@@ -781,7 +781,75 @@ function needleAngle(el) {
 }
 
 /** One shared empty map, for a kind that has no parts of that sort. */
+/** One shared empty map, for a kind that has no parts of that sort. */
 const NO_PARTS = Object.freeze({});
+
+/**
+ * Measure a gauge's own parts, in per cent of the element's box.
+ *
+ * Measured rather than worked out: a gauge is letterboxed inside its element,
+ * drawn at a scale of its own and at whatever the canvas is zoomed to, and the
+ * text's own rect already knows all three. Per cent of the box, so the frames
+ * are right at any zoom without measuring again.
+ *
+ * `pxPerUnit` comes from the SVG's screen matrix, which is the only thing that
+ * knows where the letterboxed viewBox actually landed.
+ *
+ * @param {any} box the element's box on the canvas
+ */
+function measureGauge(box) {
+  const gauge = box.querySelector('sc-gauge');
+  // The gauge's own square, not the element's box: the viewBox letterboxes
+  // inside it, so this is what an offset in viewBox units is a fraction of.
+  const svg = gauge?.shadowRoot?.querySelector('svg');
+  const texts = gauge?.shadowRoot?.querySelectorAll('[data-sc-part]') || [];
+  const needle = gauge?.shadowRoot?.querySelector('[data-sc-needle]');
+  if (!svg) return null;
+  const elRect = box.getBoundingClientRect();
+  if (!elRect.width || !elRect.height) return null;
+  const svgRect = svg.getBoundingClientRect();
+  /** @type {any} */
+  const next = {
+    parts: {},
+    // Off the computed transform rather than off the config: mid-animation
+    // the needle is wherever the transition has got to, and that is where
+    // its handles have to be. Zero when there is no needle to read.
+    angle: needleAngle(needle),
+    svg: {
+      l: (svgRect.left - elRect.left) / elRect.width * 100,
+      t: (svgRect.top - elRect.top) / elRect.height * 100,
+      w: svgRect.width / elRect.width * 100,
+      h: svgRect.height / elRect.height * 100,
+    },
+  };
+  texts.forEach((/** @type {any} */ t) => {
+    const part = t.dataset.scPart;
+    if (!GAUGE_PARTS[part]) return;
+    const r = t.getBoundingClientRect();
+    if (!r.width && !r.height) return;
+    // Per part, not once: the value is drawn in a layer of its own, and a
+    // layer is free to be scaled differently from the one beside it.
+    const ctm = t.ownerSVGElement?.getScreenCTM?.();
+    next.parts[part] = {
+      l: (r.left - elRect.left) / elRect.width * 100,
+      t: (r.top - elRect.top) / elRect.height * 100,
+      w: r.width / elRect.width * 100,
+      h: r.height / elRect.height * 100,
+      pxPerUnit: ctm?.a || (elRect.width / GAUGE_VIEW),
+    };
+  });
+  return next;
+}
+
+/**
+ * The frame a box-shaped kind is measured in: the element's own box, whole.
+ *
+ * Nothing letterboxes inside it, so a per cent of the box already is a per
+ * cent of the drawing - there is no scale to read, no text rect to follow and
+ * no needle to be turning. A constant, which also means the sameness check
+ * settles on the first measurement and the follow loop stops straight away.
+ */
+const boxFrame = () => ({ parts: NO_PARTS, angle: 0, svg: { l: 0, t: 0, w: 100, h: 100 } });
 
 /**
  * The kinds of element whose own parts the canvas can take in hand, and what
@@ -801,9 +869,12 @@ const NO_PARTS = Object.freeze({});
 const INNER_KINDS = Object.freeze({
   gauge: {
     match: /^gauge_(\d+)$/,
+    noun: 'gauge',
+    holds: 'its label, its value, its scale, its needle',
     editor: 'sc-gauge-editor',
     parts: GAUGE_PARTS,
     rings: GAUGE_RINGS,
+    measure: measureGauge,
     config: (/** @type {any} */ slot, /** @type {string} */ _id, /** @type {number} */ idx) => {
       if (!slot.gauge_active) return null;
       const gauges = Array.isArray(slot.gauges) && slot.gauges.length ? slot.gauges : [slot];
@@ -2497,68 +2568,22 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * Measure the parts of the gauge being edited, in per cent of its box.
+   * Measure the parts of whatever is being edited, in per cent of its box.
    *
-   * Measured rather than worked out: a gauge is letterboxed inside its
-   * element, drawn at a scale of its own and at whatever the canvas is zoomed
-   * to, and the text's own rect already knows all three. Per cent of the box,
-   * so the frames are right at any zoom without measuring again.
-   *
-   * `pxPerUnit` comes from the SVG's screen matrix, which is the only thing
-   * that knows where the letterboxed viewBox actually landed.
+   * The kind does the measuring, because that is the one thing a gauge and a
+   * box genuinely do differently. What is shared is here: bail when nothing is
+   * open, and write the answer only when it is a different answer - this runs
+   * after every render, and writing state that renders is how a measurement
+   * becomes a loop.
    */
   _measureInner() {
-    if (!this._innerOn) {
+    const target = this._innerOn ? this._innerTarget : null;
+    const box = target && this.shadowRoot?.querySelector(`.el[data-item-id="${this._inner}"]`);
+    const next = box ? target.k.measure(box) : null;
+    if (!next) {
       if (this._innerRects) this._innerRects = null;
       return false;
     }
-    const box = this.shadowRoot?.querySelector(`.el[data-item-id="${this._inner}"]`);
-    const gauge = box?.querySelector('sc-gauge');
-    // The gauge's own square, not the element's box: the viewBox letterboxes
-    // inside it, so this is what an offset in viewBox units is a fraction of.
-    const svg = gauge?.shadowRoot?.querySelector('svg');
-    const texts = gauge?.shadowRoot?.querySelectorAll('[data-sc-part]') || [];
-    const parts = this._innerTarget?.parts || NO_PARTS;
-    const needle = gauge?.shadowRoot?.querySelector('[data-sc-needle]');
-    if (!box || !svg) {
-      if (this._innerRects) this._innerRects = null;
-      return false;
-    }
-    const elRect = box.getBoundingClientRect();
-    if (!elRect.width || !elRect.height) return false;
-    const svgRect = svg.getBoundingClientRect();
-    /** @type {any} */
-    const next = {
-      parts: {},
-      // Off the computed transform rather than off the config: mid-animation
-      // the needle is wherever the transition has got to, and that is where
-      // its handles have to be. Zero when there is no needle to read.
-      angle: needleAngle(needle),
-      svg: {
-        l: (svgRect.left - elRect.left) / elRect.width * 100,
-        t: (svgRect.top - elRect.top) / elRect.height * 100,
-        w: svgRect.width / elRect.width * 100,
-        h: svgRect.height / elRect.height * 100,
-      },
-    };
-    texts.forEach((/** @type {any} */ t) => {
-      const part = t.dataset.scPart;
-      if (!parts[part]) return;
-      const r = t.getBoundingClientRect();
-      if (!r.width && !r.height) return;
-      // Per part, not once: the value is drawn in a layer of its own, and a
-      // layer is free to be scaled differently from the one beside it.
-      const ctm = t.ownerSVGElement?.getScreenCTM?.();
-      next.parts[part] = {
-        l: (r.left - elRect.left) / elRect.width * 100,
-        t: (r.top - elRect.top) / elRect.height * 100,
-        w: r.width / elRect.width * 100,
-        h: r.height / elRect.height * 100,
-        pxPerUnit: ctm?.a || (elRect.width / GAUGE_VIEW),
-      };
-    });
-    // Only when it actually moved: this runs after every render, and writing
-    // state that renders is how a measurement becomes a loop.
     const was = this._innerRects;
     const same = was
       && Object.keys(next.parts).length === Object.keys(was.parts).length
@@ -3013,7 +3038,7 @@ class ScCanvasEditor extends LitElement {
           <span class="inner-tag">${spec.label}${spec.weight && this._innerSel === part
             ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}</span>
           <button class="inner-drop"
-                  title=${`Hide the ${spec.label.toLowerCase()} on this gauge`}
+                  title=${`Hide the ${spec.label.toLowerCase()} on this ${target.k.noun}`}
                   @pointerdown=${swallow}
                   @click=${() => this._setInnerPart(part, false)}>−</button>
           <div class="inner-grip"
@@ -3028,7 +3053,7 @@ class ScCanvasEditor extends LitElement {
       if (!home) return '';
       return html`
         <button class="inner-add" style="left:${home.l}%; top:${home.t}%;"
-                title=${`Show the ${spec.label.toLowerCase()} on this gauge`}
+                title=${`Show the ${spec.label.toLowerCase()} on this ${target.k.noun}`}
                 @pointerdown=${swallow}
                 @click=${() => this._setInnerPart(part, true)}>+ ${spec.label}</button>`;
     })}
@@ -3040,7 +3065,7 @@ class ScCanvasEditor extends LitElement {
       if (!home) return '';
       return html`
         <button class="inner-add ring-add" style="left:${home.l}%; top:${home.t}%;"
-                title=${`Show ${spec.label.toLowerCase()} on this gauge`}
+                title=${`Show ${spec.label.toLowerCase()} on this ${target.k.noun}`}
                 @pointerdown=${swallow}
                 @click=${() => this._setInnerRing(part, true)}>+ ${spec.label}</button>`;
     })}`;
@@ -3165,7 +3190,7 @@ class ScCanvasEditor extends LitElement {
               ? this._renderSwap(spec.label, spec.shapes, 'Make') : ''}
             ${spec.turnOff ? html`
               <button class="ring-drop"
-                      title=${`Take the ${spec.label.toLowerCase()} off this gauge`}
+                      title=${`Take the ${spec.label.toLowerCase()} off this ${target.k.noun}`}
                       @pointerdown=${swallow}
                       @click=${() => this._setInnerRing(part, false)}>−</button>` : ''}
           </span>
@@ -4009,7 +4034,7 @@ class ScCanvasEditor extends LitElement {
     // label and value borrow, so they sit together at the end.
     const alignBtn = ([edge, what]) => html`
       <button title=${centring && MIDDLE_AXIS[edge]
-                ? `Put the ${centring.label.toLowerCase()} back on the gauge's ${MIDDLE_AXIS[edge].what} middle`
+                ? `Put the ${centring.label.toLowerCase()} back on the ${inner.k.noun}'s ${MIDDLE_AXIS[edge].what} middle`
                 : (movers < 2
                     ? 'Two selected elements that can move are needed to line anything up'
                     : `${what}. The outermost of them stays where it is.`)}
@@ -4109,10 +4134,10 @@ class ScCanvasEditor extends LitElement {
                 ${inner?.id === el.id ? html`
                   <button class="inner-open ${this._innerOn ? 'on' : ''}"
                           title=${!this._live
-                            ? 'Switch the live preview on - the frames sit on the drawn text'
+                            ? 'Switch the live preview on - the frames sit on the drawing'
                             : (this._innerOn
-                                ? "Done with this gauge's own parts"
-                                : "Take this gauge's own parts in hand - its label, its value, its scale, its needle")}
+                                ? `Done with this ${inner.k.noun}'s own parts`
+                                : `Take this ${inner.k.noun}'s own parts in hand - ${inner.k.holds}`)}
                           ?disabled=${!this._live}
                           @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
                           @click=${() => this._toggleInner()}>✎</button>` : ''}
