@@ -2133,16 +2133,16 @@ class ScCanvasEditor extends LitElement {
          dragged, and the tail is dragged in towards the pivot where the hub's
          own chip stands. */
       .grip-layer { z-index: 8; }
-      /* Half transparent, both of them: the band lies across the very marks it
-         is there to place, and at full strength the selected one hid the ticks
-         and sub-ticks under it. Which ring is in hand is said by its width and
-         by its unbroken line instead, neither of which costs any legibility. */
+      /* Thin, dashed and half transparent: the band lies across the very marks
+         it is there to place, and anything heavier hid the ticks and
+         sub-ticks under it. It used to go solid and half again as wide when
+         it was the ring in hand, back when every ring had one and the width
+         was what told them apart. Only the ring in hand is drawn now, so
+         there is nothing left to tell apart and the colour is enough. */
       .ring-band { fill: none; stroke: var(--sc-part); stroke-width: 0.35;
         stroke-dasharray: 1.2 1.2; opacity: 0.5;
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
-      .ring-band.sel { stroke: var(--sc-part-sel); stroke-width: 0.6;
-        stroke-dasharray: none; opacity: 0.5;
-        filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
+      .ring-band.sel { stroke: var(--sc-part-sel); }
       .ring-hit { fill: none; stroke: transparent; stroke-width: 2.4;
         pointer-events: stroke; cursor: ns-resize; touch-action: none; }
       /* The needle itself, which selects the pointer and slides it in and out
