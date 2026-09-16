@@ -28,6 +28,54 @@ export const NO_TIER_STATE = Object.freeze({ range: null, scale: null });
 const PREFIXES = Object.freeze(['', 'k', 'M', 'G', 'T', 'P']);
 
 /**
+ * The mantissas a round number is made of: 1, 2 or 5 times a power of ten.
+ *
+ * These are the numbers a scale can be divided into whole parts by, which is
+ * the only property that matters here - a dial that ends on 5000 puts a tick
+ * every 500 and labels them 0 to 10, where one that ends on 5500 labels the
+ * same eleven ticks 0, 0.55, 1.1 and has to round two of them to the same
+ * digit.
+ */
+const ROUND_STEPS = Object.freeze([1, 2, 5]);
+
+/**
+ * The next round number strictly above `t`.
+ *
+ * @param {number} t
+ */
+function nextRound(t) {
+  const k = Math.floor(Math.log10(t) + 1e-12);
+  const decade = Math.pow(10, k);
+  for (const d of ROUND_STEPS) {
+    const c = d * decade;
+    if (c > t * (1 + 1e-9)) return c;
+  }
+  return decade * 10;
+}
+
+/**
+ * What the tick labels should be divided by, so that they read short.
+ *
+ * The divisor is the largest power of ten the *step between two ticks* still
+ * contains, which is what makes the labels whole: a step of 50M under a
+ * divisor of 10M reads 0, 5, 10 - under the 100M that the range alone would
+ * suggest it reads 0, 0.5, 1 and, at no decimals, 0, 1, 1.
+ *
+ * It used to be taken from a fifth of the range, which is the step of a
+ * six-tick dial and of no other. On the common eleven-tick dial it was right
+ * whenever the range was a plain power of ten and half a decade out whenever
+ * it was not, so a dial ending on 500M labelled two ticks 1, two 2, two 3.
+ *
+ * @param {number} range @param {number} tickCount
+ */
+export function tickMultiplier(range, tickCount) {
+  const div = tickCount > 1 ? tickCount - 1 : 1;
+  const step = Math.abs(range) / div;
+  if (!Number.isFinite(step) || step <= 0) return 1;
+  return Math.pow(10, Math.floor(Math.log10(Math.max(step, 0.000001))));
+}
+
+/**
  * The ladder auto-range climbs: every decade up to the user's maximum, and
  * that maximum on top.
  *
@@ -44,8 +92,14 @@ export function rangeTiers(absMax, absVal = 0, grow = false) {
   for (let t = 10; t < top; t *= 10) tiers.push(t);
   tiers.push(top);
   if (grow) {
+    // By round numbers, not by decades. Ten times the user's own maximum is
+    // a rung the value has almost no chance of standing near: a dial of 300M
+    // that has to show 614M was drawn to 3G, which left the needle at a
+    // fifth of the arc and the face labelled 0 to 30. The 1-2-5 ladder puts
+    // the next rung close above the value instead, and every rung on it
+    // divides into whole labels.
     let t = top;
-    while (t < absVal) { t *= 10; tiers.push(t); }
+    while (t < absVal) { t = nextRound(t); tiers.push(t); }
   }
   return tiers;
 }
@@ -64,6 +118,24 @@ function hold(ideal, was, absVal, hys, boundary) {
   const margin = hys / 100;
   if (ideal > was) return absVal <= boundary(was) * (1 + margin) ? was : ideal;
   return absVal > boundary(ideal) * (1 - margin) ? was : ideal;
+}
+
+/**
+ * The factor and the prefix a multiplier caption should be written with.
+ *
+ * The caption carries the auto-scale prefix because the numbers it explains
+ * are in those units - but the factor is worked out from the scale, and the
+ * two do not have to land on the same power of a thousand. A dial of 2000 W
+ * under a k prefix divides its labels by a tenth of a thousand and used to be
+ * captioned "x0.1k", which is arithmetic rather than a caption. Where the
+ * factor is below one, the prefix steps down until it is not.
+ *
+ * @param {number} factor @param {number} tier
+ */
+export function multiplierParts(factor, tier) {
+  let f = factor, t = Math.max(0, Math.min(tier | 0, PREFIXES.length - 1));
+  while (f < 1 && t > 0 && Number.isFinite(f) && f > 0) { f *= 1000; t -= 1; }
+  return { factor: f, prefix: PREFIXES[t] };
 }
 
 /**

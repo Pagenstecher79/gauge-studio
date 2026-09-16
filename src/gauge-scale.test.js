@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gaugeScale, rangeTiers, NO_TIER_STATE } from './gauge-scale.js';
+import { gaugeScale, rangeTiers, tickMultiplier, multiplierParts, NO_TIER_STATE } from './gauge-scale.js';
 
 const run = (steps, cfg) => {
   let state = NO_TIER_STATE;
@@ -99,7 +99,7 @@ describe('auto-range', () => {
     // The two switches used to cancel: dynamic max was skipped whenever
     // auto-range was on, so the needle sat at the end stop.
     expect(gaugeScale({ value: 5000, min: 0, max: 1000, autoRange: true, dynamicMax: true }).max)
-      .toBe(10_000);
+      .toBe(5000);
   });
 });
 
@@ -131,9 +131,46 @@ describe('rangeTiers', () => {
     expect(rangeTiers(0)).toEqual([1]);
   });
 
-  it('grows by decades past the top only when asked', () => {
+  it('grows past the top only when asked', () => {
     expect(rangeTiers(1000, 5000, false)).toEqual([10, 100, 1000]);
-    expect(rangeTiers(1000, 5000, true)).toEqual([10, 100, 1000, 10_000]);
+    expect(rangeTiers(1000, 5000, true)).toEqual([10, 100, 1000, 2000, 5000]);
+  });
+
+  it('grows by round numbers, so the rung lands near the value', () => {
+    // A decade of growth put the needle wherever it happened to fall: a dial
+    // of 300M asked to show 614M was drawn to 3G and read at a fifth.
+    const tiers = rangeTiers(3e8, 6.143e8, true);
+    expect(tiers.slice(-3)).toEqual([3e8, 5e8, 1e9]);
+    expect(gaugeScale({ value: 6.143e8, min: 0, max: 3e8,
+                        autoRange: true, dynamicMax: true }).max).toBe(1e9);
+  });
+
+  it('stops at the first round rung above the value', () => {
+    expect(rangeTiers(5e7, 1.844e8, true).slice(-3)).toEqual([5e7, 1e8, 2e8]);
+    expect(gaugeScale({ value: 1.844e8, min: 0, max: 5e7,
+                        autoRange: true, dynamicMax: true }).max).toBe(2e8);
+  });
+});
+
+describe('what the tick labels are divided by', () => {
+  it('is the power of ten the step between two ticks contains', () => {
+    expect(tickMultiplier(1000, 11)).toBe(100);
+    expect(tickMultiplier(100, 11)).toBe(10);
+    expect(tickMultiplier(100, 21)).toBe(1);
+  });
+
+  it('keeps a half-decade range labelling in whole numbers', () => {
+    // Taken from a fifth of the range this was 100, which labelled the
+    // eleven ticks of a 500 dial 0, 0.5, 1 - and, at no decimals, 0, 1, 1.
+    expect(tickMultiplier(500, 11)).toBe(10);
+    const step = 500 / 10 / tickMultiplier(500, 11);
+    expect(Number.isInteger(step)).toBe(true);
+  });
+
+  it('answers 1 where there is no range to divide', () => {
+    expect(tickMultiplier(0, 11)).toBe(1);
+    expect(tickMultiplier(NaN, 11)).toBe(1);
+    expect(tickMultiplier(100, 1)).toBe(100);
   });
 });
 
@@ -143,5 +180,29 @@ describe('a hysteresis that is not a number', () => {
     // in one direction and off in the other.
     const [, held] = run([999, 1050], { min: 0, max: 1e6, autoScale: true, hysteresis: NaN });
     expect(held.unitPrefix).toBe('');
+  });
+});
+
+
+describe('how a multiplier caption is written', () => {
+  it('steps the prefix down rather than writing a fraction of one', () => {
+    // A 2000 W dial under a k prefix divides its labels by 100, which used to
+    // be captioned "x0.1k".
+    expect(multiplierParts(0.1, 1)).toEqual({ factor: 100, prefix: '' });
+    expect(multiplierParts(0.01, 2)).toEqual({ factor: 10, prefix: 'k' });
+  });
+
+  it('leaves a factor of one or more where it is', () => {
+    expect(multiplierParts(100, 2)).toEqual({ factor: 100, prefix: 'M' });
+    expect(multiplierParts(1, 0)).toEqual({ factor: 1, prefix: '' });
+  });
+
+  it('cannot step below the plain unit', () => {
+    expect(multiplierParts(0.001, 0)).toEqual({ factor: 0.001, prefix: '' });
+  });
+
+  it('does not loop on a factor that is not a number', () => {
+    expect(multiplierParts(0, 2)).toEqual({ factor: 0, prefix: 'M' });
+    expect(multiplierParts(NaN, 2).prefix).toBe('M');
   });
 });

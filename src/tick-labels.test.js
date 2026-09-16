@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { autoStep, staggerRows, labelBox, boxReach,
-         EM_WIDTH, LINE_HEIGHT, MIN_GAP } from './tick-labels.js';
+         EM_WIDTH, LINE_HEIGHT, MIN_GAP , rowBox } from './tick-labels.js';
 
 /**
  * The demo's largest gauge, read off the running card: 23 ticks over a semi
@@ -143,5 +143,19 @@ describe('boxReach', () => {
       expect(edge('7')).toBeCloseTo(r);
       expect(edge('12345')).toBeCloseTo(r);
     }
+  });
+});
+
+
+describe('one circle for a row of labels', () => {
+  it('measures the row by its widest member', () => {
+    const b = rowBox(['0', '5', '10'], 10);
+    expect(b).toEqual(rowBox(['10'], 10));
+    expect(b.w).toBeGreaterThan(rowBox(['5'], 10).w);
+  });
+
+  it('answers a box for a row with nothing in it', () => {
+    expect(rowBox([], 10).w).toBeGreaterThan(0);
+    expect(rowBox(undefined, 10).w).toBeGreaterThan(0);
   });
 });

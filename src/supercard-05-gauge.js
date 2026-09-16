@@ -1,7 +1,7 @@
 import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops } from "./gradient-stops.js";
-import { autoStep, staggerRows, ROW_GAP, labelBox, boxReach } from "./tick-labels.js";
-import { gaugeScale, NO_TIER_STATE } from "./gauge-scale.js";
+import { autoStep, staggerRows, ROW_GAP, rowBox, boxReach } from "./tick-labels.js";
+import { gaugeScale, NO_TIER_STATE, tickMultiplier, multiplierParts } from "./gauge-scale.js";
 import { ringRadius, ringPartRadius } from "./gauge-inner-boxes.js";
 
 const SC = window.SupercardUtils;
@@ -686,8 +686,7 @@ class ScGauge extends LitElement {
 
     const tCount = parseInt(this._get('tick_count',0));
     const div = tCount > 1 ? tCount - 1 : 1;
-    let smartMVal = 1;
-    if (range !== 0) smartMVal = Math.pow(10, Math.floor(Math.log10(Math.max(Math.abs(range) / 5, 0.000001))));
+    const smartMVal = range !== 0 ? tickMultiplier(range, tCount) : 1;
 
     const ticks = []; const tLabels = [];
     if (tCount > 0) {
@@ -701,10 +700,19 @@ class ScGauge extends LitElement {
 
       // What each tick would say, needed before any of them is drawn: how
       // wide a label is decides how many of them fit.
+      // A step that is not whole under its own divisor needs a decimal, or
+      // two neighbours round to the same digit and the scale reads as though
+      // it had stopped counting. Only where nobody has answered: a decimal
+      // count that was set is the answer.
+      const setDec = parseInt(this._get('tick_label_decimals', 0));
+      const labelStepVal = Math.abs(range) / div
+        / ((this._get('show_multiplier_label',false) && this._get('multiplier_divide_ticks',false)) ? smartMVal : 1);
+      const tickDecimals = setDec > 0 ? setDec
+        : (Math.abs(labelStepVal - Math.round(labelStepVal)) > 1e-9 ? 1 : 0);
       const tickText = (/** @type {number} */ i) => {
         let v = data.min + (i/div)*range;
         if (this._get('show_multiplier_label',false) && this._get('multiplier_divide_ticks',false)) v /= smartMVal;
-        const dec = parseInt(this._get('tick_label_decimals',0));
+        const dec = tickDecimals;
         return dec > 0 ? parseFloat(v.toFixed(dec)).toString() : v.toFixed(0);
       };
       const plan = { count: tCount, startAngle, totalAngle, radius: radius + tlOff,
@@ -716,6 +724,10 @@ class ScGauge extends LitElement {
       // moves with the tick count, the type, the digits and the card's size.
       const setStep = parseInt(this._get('tick_label_step', 0));
       const labelStep = setStep > 0 ? setStep : autoStep(plan);
+      // The row shares one circle: every label is pushed off it by the reach
+      // of the widest of them, so a two-digit number does not stand half a
+      // digit deeper than the one-digit number beside it.
+      const labelReachBox = rowBox(plan.texts.filter((_, i) => i % labelStep === 0), tlSize);
       // Or it keeps every label and sends the crowded ones out a row, which is
       // the one way of separating them that leaves each over its own tick.
       const labelRows = this._get('tick_label_stagger', false) ? staggerRows(plan, labelStep) : [];
@@ -763,7 +775,7 @@ class ScGauge extends LitElement {
           // crossed one - a kink in a row of numbers otherwise on a perfect
           // arc. The points were round; the type was not.
           const rowShift = (labelRows[i] || 0) * (isOut ? 1 : -1) * ROW_GAP * tlSize;
-          const reach = boxReach(labelBox(tStr, tlSize), cosA, sinA);
+          const reach = boxReach(labelReachBox, cosA, sinA);
           const pL = polarToCart(this.CENTER, this.CENTER,
                                  radius + tlOff + rowShift + (isOut ? reach : -reach), ang);
           
@@ -829,13 +841,14 @@ class ScGauge extends LitElement {
       // step from one tick to the next: a true number about the scale, but
       // not this one, so a dial whose labels already said 300 to 2500 was
       // captioned "x100".
-      let mValDisp = this._get('multiplier_divide_ticks',false) ? smartMVal : 1;
+      const mRaw = this._get('multiplier_divide_ticks',false) ? smartMVal : 1;
+      const { factor: mValDisp, prefix: mPrefix } = multiplierParts(mRaw, data.resultTier);
       const mDec = parseInt(this._get('multiplier_decimals',0));
       // A factor below one rounds to "x0" at no decimals, and a gauge that
       // says multiply by zero says the scale is worthless. Whole numbers keep
       // the setting; a fraction is drawn at the places it needs.
       const mNum = parseFloat(mValDisp.toFixed(mDec)) || parseFloat(mValDisp.toPrecision(2));
-      const mStr=`${this._get('multiplier_prepend','x')}${mNum}${data.unitPrefix}`;
+      const mStr=`${this._get('multiplier_prepend','x')}${mNum}${mPrefix}`;
       const mCol=resolveColor(this._get('multiplier_color_type','adaptive'),this._get('multiplier_color',null));
       extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="multiplier" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${mStr}</text>`);
     }
