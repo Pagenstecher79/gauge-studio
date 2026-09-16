@@ -45,6 +45,12 @@
 export const GAUGE_FACE = Object.freeze({
   gauge_type: 'semi',
   gauge_scale: 0.9,
+  // `gauge_scale` is how far out the gauge reaches - the outermost thing it
+  // draws, with the frame ring and the gap subtracted from there inwards.
+  // Cards written before that read it as the radius of the value ring alone,
+  // with the frame stacked on top, so they are translated on the way in
+  // rather than rewritten; this says which of the two this card means.
+  scale_from_outer: true,
   frame_ring_active: true,
   frame_ring_closed: true,
   frame_ring_width: 0.3,

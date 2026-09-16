@@ -13,7 +13,7 @@ import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
 import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
          needleEnds, needleFromRadius, needleSlide,
-         ringInnerEdge, strokeFromRadius, alignParts } from "./gauge-inner-boxes.js";
+         ringInnerEdge, strokeFromRadius, alignParts, frameBand, gaugeScaleOf } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
@@ -859,9 +859,9 @@ const GAUGE_RINGS = Object.freeze({
     label: 'Ring', section: '_section_color',
     on: () => true,
     radiusOf: (/** @type {any} */ cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
-      ringInnerEdge(SC.safeFloat(cfg.stroke_width, 3), scale),
+      ringInnerEdge(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale)),
     fromRadius: (/** @type {number} */ r, /** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
-      ({ stroke_width: strokeFromRadius(r, scale) }),
+      ({ stroke_width: strokeFromRadius(r, scale, frameBand(_cfg, scale)) }),
     // How far the ring goes round is the ring's own business, and the ring is
     // what is in hand while this is showing. Two values, so it reads as the
     // switch it is rather than as a list with two things in it.
@@ -3681,8 +3681,8 @@ class ScCanvasEditor extends LitElement {
     if (!line || !cfg || !svgBox) return null;
     const gauge = root.querySelector(`.el[data-item-id="${this._inner}"] sc-gauge`);
     const a = needleAngle(gauge?.shadowRoot?.querySelector('[data-sc-needle]')) * Math.PI / 180;
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
-    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale);
+    const scale = gaugeScaleOf(cfg) || 1;
+    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale));
     const cx = GAUGE_VIEW / 2;
     const cy = cx;
     const ends = needleEnds(SC.safeFloat(cfg.pointer_offset, 2),
@@ -3928,13 +3928,13 @@ class ScCanvasEditor extends LitElement {
     const r = svg?.getBoundingClientRect();
     if (!r?.width) return null;
     const cfg = this._innerTarget?.cfg || {};
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
+    const scale = gaugeScaleOf(cfg) || 1;
     const pxPerUnit = r.width / GAUGE_VIEW;
     return {
       cx: r.left + r.width / 2,
       cy: r.top + r.height / 2,
       pxPerUnit, scale,
-      ring: ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale),
+      ring: ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale)),
     };
   }
 
@@ -4006,7 +4006,7 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     const rects = this._innerRects;
     if (!target || !rects?.px) return;
-    const scale = SC.safeFloat(target.cfg.gauge_scale, 0.9) || 1;
+    const scale = gaugeScaleOf(target.cfg) || 1;
     const items = this._innerHeld.map((part) => {
       const spec = target.parts[part];
       const r = rects.parts?.[part];
@@ -4183,8 +4183,8 @@ class ScCanvasEditor extends LitElement {
     const bands = live.filter(([part, spec]) =>
       !spec.needle && !spec.spot && this._innerSel === part);
     const needles = live.filter(([, spec]) => spec.needle);
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
-    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale);
+    const scale = gaugeScaleOf(cfg) || 1;
+    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale));
     const at = (/** @type {any} */ spec) => Math.abs(ringPartAt(spec, cfg, ring, scale));
     const C = GAUGE_VIEW / 2;
     // Every part of a gauge is drawn about its centre, the needle and its hub
