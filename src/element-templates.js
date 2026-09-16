@@ -203,6 +203,68 @@ const HUNDRED = Object.freeze({
  */
 const stops = (...pairs) => pairs.map(([pos, color]) => ({ pos, color }));
 
+/**
+ * What a gauge looks like before anyone has chosen anything about it.
+ *
+ * An empty gauge used to be the renderer's own fallbacks, and those are not a
+ * design - they are what each field does when nobody has answered it. No ticks
+ * at all, a stubby pointer twice as wide as it should be, and a tick label
+ * offset of +10, which puts the numbers outside the gradient ring rather than
+ * inside it. Someone who adds a gauge and then switches the labels on is shown
+ * a scale that has fallen off the dial, and their first job is to put it back.
+ *
+ * So the same face the templates wear, with the three things a template would
+ * otherwise have supplied: a range, a tick count that suits it, and a
+ * gradient. It is not a template and does not appear in the menu - it is what
+ * *any* new gauge starts as, including one a template is about to overwrite.
+ *
+ * No frame ring: the gradient arc is already the ring, and a second one around
+ * it is a decision about the card rather than about a gauge that has no entity
+ * yet. The ticks and their labels sit *inside* that arc, which is the whole
+ * point - `tick_offset` and `tick_label_offset` are measured outward from the
+ * ring, so both are negative.
+ */
+export const GAUGE_DEFAULT = Object.freeze({
+  ...GAUGE_FACE,
+  frame_ring_active: false,
+
+  min: 0,
+  max: 100,
+
+  // A slightly heavier arc than a template's, because there is no frame ring
+  // outside it to give the dial an edge.
+  stroke_width: 1.25,
+  gradient_resolution: 'superfine',
+
+  // Thin enough to pick out one graduation rather than a region: with 21 of
+  // them there is a mark to point at, and a wedge would cover three.
+  pointer_width: 0.7,
+
+  tick_count: 21,
+  tick_width: 0.4,
+  tick_length: 1.7,
+  tick_offset: -1.2,
+  sub_tick_count: 4,
+  sub_tick_width: 0.3,
+  sub_tick_length: 0.5,
+  sub_tick_offset: -1.8,
+
+  // Every second tick labelled is eleven numbers round the arc, which is why
+  // they are smaller than a template's: eleven at the template's size touch,
+  // and a scale whose numbers touch is read as no scale at all.
+  tick_label_step: 2,
+  tick_label_font_size: 2.5,
+  tick_label_offset: -4.6,
+  tick_label_extra_length: 0.7,
+
+  // Green through to red across the range, in per cent so the colours survive
+  // the first change of min and max - the same reasoning as the templates'.
+  gradient_preset: 'manual',
+  threshold_unit: 'percent',
+  manual_stops: stops([0, '#4caf50'], [33.3, '#fdd835'],
+                      [66.7, '#fb8c00'], [100, '#f44336']),
+});
+
 /** @type {readonly ElementTemplate[]} */
 export const GAUGE_TEMPLATES = Object.freeze([
   Object.freeze({

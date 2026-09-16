@@ -1,5 +1,6 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
+import { GAUGE_DEFAULT } from "./element-templates.js";
 
 const SC = window.SupercardUtils;
 
@@ -16,7 +17,9 @@ function editorFields() {}
  * The canvas adds gauges too, and it has no business knowing what one
  * contains - that is this module's, so both add buttons ask here.
  */
-function newEntry() { return { entity: '', gauge_attribute: '' }; }
+function newEntry() {
+  return { entity: '', gauge_attribute: '', ...structuredClone(GAUGE_DEFAULT) };
+}
 
 /**
  * Whether the gauge is drawn at a size and a place of its own.
