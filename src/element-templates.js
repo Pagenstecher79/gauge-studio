@@ -42,7 +42,7 @@
  * is the size of its box, and these numbers keep their proportions at any of
  * them.
  */
-const GAUGE_FACE = Object.freeze({
+export const GAUGE_FACE = Object.freeze({
   gauge_type: 'semi',
   gauge_scale: 0.9,
   frame_ring_active: true,

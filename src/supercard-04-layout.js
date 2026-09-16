@@ -14,7 +14,7 @@ import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
          needleEnds, needleFromRadius, needleSlide,
          ringInnerEdge, strokeFromRadius, alignParts } from "./gauge-inner-boxes.js";
-import { templatesFor, templateEntry, previewFor } from "./element-templates.js";
+import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
@@ -810,10 +810,16 @@ const GAUGE_PARTS = Object.freeze({
                 // scale is above the top of the 50-unit box - switched on and
                 // left at it, it is a label nobody sees, and the form's
                 // slider cannot even reach back to it. So a card that has
-                // never said where it goes is given somewhere it can be seen.
+                // never said where it goes is given somewhere it can be seen:
+                // midway between the centre the pointer turns about and the
+                // gauge's own name, which is the gap the face leaves empty.
+                // Taken from the name's own offset rather than written out,
+                // so moving the name moves this with it instead of leaving a
+                // second number behind to drift.
                 needs: (/** @type {any} */ cfg) => SC.safeFloat(cfg.tick_count, 0) > 1,
                 seed: { tick_count: 11 },
-                place: { multiplier_offset_x: 0, multiplier_offset_y: -8.4,
+                place: { multiplier_offset_x: 0,
+                         multiplier_offset_y: GAUGE_FACE.gauge_label_offset_y / 2,
                          multiplier_font_size: 2.4 },
                 steps: [
                   ...colourRows('multiplier_color_type', 'multiplier_color', 'multiplier',
