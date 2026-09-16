@@ -128,6 +128,36 @@ construction, a press on nothing:
 if (this._innerSel) this._innerSel = null;
 ```
 
+### Holding more than one
+
+Four texts that belong under one another - a name, a reading, a scale label, a
+multiplier - are arranged against *each other*, not one at a time against the
+gauge. So several parts can be held at once, and the gesture is the one the
+canvas already uses for its elements: **shift, ctrl or cmd adds a part to what
+is held**, a plain press takes one alone, and a plain press on something
+already held drags the whole group.
+
+Two rules keep the state honest, and both were bugs before they were rules:
+
+- **Read what is held before the press changes it.** The head of the group is
+  whatever is in hand, so assigning the new selection first and asking what is
+  held second loses the part that was in hand a line earlier.
+- **The head is not also a member.** Pressing a part that was held alongside
+  makes it the head and takes it out of the rest; without that the group keeps
+  a second copy of its own head, and letting go of that head promotes it back.
+
+The row of alignment buttons under the canvas is then read three ways, in the
+order a press is meant: the two middle-axis buttons put whatever is held back
+on the gauge's own axis (an offset of zero *is* the middle, so nothing is
+measured), the four edges line the held parts up on each other, and with
+nothing held at all they do what they have always done to the elements.
+
+Lining parts up cannot be done from the offsets. A part's offset places its
+*anchor*, and one part's anchor is the middle of its text where the next one's
+is a baseline - two parts sharing an offset do not share an edge. `alignParts`
+works off the measured boxes and returns a *travel*, which is why the anchor
+each part uses cancels out and a baseline needs no special case.
+
 ## 6. Zoom is part of the mode, not a setting beside it
 
 Parts that are a couple of viewBox units across cannot be aimed at, let alone
