@@ -35,6 +35,18 @@ function tenth(v) {
 }
 
 /**
+ * Three decimals, for the one value a drag may write off that step.
+ *
+ * Landing exactly on something and stepping in tenths are not always the same
+ * wish: the radius a rest is aiming at is built out of other fields, and
+ * nothing says their arithmetic comes out on a tenth. Rounding at all is only
+ * to keep float noise out of a number a person will read in the form.
+ */
+function fine(v) {
+  return Math.round(v * 1000) / 1000;
+}
+
+/**
  * Where a part sits after being dragged `dxPx, dyPx` from where it was.
  *
  * `scale` is the gauge's own, because an offset is multiplied by it before it
@@ -138,6 +150,25 @@ export const POINTER_LENGTH_MAX = 50;
 export const POINTER_OFFSET_LIMIT = 10;
 
 /**
+ * How near the pivot the needle's tail may be let go and still be put exactly
+ * on it, in the gauge's own units.
+ *
+ * A needle that begins at the centre and one that begins a hair off it are
+ * different drawings, and only one of them is what anybody meant. The centre
+ * is the one radius on that line worth landing on exactly, and it is the one
+ * a hand cannot hit: it is behind the hub, where the tail is hidden by the
+ * very thing it is being lined up with.
+ *
+ * A few pixels at any ordinary size, and no more. The rest is there to catch
+ * a hand that is already on the pivot, not to pull one towards it: at a
+ * reach wide enough to feel like help it takes the last of the travel away,
+ * and the tail stops answering the hand over the stretch where it matters
+ * most. It also has to be pulled straight through - a tail dragged past the
+ * pivot and out the far side is a dial people draw on purpose.
+ */
+export const NEEDLE_CENTRE_SNAP = 0.4;
+
+/**
  * Where the needle's two ends stand, as radii from the pivot.
  *
  * The tip is the ring less the pointer's offset; the tail is a length back
@@ -163,6 +194,10 @@ export function needleEnds(offset, length, ring, scale) {
  * and the tip carries an offset while the tail stays, which is why the tip
  * writes both fields.
  *
+ * The tail rests on the pivot, within `NEEDLE_CENTRE_SNAP` of it. The tip has
+ * no such point: it is being lined up with a ring that is drawn, and where it
+ * should sit is something you can see.
+ *
  * @param {'tip' | 'tail'} end
  * @param {number} at the radius the end has been dragged to
  * @param {number} offset @param {number} length @param {number} ring @param {number} scale
@@ -171,12 +206,52 @@ export function needleFromRadius(end, at, offset, length, ring, scale) {
   const s = scale || 1;
   const ends = needleEnds(offset, length, ring, s);
   if (end === 'tail') {
+    // The pivot is the one place on this line worth landing on exactly, and
+    // the tail is hidden behind the hub just as it gets there. Exactly is
+    // meant literally, so this is the one drag that may write off the tenth
+    // the slider steps in: the length that puts the tail on the pivot is the
+    // ring's radius over the scale, and the ring is half a stroke in from the
+    // edge - a stroke of 0.5 leaves it on a quarter, not a tenth. Rounding
+    // to the nearest tenth there would land beside the very thing the rest is
+    // for, by as much as the rest is wide.
+    if (Math.abs(at) <= NEEDLE_CENTRE_SNAP) {
+      return { pointer_length: clamp(fine(ends.tip / s), 0, POINTER_LENGTH_MAX) };
+    }
     return { pointer_length: clamp(tenth((ends.tip - at) / s), 0, POINTER_LENGTH_MAX) };
   }
   const off = clamp(tenth((ring - at) / s), -POINTER_OFFSET_LIMIT, POINTER_OFFSET_LIMIT);
   return {
     pointer_offset: off,
     pointer_length: clamp(tenth((ring - off * s - ends.tail) / s), 0, POINTER_LENGTH_MAX),
+  };
+}
+
+/**
+ * The whole needle slid in or out, from a grab that began at `at0` and has
+ * reached `at` - both signed radii along the needle's own line.
+ *
+ * Only the offset moves. The length is what the two end handles are for, and
+ * a line taken hold of bodily is asking for the other thing: keep the needle
+ * as long as it is and put it somewhere else on its own line. So the tail
+ * follows the tip and nothing but where it sits changes.
+ *
+ * Relative rather than absolute, unlike the ends: a handle is a point and can
+ * simply be dragged to where the pointer is, but a line is grabbed somewhere
+ * along its length, and jumping its tip to the pointer would throw the needle
+ * by however far from the tip it was taken hold of.
+ *
+ * The tip's radius is the ring less the offset, so a needle pulled outward -
+ * a growing radius - is one whose offset falls.
+ *
+ * @param {number} at the radius the grab has reached
+ * @param {number} at0 the radius it began at
+ * @param {number} offset `pointer_offset` when the grab began
+ * @param {number} scale the gauge's `gauge_scale`
+ */
+export function needleSlide(at, at0, offset, scale) {
+  return {
+    pointer_offset: clamp(tenth(offset - (at - at0) / (scale || 1)),
+                          -POINTER_OFFSET_LIMIT, POINTER_OFFSET_LIMIT),
   };
 }
 

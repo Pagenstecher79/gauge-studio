@@ -12,7 +12,7 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
 import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
 import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
-         needleEnds, needleFromRadius,
+         needleEnds, needleFromRadius, needleSlide,
          ringInnerEdge, strokeFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor } from "./element-templates.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
@@ -758,6 +758,46 @@ const GAUGE_PARTS = Object.freeze({
                what: 'replace the unit',
                condition: (/** @type {any} */ cfg) => !!cfg.value_show_raw_unit },
            ] },
+  // The two that say what scale the number is being read on: the k/M/G the
+  // card has auto-scaled to, and how much of the range one tick interval is
+  // worth. Both are baselined like the value, and neither has a weight of its
+  // own - they are drawn at 500 and always have been.
+  scale_label: { label: 'Scale', x: 'scale_label_offset_x', y: 'scale_label_offset_y',
+                 size: 'scale_label_font_size', dx: 0, dy: -18, dsize: 10,
+                 section: '_section_labels', baseline: true, active: 'show_scale_label',
+                 // The prefix is the card's own and is not text anybody types;
+                 // whether the unit follows it is, and that switch had no
+                 // control at all until it got a chip.
+                 steps: [
+                   ...colourRows('scale_label_color_type', 'scale_label_color', 'scale',
+                                 '#ffffff', 'adaptive'),
+                   { key: 'scale_label_show_raw_unit', icon: '\u{1F517}', flag: true,
+                     what: 'show the unit' },
+                 ] },
+  multiplier: { label: 'Multiplier', x: 'multiplier_offset_x', y: 'multiplier_offset_y',
+                size: 'multiplier_font_size', dx: 0, dy: -30, dsize: 10,
+                section: '_section_labels', baseline: true, active: 'show_multiplier_label',
+                // A multiplier is the range shared between tick intervals, so
+                // a gauge with fewer than two ticks has nothing to divide and
+                // the renderer draws none. Switching it on brings ticks with
+                // it, the way switching tick labels on does.
+                //
+                // And its own default offset is -30, which at any ordinary
+                // scale is above the top of the 50-unit box - switched on and
+                // left at it, it is a label nobody sees, and the form's
+                // slider cannot even reach back to it. So a card that has
+                // never said where it goes is given somewhere it can be seen.
+                needs: (/** @type {any} */ cfg) => SC.safeFloat(cfg.tick_count, 0) > 1,
+                seed: { tick_count: 11 }, place: { multiplier_offset_y: -20 },
+                steps: [
+                  ...colourRows('multiplier_color_type', 'multiplier_color', 'multiplier',
+                                '#ffffff', 'adaptive'),
+                  { key: 'multiplier_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
+                    what: 'decimals' },
+                  { key: 'multiplier_divide_ticks', icon: '\u00F7', flag: true,
+                    what: 'divide the tick labels by it',
+                    condition: (/** @type {any} */ cfg) => !!cfg.show_tick_labels },
+                ] },
 });
 
 /**
@@ -1255,6 +1295,41 @@ const BAR_PARTS = Object.freeze({
  */
 const partCan = (spec, cfg) => !spec.can || spec.can(cfg);
 
+/**
+ * What has to be written alongside the switch for a part to actually appear.
+ *
+ * A switch is not always enough. A label with no text draws nothing however
+ * active it is; a multiplier is a range divided between ticks, so a gauge
+ * with no ticks draws none however loudly it is asked to - and a part
+ * switched on from the canvas that then fails to appear reads as a broken
+ * button rather than as a setting that is missing something.
+ *
+ * Two rules, because they answer two questions.
+ *
+ * `needs` is what the part stands on, and `seed` what to write when it is not
+ * standing on it: a key and a value where one field is missing, a predicate
+ * and a patch where what is missing is a condition rather than a field. Where
+ * the predicate already holds nothing is written at all, so a gauge that has
+ * 21 ticks keeps them - and where it does not hold, the patch goes in whole,
+ * because a card that says `tick_count: 0` has said something that does not
+ * work rather than nothing.
+ *
+ * `place` is where the part goes, and that one is written only where the card
+ * says nothing: a part somebody has already put somewhere stays there.
+ */
+const partSeed = (spec, cfg) => {
+  const patch = {};
+  for (const [k, v] of Object.entries(spec.place || {})) {
+    if (cfg[k] === undefined) patch[k] = v;
+  }
+  if (typeof spec.needs === 'function') {
+    if (!spec.needs(cfg)) Object.assign(patch, spec.seed);
+  } else if (spec.needs && !cfg[spec.needs]) {
+    patch[spec.needs] = spec.seed;
+  }
+  return patch;
+};
+
 /** Whether the part is actually being drawn right now. */
 const partOn = (spec, cfg) => partCan(spec, cfg) && spec.on(cfg);
 
@@ -1387,6 +1462,8 @@ const INNER_KINDS = Object.freeze({
       const on = [];
       if (cfg.gauge_label_text && cfg.gauge_label_active !== false) on.push('gauge_label');
       if (cfg.show_value) on.push('value');
+      if (cfg.show_scale_label) on.push('scale_label');
+      if (cfg.show_multiplier_label && SC.safeFloat(cfg.tick_count, 0) > 1) on.push('multiplier');
       return on;
     },
     write: (/** @type {any} */ slot, /** @type {any} */ t, /** @type {any} */ patch) => {
@@ -1466,9 +1543,6 @@ const INNER_KINDS = Object.freeze({
  * A text has no left edge to line up against here - it has a middle, and the
  * gauge has one too.
  */
-/** Half a cap height, in ems: what a baselined part sits above its own y. */
-const BASELINE_LIFT = 0.35;
-
 const MIDDLE_AXIS = Object.freeze({
   hcenter: { axis: 'x', what: 'vertical' },
   vcenter: { axis: 'y', what: 'horizontal' },
@@ -2006,14 +2080,43 @@ class ScCanvasEditor extends LitElement {
         box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
       .inner-drop:hover { background: var(--error-color,#db4437); border-color: var(--error-color,#db4437);
         color: #fff; }
-      /* The offer to switch a part on, standing where that part would be
-         drawn. It writes the key the form's own switch writes, so there is one
-         setting and not two. Dashed, because nothing is there yet. */
-      .inner-add { position: absolute;
-        transform: translate(calc(-50% + var(--sc-chip-dx, 0px)),
-                             calc(-50% + var(--sc-chip-dy, 0px)));
+      /* Every offer this element has not taken up yet, down the sides of it -
+         out of the drawing, and out of the way of the chips of the parts that
+         are drawn.
+
+         Each used to stand where its part would appear, which reads well with
+         one offer out and badly with six. A row across the top was no better
+         on a gauge: the middle of the top edge is where the arc reaches
+         highest, so the row lay over the drawing on exactly the elements that
+         had the most to offer. The sides are the empty part of a round thing
+         in a square box, and there is room there for every offer a kind has.
+
+         A column per kind, so which are texts on the face and which are rings
+         around it is said by where they stand rather than by a gap in a list.
+         It wraps inwards if a column ever runs out of height - never off the
+         box - and the right-hand one packs to the right so its second column
+         grows towards the middle rather than away.
+
+         Only left/top or right/top, never both sides at once: an absolute box
+         spanning two edges is as wide as the element whatever it holds, and
+         the dodging measures this box, so a stretched one would read as being
+         in the panel's way from either side and could never step out of it. */
+      .inner-adds { position: absolute; top: 6px;
+        max-height: calc(100% - 42px);
+        transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
+        display: flex; flex-flow: column wrap; column-gap: 6px; row-gap: 3px;
+        z-index: 6; pointer-events: none; }
+      /* Below the pencil, which owns the top left corner. */
+      .inner-adds.left { left: 6px; top: 36px;
+        align-items: flex-start; align-content: flex-start; }
+      .inner-adds.right { right: 6px;
+        align-items: flex-end; align-content: flex-end; }
+      /* The offer to switch a part on. It writes the key the form's own switch
+         writes, so there is one setting and not two. Dashed, because nothing
+         is there yet. */
+      .inner-add { pointer-events: auto;
         padding: 1px 6px; font-size: 11.5px; line-height: 1.5; white-space: nowrap;
-        border-radius: 4px; cursor: pointer; touch-action: none; z-index: 6;
+        border-radius: 4px; cursor: pointer; touch-action: none;
         border: 1px dashed var(--sc-part); background: rgba(0,0,0,0.65); color: #fff;
         box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
       .inner-add:hover { background: var(--primary-color,#03a9f4); border-style: solid; }
@@ -2030,23 +2133,23 @@ class ScCanvasEditor extends LitElement {
          dragged, and the tail is dragged in towards the pivot where the hub's
          own chip stands. */
       .grip-layer { z-index: 8; }
-      /* Half transparent, both of them: the band lies across the very marks it
-         is there to place, and at full strength the selected one hid the ticks
-         and sub-ticks under it. Which ring is in hand is said by its width and
-         by its unbroken line instead, neither of which costs any legibility. */
+      /* Thin, dashed and half transparent: the band lies across the very marks
+         it is there to place, and anything heavier hid the ticks and
+         sub-ticks under it. It used to go solid and half again as wide when
+         it was the ring in hand, back when every ring had one and the width
+         was what told them apart. Only the ring in hand is drawn now, so
+         there is nothing left to tell apart and the colour is enough. */
       .ring-band { fill: none; stroke: var(--sc-part); stroke-width: 0.35;
         stroke-dasharray: 1.2 1.2; opacity: 0.5;
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
-      .ring-band.sel { stroke: var(--sc-part-sel); stroke-width: 0.6;
-        stroke-dasharray: none; opacity: 0.5;
-        filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
+      .ring-band.sel { stroke: var(--sc-part-sel); }
       .ring-hit { fill: none; stroke: transparent; stroke-width: 2.4;
         pointer-events: stroke; cursor: ns-resize; touch-action: none; }
-      /* The needle itself, which selects the pointer but drags nothing - the
-         two ends do that, and they are drawn after this so they win the press
-         where the two overlap. */
+      /* The needle itself, which selects the pointer and slides it in and out
+         along its own line. The two ends set its length instead, and they are
+         drawn after this so they win the press where the two overlap. */
       .needle-hit { fill: none; stroke: transparent; stroke-width: 3;
-        pointer-events: stroke; cursor: pointer; touch-action: none; }
+        pointer-events: stroke; cursor: move; touch-action: none; }
       /* The needle's two ends. Filled, unlike the bands: a grip is small
          enough that taking every press inside it is what it is for, and the
          needle has nothing underneath it worth reading through. */
@@ -3383,7 +3486,14 @@ class ScCanvasEditor extends LitElement {
         ? { offset: SC.safeFloat(cfg.pointer_offset, 2),
             length: SC.safeFloat(cfg.pointer_length, 10) }
         : null;
-      this._innerDrag = { part, mode, end, from, ...geo, started: false };
+      // Where along the line the hand took hold of it. An end handle is a
+      // point and is simply dragged to the pointer; the line is grabbed
+      // anywhere along its length, so what it follows is the travel from
+      // here rather than the pointer's own radius.
+      const at0 = end === 'line'
+        ? this._needleRadius({ x: e.clientX, y: e.clientY }, geo) : 0;
+      this._innerDrag = { part, mode, end, from, at0, ...geo,
+                          startX: e.clientX, startY: e.clientY, started: false };
       this._ptr = { x: e.clientX, y: e.clientY };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
@@ -3404,6 +3514,23 @@ class ScCanvasEditor extends LitElement {
     };
     this._ptr = { x: e.clientX, y: e.clientY };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
+  }
+
+  /**
+   * How far out along the needle's own line a point stands, in viewBox units.
+   *
+   * Signed, not a distance: a distance would fold the far side of the pivot
+   * back onto the near one, and the far side is exactly where a tail is
+   * dragged to. Measured against the angle the needle is drawn at this
+   * instant rather than the one the config asks for, because mid-animation
+   * those are two different numbers.
+   *
+   * @param {{x: number, y: number}} p the point, in screen pixels
+   * @param {any} geo the gesture's geometry - centre and pixels per unit
+   */
+  _needleRadius(p, geo) {
+    const ang = (this._innerRects?.angle ?? 0) * Math.PI / 180;
+    return ((p.x - geo.cx) * Math.cos(ang) + (p.y - geo.cy) * Math.sin(ang)) / geo.pxPerUnit;
   }
 
   /**
@@ -3498,13 +3625,17 @@ class ScCanvasEditor extends LitElement {
       return;
     }
     if (d.mode === 'needle') {
-      // Along the needle's own line, signed: a distance would fold the far
-      // side of the pivot back onto the near one, and the far side is exactly
-      // where a tail is dragged to.
-      const ang = (this._innerRects?.angle ?? 0) * Math.PI / 180;
-      const at = ((p.x - d.cx) * Math.cos(ang) + (p.y - d.cy) * Math.sin(ang)) / d.pxPerUnit;
-      this._writeInner(needleFromRadius(d.end, at, d.from.offset, d.from.length,
-                                        d.ring, d.scale), d.started);
+      const at = this._needleRadius(p, d);
+      if (d.end === 'line') {
+        // The line is also what a press selects the pointer by, so a hand
+        // that shook while pressing must not nudge the needle. Past a few
+        // pixels it is a drag and stays one.
+        if (!d.started && Math.hypot(p.x - d.startX, p.y - d.startY) <= CHIP_DRAG_SLOP) return;
+        this._writeInner(needleSlide(at, d.at0, d.from.offset, d.scale), d.started);
+      } else {
+        this._writeInner(needleFromRadius(d.end, at, d.from.offset, d.from.length,
+                                          d.ring, d.scale), d.started);
+      }
       d.started = true;
       return;
     }
@@ -3549,8 +3680,7 @@ class ScCanvasEditor extends LitElement {
       // sliders would stay hidden behind a frame that is not there.
       this._innerSel = null;
     }
-    const patch = { [spec.active]: on };
-    if (on && spec.needs && !target.cfg[spec.needs]) patch[spec.needs] = spec.seed;
+    const patch = { [spec.active]: on, ...(on ? partSeed(spec, target.cfg) : null) };
     this._writeInner(patch, false);
   }
 
@@ -3670,78 +3800,8 @@ class ScCanvasEditor extends LitElement {
     };
   }
 
-  /**
-   * Where a part would be drawn if it were switched on, in per cent of the
-   * element's box.
-   *
-   * Measured for the gauge's own square rather than the element's box: the
-   * 50x50 viewBox letterboxes inside a box of any shape, and an offset is a
-   * fraction of the viewBox. Reading it against the box instead is what once
-   * put the value's chip at 104% - outside the element altogether, which is
-   * why it never appeared.
-   */
-  _innerHome(part) {
-    const spec = this._innerTarget?.parts[part];
-    const svg = this._innerRects?.svg;
-    if (!spec || !svg) return null;
-    const cfg = this._innerTarget?.cfg || {};
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
-    const at = (/** @type {number} */ v) => 0.5 + v * scale / GAUGE_VIEW;
-    const clamp = (/** @type {number} */ v) => Math.max(1, Math.min(99, v));
-    const lift = spec.baseline
-      ? SC.safeFloat(cfg[spec.size], spec.dsize) * BASELINE_LIFT * scale / GAUGE_VIEW * svg.h
-      : 0;
-    return {
-      l: clamp(svg.l + svg.w * at(SC.safeFloat(cfg[spec.x], spec.dx))),
-      t: clamp(svg.t + svg.h * at(SC.safeFloat(cfg[spec.y], spec.dy)) - lift),
-    };
-  }
 
-  /**
-   * The ring a part is drawn on, as a box in per cent of the element's box.
-   *
-   * Two radii rather than one: the gauge's square letterboxes inside a box of
-   * any shape, so the same number of viewBox units is a different per cent
-   * across than it is down. The box that comes out is an ellipse in per cent
-   * and a circle on the screen.
-   */
-  _ringBox(part) {
-    const spec = this._innerTarget?.rings[part];
-    const svg = this._innerRects?.svg;
-    if (!spec || !svg) return null;
-    const cfg = this._innerTarget?.cfg || {};
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
-    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale);
-    const r = ringPartAt(spec, cfg, ring, scale);
-    const rx = Math.abs(r) / GAUGE_VIEW * svg.w;
-    const ry = Math.abs(r) / GAUGE_VIEW * svg.h;
-    return {
-      cx: svg.l + svg.w * 0.5,
-      cy: svg.t + svg.h * 0.5,
-      rx, ry,
-    };
-  }
 
-  /**
-   * Where a ring's offer stands: on the ring it would be drawn on, near the
-   * top of the dial, each of the three a little way round from the next so
-   * three offers on one gauge do not land on top of each other.
-   */
-  _ringHome(part) {
-    // A part that is told where to stand is told in per cent of the box, which
-    // is the answer this is on its way to - and it has no radius to work one
-    // out from, so asking for its ring would answer nothing.
-    const told = this._innerTarget?.rings[part]?.spot;
-    if (told) return { l: told.l, t: told.t };
-    const box = this._ringBox(part);
-    if (!box) return null;
-    const ang = (RING_CHIP_ANGLE[part] ?? -90) * Math.PI / 180;
-    const clamp = (/** @type {number} */ v) => Math.max(2, Math.min(98, v));
-    return {
-      l: clamp(box.cx + box.rx * Math.cos(ang)),
-      t: clamp(box.cy + box.ry * Math.sin(ang)),
-    };
-  }
 
   /**
    * Bring the settings that belong to the part just taken hold of up to where
@@ -3844,34 +3904,67 @@ class ScCanvasEditor extends LitElement {
         ${this._innerSel === part
           ? this._renderSteppers(r.l + r.w / 2, r.t + r.h) : ''}`;
     })}
-    ${Object.entries(target.parts).map(([part, spec]) => {
-      // On the spot the part would take, so the press both switches it on and
-      // says where it is about to appear.
-      if (drawn.has(part)) return '';
-      const home = this._innerHome(part);
-      if (!home) return '';
-      return html`
-        <button class="inner-add" style="left:${home.l}%; top:${home.t}%;"
-                title=${`Show the ${spec.label.toLowerCase()} on this ${target.k.noun}`}
-                @pointerdown=${swallow}
-                @click=${() => this._setInnerPart(part, true)}>+ ${spec.label}</button>`;
-    })}
     ${this._renderCorners()}
     ${this._renderSides()}
     ${this._renderRings(swallow)}
-    ${Object.entries(target.rings).map(([part, spec]) => {
-      const cfg = target.cfg;
-      // Offered only to an element that could have it: a bar drawn as a ring
-      // has nowhere to put a pill, and an offer it cannot take is noise.
-      if (!partCan(spec, cfg) || spec.on(cfg)) return '';
-      const home = this._ringHome(part);
-      if (!home) return '';
-      return html`
-        <button class="inner-add ring-add" style="left:${home.l}%; top:${home.t}%;"
-                title=${`Show ${spec.label.toLowerCase()} on this ${target.k.noun}`}
-                @pointerdown=${swallow}
-                @click=${() => this._setInnerRing(part, true)}>+ ${spec.label}</button>`;
-    })}`;
+    ${this._renderOffers(swallow)}`;
+  }
+
+  /**
+   * The offers to switch on what this element is not drawing yet, in a column
+   * down each side of it.
+   *
+   * Each used to stand where its part would appear - on its own ring, or on
+   * the spot the text would take - so that the press both switched the thing
+   * on and said where it was about to show up. It reads well with one offer
+   * out and badly with four: a gauge drawing none of them put a button on
+   * every ring and two more over the middle, and they landed on each other,
+   * on the chips of the parts that *were* drawn, and across the drawing the
+   * whole editor is there to let you see.
+   *
+   * So they stand at the sides instead, where a round drawing in a square box
+   * leaves the room. Where a part appears is answered by the part appearing -
+   * it arrives in hand, framed, with its numbers open - and the offers stop
+   * competing with the drawing for the same space. A column also means they
+   * cannot land on each other, which the dodging had been asked to sort out
+   * one collision at a time.
+   *
+   * Parts down one side and rings down the other, in the order their tables
+   * are written. How they are switched on is nothing a person reading a row
+   * of buttons cares about, but which of them are texts on the face and which
+   * are rings around it is, and one list mixing the two reads as an arbitrary
+   * one. A kind with only parts simply has an empty right-hand side.
+   *
+   * @param {(e: any) => void} swallow
+   */
+  _renderOffers(swallow) {
+    const target = this._innerTarget;
+    if (!target) return '';
+    const drawn = new Set(target.drawn);
+    const groups = [
+      {
+        side: 'left',
+        offers: Object.entries(target.parts)
+          .filter(([part]) => !drawn.has(part))
+          .map(([part, spec]) => ({ spec, on: () => this._setInnerPart(part, true) })),
+      },
+      {
+        side: 'right',
+        offers: Object.entries(target.rings)
+          .filter(([, spec]) => partCan(spec, target.cfg) && !spec.on(target.cfg))
+          .map(([part, spec]) => ({ spec, on: () => this._setInnerRing(part, true) })),
+      },
+    ].filter((group) => group.offers.length);
+    if (!groups.length) return '';
+    return html`
+      ${groups.map(({ side, offers }) => html`
+        <div class="inner-adds ${side}">
+          ${offers.map(({ spec, on }) => html`
+            <button class="inner-add"
+                    title=${`Show ${spec.label.toLowerCase()} on this ${target.k.noun}`}
+                    @pointerdown=${swallow}
+                    @click=${on}>+ ${spec.label}</button>`)}
+        </div>`)}`;
   }
 
   /**
@@ -3906,7 +3999,14 @@ class ScCanvasEditor extends LitElement {
     // What is drawn as a band, and what only ever stands somewhere. A part
     // with a spot has no radius, so none of the arithmetic below is asked of
     // it and neither layer is drawn for a kind that has only such parts.
-    const bands = live.filter(([, spec]) => !spec.needle && !spec.spot);
+    // Only the ring in hand gets a band. A gauge has five of them, and five
+    // dashed circles laid over the very marks they are there to place is a
+    // picture of the editor rather than of the card - the ticks, the sub-ticks
+    // and the numbers on them all vanished under their own frames. The chips
+    // stay, so every ring can still be reached; the band is for the one being
+    // moved, and the press on the chip is what brings it out.
+    const bands = live.filter(([part, spec]) =>
+      !spec.needle && !spec.spot && this._innerSel === part);
     const needles = live.filter(([, spec]) => spec.needle);
     const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
     const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale);
@@ -3934,8 +4034,7 @@ class ScCanvasEditor extends LitElement {
           const r = at(spec);
           if (r < 0.5) return '';
           return svg`
-            <circle class="ring-band ${this._innerSel === part ? 'sel' : ''}"
-                    cx=${c.x} cy=${c.y} r=${r}></circle>
+            <circle class="ring-band sel" cx=${c.x} cy=${c.y} r=${r}></circle>
             <circle class="ring-hit" cx=${c.x} cy=${c.y} r=${r}
                     @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'ring')}>
               <title>${'Drag the ' + spec.label.toLowerCase() + ' in or out'}</title>
@@ -3953,8 +4052,10 @@ class ScCanvasEditor extends LitElement {
                   x1=${n.tail.x} y1=${n.tail.y} x2=${n.tip.x} y2=${n.tip.y}></line>
             <line class="needle-line needle-hit"
                   x1=${n.tail.x} y1=${n.tail.y} x2=${n.tip.x} y2=${n.tip.y}
-                  @pointerdown=${(/** @type {any} */ ev) => this._innerDown(ev, part, 'ring')}>
-              <title>${'Select the ' + spec.label.toLowerCase()}</title>
+                  @pointerdown=${(/** @type {any} */ ev) =>
+                    this._innerDown(ev, part, 'needle', 'line')}>
+              <title>${'Drag the ' + spec.label.toLowerCase()
+                       + ' in or out, or either end to set its length'}</title>
             </line>
             ${Object.entries(NEEDLE_ENDS).map(([end, e2]) => svg`
               <circle class="ring-grip ${sel ? 'sel' : ''}" data-end=${end}
@@ -4273,7 +4374,7 @@ class ScCanvasEditor extends LitElement {
       h.l < o.right + M && h.l + h.w > o.left - M
       && h.t < o.bottom + M && h.t + h.h > o.top - M;
     const taken = box ? [box.getBoundingClientRect()] : [];
-    const chips = /** @type {any[]} */ ([...root.querySelectorAll('.ring-tag, .inner-add')]);
+    const chips = /** @type {any[]} */ ([...root.querySelectorAll('.ring-tag, .inner-adds')]);
     // The one the panel hangs from goes first, so it gets the shortest way out
     // and the others arrange themselves around it. It gives way like any
     // other: the panel is placed from where that chip belongs, not from where

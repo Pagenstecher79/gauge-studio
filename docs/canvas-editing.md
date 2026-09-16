@@ -42,6 +42,50 @@ gesture cannot reach a value the setting can hold, the handle is modelling the
 wrong thing.** Look for the geometry the value actually lives in before adding
 a second handle or a clamp.
 
+The line between the two ends is a third grip, and it asks the other question:
+the ends say how long the needle is, the line says where on its own axis it
+sits. So it writes `pointer_offset` and leaves `pointer_length` alone, and the
+tail follows the tip.
+
+That one is **relative where the ends are absolute**. An end is a point and
+can be dragged to wherever the pointer is; a line is taken hold of somewhere
+along its length, and jumping the tip to the pointer would throw the needle by
+however far from the tip the hand happened to grab it. So the grab records the
+radius it began at and follows the travel from there.
+
+The line is also what a press selects the pointer by, which is why it is the
+one grip with a slop: under `CHIP_DRAG_SLOP` pixels nothing is written, and a
+press with a shaking hand stays a press. A handle needs no such guard - nobody
+reaches for a 2.4-unit circle by accident.
+
+The tail rests on the pivot, within `NEEDLE_CENTRE_SNAP` of it. A rest is
+worth adding where two drawings differ and only one of them is what anybody
+meant - a needle that starts at the centre against one that starts a hair off
+it - and where the hand cannot hit the value on its own: the tail is behind
+the hub exactly as it reaches the centre, hidden by the thing it is being
+lined up with. Keep such a rest **narrow** - a few pixels at an ordinary
+size. It is there to catch a hand already on the value, not to pull one
+towards it: a reach wide enough to feel like help takes the last of the
+travel away, and the handle stops answering the hand over the stretch where
+it matters most. It must also pull straight through; a tail dragged out the
+far side is a dial people draw on purpose and must not stick on the way. The
+tip gets none: it is lined up against a ring that is drawn, and where it
+should sit is something you can see.
+
+**A rest lands on the value, not near it**, and that is worth the one place
+where the two rules collide. Every one of these drags writes on the tenth its
+slider steps in, but the length that puts the tail on the pivot is the ring's
+radius over the scale, and the ring sits half a stroke in from the edge - a
+`stroke_width` of 0.5 leaves that length on a quarter. Rounded to the
+nearest tenth it lands beside the pivot by as much as the rest is wide, which
+is the rest failing at exactly its job. So the snapped length is the
+exception that is written finer.
+
+Worth knowing before reaching for the scale: it is not in this. The tip is
+`ring - offset * scale` and the ring is itself a multiple of the scale, so
+the scale cancels out of `tip / scale` entirely. `gauge_scale` cannot make
+this land or miss, and no default for it would have.
+
 ## 3. Only one edge of a band can move
 
 A ring drawn with a stroke centred on radius `r` has its outer edge at

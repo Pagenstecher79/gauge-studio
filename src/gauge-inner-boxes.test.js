@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { offsetsFromDrag, fontFromResize, estimateRect, clamp,
          ringRadius, ringPartRadius, offsetFromRadius,
          OFFSET_LIMIT, FONT_MAX, FONT_MIN, GAUGE_CENTER,
-         needleEnds, needleFromRadius,
+         needleEnds, needleFromRadius, needleSlide, NEEDLE_CENTRE_SNAP,
          ringInnerEdge, strokeFromRadius } from './gauge-inner-boxes.js';
 
 describe('offsetsFromDrag', () => {
@@ -169,6 +169,50 @@ describe('the needle', () => {
   it('rounds to the tenth the sliders step in', () => {
     expect(needleFromRadius('tail', 3.33, 2, 10, 20, 0.9).pointer_length).toBe(16.5);
   });
+
+  it('rests the tail on the pivot from either side of it', () => {
+    // The tip is at 18, so a tail exactly on the pivot is a length of 18.
+    for (const at of [NEEDLE_CENTRE_SNAP, 0, -NEEDLE_CENTRE_SNAP]) {
+      expect(needleFromRadius('tail', at, 2, 10, 20, 1)).toEqual({ pointer_length: 18 });
+    }
+  });
+
+  it('lets the tail through the pivot rather than sticking on it', () => {
+    const past = NEEDLE_CENTRE_SNAP + 0.5;
+    expect(needleFromRadius('tail', -past, 2, 10, 20, 1).pointer_length).toBe(18 + past);
+    expect(needleFromRadius('tail', past, 2, 10, 20, 1).pointer_length).toBe(18 - past);
+  });
+
+  it('lands the tail on the pivot when the length is not a tenth', () => {
+    // A stroke of 0.5 puts the ring on 23.75, which is not a tenth. The rest
+    // is meant literally, so this is the one drag written finer.
+    const ring = ringRadius(0.5, 1);
+    const p = needleFromRadius('tail', 0.2, 0, 10, ring, 1);
+    expect(p.pointer_length).toBe(23.75);
+    expect(needleEnds(0, p.pointer_length, ring, 1).tail).toBe(0);
+  });
+
+  it('keeps the tenth for every length that is not the rest', () => {
+    const ring = ringRadius(0.5, 1);
+    const p = needleFromRadius('tail', 2, 0, 10, ring, 1);
+    expect(p.pointer_length).toBe(21.8);
+  });
+
+  it('measures the rest in what is drawn, not in what is written', () => {
+    // Half the scale draws the same needle half the size, so the same reach
+    // around the pivot is twice as many of the pointer's own units.
+    const p = needleFromRadius('tail', NEEDLE_CENTRE_SNAP, 2, 10, 20, 0.5);
+    expect(needleEnds(2, p.pointer_length, 20, 0.5).tail).toBe(0);
+  });
+
+  it('gives the tip no rest of its own - it has a ring to line up against', () => {
+    // The tip cannot reach the pivot anyway, its offset being the smaller
+    // field, so what is asserted here is that it lands where it was let go.
+    for (const at of [14, 14 + NEEDLE_CENTRE_SNAP, 14 - NEEDLE_CENTRE_SNAP]) {
+      const p = needleFromRadius('tip', at, 2, 10, 20, 1);
+      expect(needleEnds(p.pointer_offset, p.pointer_length, 20, 1).tip).toBe(at);
+    }
+  });
 });
 
 describe('the ring thickness', () => {
@@ -191,5 +235,41 @@ describe('the ring thickness', () => {
   it('never writes a thickness its own slider would refuse', () => {
     expect(strokeFromRadius(-99, 1)).toBe(5);
     expect(strokeFromRadius(99, 1)).toBe(0);
+  });
+});
+
+describe('needleSlide', () => {
+  it('moves the offset by how far the grab travelled, not to where it landed', () => {
+    // Grabbed at 15, dragged out to 18: three units further out, wherever on
+    // the line the hand happened to take hold of it.
+    expect(needleSlide(18, 15, 2, 1)).toEqual({ pointer_offset: -1 });
+    // The same three units, grabbed somewhere else entirely.
+    expect(needleSlide(8, 5, 2, 1)).toEqual({ pointer_offset: -1 });
+  });
+
+  it('pulls the offset up when the needle is pushed inward', () => {
+    expect(needleSlide(12, 15, 2, 1)).toEqual({ pointer_offset: 5 });
+  });
+
+  it('stands still for a grab that has not moved', () => {
+    expect(needleSlide(15, 15, 2, 1)).toEqual({ pointer_offset: 2 });
+  });
+
+  it('changes the number twice as fast on a gauge drawn half size', () => {
+    expect(needleSlide(18, 15, 2, 0.5)).toEqual({ pointer_offset: -4 });
+  });
+
+  it('keeps the needle as long as it was', () => {
+    const ring = 20, scale = 1;
+    const was = needleEnds(2, 10, ring, scale);
+    const p = needleSlide(18, 15, 2, scale);
+    const now = needleEnds(p.pointer_offset, 10, ring, scale);
+    expect(now.tip - now.tail).toBeCloseTo(was.tip - was.tail, 6);
+    expect(now.tip).toBeCloseTo(was.tip + 3, 6);
+  });
+
+  it('never writes an offset its own slider would refuse', () => {
+    expect(needleSlide(999, 0, 2, 1).pointer_offset).toBe(-10);
+    expect(needleSlide(-999, 0, 2, 1).pointer_offset).toBe(10);
   });
 });
