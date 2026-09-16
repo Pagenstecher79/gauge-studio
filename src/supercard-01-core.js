@@ -485,7 +485,8 @@ Object.assign(window.SupercardUtils, (() => {
    * blocks that are not a field at all - a preview, a picker grid.
    *
    * `ctx` carries the entry being edited and how to write to it:
-   * `{ entry, slot, hass, set(id, value), setDebounced(id, value) }`.
+   * `{ entry, slot, hass, set(id, value), setDebounced(id, value) }`, and
+   * `framed` - the set of parts the canvas has taken over, for `framedBy`.
    *
    * @param {any} field
    * @param {any} ctx
@@ -493,6 +494,17 @@ Object.assign(window.SupercardUtils, (() => {
   const renderField = (field, ctx) => {
     if (!field) return html``;
     if (field.condition && !field.condition(ctx.entry, ctx.slot)) return html``;
+    // A setting the canvas has taken over is not offered here as well: two
+    // live controls for one value is worse than one badly placed control.
+    // A function where what it is framed by depends on the entry - a solid
+    // colour is a swatch on the drawing, a gradient is a list and is not.
+    const framedBy = typeof field.framedBy === 'function'
+      ? field.framedBy(ctx.entry, ctx) : field.framedBy;
+    if (framedBy && ctx.framed?.has?.(framedBy)) return html``;
+    // The mirror of it: the line that stands in for what has just gone. A fold
+    // that has lost most of its rows otherwise reads as a fold that is missing
+    // something.
+    if (field.framedWhen && !ctx.framed?.has?.(field.framedWhen)) return html``;
 
     // A field usually reads its own key; `value` is for the few that do not -
     // a default that falls back through an older key, a switch that is on

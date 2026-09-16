@@ -2651,6 +2651,19 @@ class ScCanvasEditor extends LitElement {
     return null;
   }
 
+  /**
+   * What the canvas has taken over from the form right now.
+   *
+   * The part in hand, and - for a kind whose corners are grips - the corners,
+   * which are on the drawing for as long as it is open rather than only while
+   * something is selected.
+   */
+  get _innerFramed() {
+    const t = this._innerOn ? this._innerTarget : null;
+    if (!t) return [];
+    return [...(this._innerSel ? [this._innerSel] : []), ...(t.k.corners ? ['corners'] : [])];
+  }
+
   /** The spec of the part in hand, whichever kind of element it belongs to. */
   get _selSpec() {
     const t = this._innerTarget;
@@ -4132,7 +4145,7 @@ class ScCanvasEditor extends LitElement {
                          .commitFn=${props.commitFn} .only=${Number(m[1])}
                          .priority=${this._innerOn && this._innerSel
                            ? (this._selSpec?.section || '') : ''}
-                         .framed=${this._innerOn && this._innerSel ? [this._innerSel] : []}></sc-gauge-editor>`);
+                         .framed=${this._innerFramed}></sc-gauge-editor>`);
     }
     if ((m = id.match(/^label_(\d+)(?:_(?:icon|name|value))?$/))) {
       const box = this._canvas.elements.find(e => e.id === id);
@@ -4159,6 +4172,7 @@ class ScCanvasEditor extends LitElement {
       ${el?.surface ? html`
         <div style="padding:0 4px 8px;">
           <sc-color-panel .hass=${props.hass} .slot=${props.slot} .switchless=${true}
+                          .framed=${this._inner === id ? this._innerFramed : []}
                           .commitFn=${props.commitFn} .target=${'elm_' + id}></sc-color-panel>
         </div>` : ''}
       <div style="padding:0 4px 8px;">

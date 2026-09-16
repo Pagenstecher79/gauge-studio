@@ -133,8 +133,13 @@ class ScColorEditor extends LitElement {
         }) },
 
       { type: 'details', label: '🎨 Design & Colours', style: 'margin: 4px 0 0 0;', fields: [
-        { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox', value: autoBorder },
-        { type: 'custom', condition: pat => !autoBorder(pat), render: ctx => this._radiusRow(ctx) },
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
+          label: 'The corners are on the canvas - drag either grip, at the bottom '
+               + 'left or the top right.' },
+        { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox',
+          value: autoBorder, framedBy: 'corners' },
+        { type: 'custom', condition: pat => !autoBorder(pat), framedBy: 'corners',
+          render: ctx => this._radiusRow(ctx) },
 
         { id: 'wave_count', label: 'Count (density)', type: 'range', min: 1, max: 20, int: true,
           placeholder: 3, condition: waveColors,
@@ -165,11 +170,20 @@ class ScColorEditor extends LitElement {
             { value: 'smoke', label: 'Smoke / fog', selected: pat.fluid_style === 'smoke' },
             { value: 'particles', label: 'Particles / stardust', selected: pat.fluid_style === 'particles' },
           ] },
-        { type: 'custom', condition: pat => !waveColors(pat), render: ctx => this._colorsBlock(ctx) },
+        // Only the one colour of a solid pattern is on the drawing. A
+        // gradient is a list of stops and a picture of its own.
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'paint',
+          label: 'Colour and opacity are on the canvas while this one is selected '
+               + '- use the buttons under its chip.' },
+        { type: 'custom', condition: pat => !waveColors(pat),
+          framedBy: pat => ((pat.bg_type || 'solid') === 'solid'
+                            && pat.animation !== 'fluid' ? 'paint' : null),
+          render: ctx => this._colorsBlock(ctx) },
 
         { id: 'gradient_angle', label: 'Angle (degrees)', type: 'range', min: 0, max: 360, int: true,
           placeholder: 90, style: 'margin-top:8px;', condition: angled },
-        { id: 'opacity', label: 'Opacity (%)', type: 'range', min: 0, max: 100, int: true, placeholder: 100 },
+        { id: 'opacity', label: 'Opacity (%)', type: 'range', min: 0, max: 100, int: true,
+          placeholder: 100, framedBy: 'paint' },
       ] },
 
       { type: 'details', label: '📊 Data source for colour calculation',
@@ -209,7 +223,10 @@ class ScColorEditor extends LitElement {
       ] },
 
       { type: 'details', label: '🎬 Animation & mode', fields: [
-        { id: 'animation', label: 'Effect', type: 'select', width: '60%',
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'paint',
+          label: 'The effect is on the canvas while this one is selected - it is the '
+               + 'list under its chip.' },
+        { id: 'animation', label: 'Effect', type: 'select', width: '60%', framedBy: 'paint',
           options: pat => PATTERN_ANIMATIONS.map(
             a => ({ ...a, selected: (pat.animation || 'none') === a.value })) },
 
@@ -525,7 +542,8 @@ class ScColorPanel extends ScColorEditor {
   static get properties() {
     return { slot: { type: Object }, hass: { type: Object }, commitFn: { type: Function },
              target: { type: String }, label: { type: String },
-             switchless: { type: Boolean }, noPump: { type: Boolean } };
+             switchless: { type: Boolean }, noPump: { type: Boolean },
+             framed: { type: Array } };
   }
 
   static get styles() {
@@ -557,8 +575,9 @@ class ScColorPanel extends ScColorEditor {
     const on = !!pat?.enabled;
     let fields = this._fields().filter(f => f.id !== 'name' && f.id !== 'target');
     if (this.noPump) fields = fields.map(dropPump);
+    const framed = new Set(Array.isArray(this.framed) ? this.framed : []);
     const body = (entry) => SC.renderFields(fields, {
-      entry, slot: this.slot, hass: this.hass,
+      entry, slot: this.slot, hass: this.hass, framed,
       targets: getTargets(this.slot), usedTargets: [],
       set: (key, value) => this._apply({ [key]: value }),
       setMany: (fields2) => this._apply(fields2),
