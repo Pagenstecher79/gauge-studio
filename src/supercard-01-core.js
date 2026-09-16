@@ -485,14 +485,45 @@ Object.assign(window.SupercardUtils, (() => {
    * blocks that are not a field at all - a preview, a picker grid.
    *
    * `ctx` carries the entry being edited and how to write to it:
-   * `{ entry, slot, hass, set(id, value), setDebounced(id, value) }`.
+   * `{ entry, slot, hass, set(id, value), setDebounced(id, value) }`, and
+   * `framed` - the set of parts the canvas has taken over, for `framedBy`.
    *
    * @param {any} field
    * @param {any} ctx
    */
+  /**
+   * Whether a field has been handed over to the canvas and should not be
+   * drawn here.
+   *
+   * Two rules, one answer. `framedBy` names the part whose frame replaces the
+   * field, and the field goes while that part is framed - two live controls
+   * for one value is worse than one badly placed control. It may be a function
+   * of the entry, for where that depends on what is being edited: a solid
+   * colour is a swatch on the drawing, a gradient is a list and is not.
+   * `framedWhen` is the mirror, for the line that stands in for what has gone,
+   * so a fold that has lost most of its rows does not read as one that is
+   * missing something.
+   *
+   * Here rather than inside `renderField` because one editor - the bar's -
+   * draws its own fields, and the rule has to be the same rule there.
+   *
+   * @param {any} field
+   * @param {any} entry the config being edited
+   * @param {Set<string>|undefined} framed the parts the canvas has taken over
+   * @returns {boolean} true when the field is not to be drawn
+   */
+  const fieldFramed = (field, entry, framed) => {
+    if (!field) return false;
+    const by = typeof field.framedBy === 'function'
+      ? field.framedBy(entry) : field.framedBy;
+    if (by && framed?.has?.(by)) return true;
+    return !!field.framedWhen && !framed?.has?.(field.framedWhen);
+  };
+
   const renderField = (field, ctx) => {
     if (!field) return html``;
     if (field.condition && !field.condition(ctx.entry, ctx.slot)) return html``;
+    if (fieldFramed(field, ctx.entry, ctx.framed)) return html``;
 
     // A field usually reads its own key; `value` is for the few that do not -
     // a default that falls back through an older key, a switch that is on
@@ -781,7 +812,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     resolveAlias, withPatch, gaugeIsResponsive, onCanvas, cardIsPill, cardRadius,
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, slider, sliderRow, sliderField, tipDot,
-    renderField, renderFields,
+    renderField, renderFields, fieldFramed,
     editorStyles, formStyles
   });
 })());

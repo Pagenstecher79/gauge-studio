@@ -288,12 +288,24 @@ that is not a field - a preview, a picker grid, a datalist - is
 `type: 'custom'` and hands the markup back through `render(ctx)`.
 
 **Settings that the drawing expresses belong on the drawing**, and the form
-has to let go of them in the same change - `field.framedBy` names the part
-whose frame replaces a field, and the field disappears while that part is
-framed. Two live controls for one value is worse than one badly placed
-control. `docs/canvas-editing.md` is the guide to the rest of it: what may be
-a control on a canvas, the hit-testing and stacking rules, how the zoom
-belongs to the mode, and how to know any of it works.
+has to let go of them in the same change. `field.framedBy` names the part whose
+frame replaces a field, and the field disappears while that part is framed;
+`field.framedWhen` is its mirror, the line that stands in for what has gone, so
+a fold that has lost most of its rows does not read as one that is missing
+something. Both are in `SC.renderField`, so every field array has them, and a
+`framedBy` may be a function of the entry where whether a setting is on the
+drawing depends on the entry. Two live controls for one value is worse than one
+badly placed control.
+
+Which elements can be worked on that way is `INNER_KINDS` in
+`supercard-04-layout.js`: a kind says where its config lives, which parts it
+has, how its drawing is measured, and which editor holds its settings, and
+nothing else in the canvas editor knows one kind from another. A new kind is an
+entry there, not a second copy of the frames, the chips and the numbers.
+`docs/canvas-editing.md` is the guide to the rest of it: what may be a control
+on a canvas, the hit-testing and stacking rules, how the zoom belongs to the
+mode, why a corner grip does the arithmetic it does, and how to know any of it
+works.
 
 A folded section is `type: 'details'`, drawn the same everywhere - the gauge
 and the bar build theirs from a `'section'` field instead, because their own

@@ -1,5 +1,9 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
+import { BEND_ROOM, bendsOf, bendClipPath, bendEscapes } from "./canvas-bend.js";
+import { PATTERN_ANIMATIONS, defaultColorPattern, patchPattern, patchPatternStops,
+         patternList, patternPreviewCss, solidColorOf,
+         solidColorPatch } from "./color-pattern.js";
 
 const SC = window.SupercardUtils;
 
@@ -20,25 +24,6 @@ function getTargets(slot) {
     if (id !== 'empty' && SC.showsElement(slot, id)) targets.push({ id: `elm_${id}`, label });
   }
   return targets;
-}
-
-/**
- * A pattern nobody has touched yet. The list and the per-target panels both
- * start from this, so a pattern made in one place is the pattern made in the
- * other.
- *
- * @param {string} target
- */
-function defaultColorPattern(target) {
-  return {
-    id: Date.now(), enabled: true, name: 'New pattern', target,
-    bg_condition: [], anim_condition: [], bg_type: 'solid',
-    gradient_stops: [{ pos: 100, color: '#ff9800' }], opacity: 100, gradient_angle: 90, animation: 'none',
-    anim_duration: 3, wave_count: 3, wave_c1: '#03a9f4', wave_c2: 'transparent',
-    border_radius: '', border_radius_unit: 'px', wave_invert: false, pump_scale: 1.1,
-    radial_x: 50, radial_y: 50, wave_balance: 50,
-    wobble_amplitude: 100, wobble_freq: 4, wobble_pause: 2
-  };
 }
 
 /**
@@ -149,8 +134,16 @@ class ScColorEditor extends LitElement {
         }) },
 
       { type: 'details', label: '🎨 Design & Colours', style: 'margin: 4px 0 0 0;', fields: [
-        { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox', value: autoBorder },
-        { type: 'custom', condition: pat => !autoBorder(pat), render: ctx => this._radiusRow(ctx) },
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
+          label: 'The corners are on the canvas - drag either grip, at the bottom '
+               + 'left or the top right.' },
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
+          label: 'Each side can be bowed out or in from the grip on its middle. '
+               + 'Double-click one to put that side straight again.' },
+        { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox',
+          value: autoBorder, framedBy: 'corners' },
+        { type: 'custom', condition: pat => !autoBorder(pat), framedBy: 'corners',
+          render: ctx => this._radiusRow(ctx) },
 
         { id: 'wave_count', label: 'Count (density)', type: 'range', min: 1, max: 20, int: true,
           placeholder: 3, condition: waveColors,
@@ -181,11 +174,20 @@ class ScColorEditor extends LitElement {
             { value: 'smoke', label: 'Smoke / fog', selected: pat.fluid_style === 'smoke' },
             { value: 'particles', label: 'Particles / stardust', selected: pat.fluid_style === 'particles' },
           ] },
-        { type: 'custom', condition: pat => !waveColors(pat), render: ctx => this._colorsBlock(ctx) },
+        // Only the one colour of a solid pattern is on the drawing. A
+        // gradient is a list of stops and a picture of its own.
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'paint',
+          label: 'Colour and opacity are on the canvas while this one is selected '
+               + '- use the buttons under its chip.' },
+        { type: 'custom', condition: pat => !waveColors(pat),
+          framedBy: pat => ((pat.bg_type || 'solid') === 'solid'
+                            && pat.animation !== 'fluid' ? 'paint' : null),
+          render: ctx => this._colorsBlock(ctx) },
 
         { id: 'gradient_angle', label: 'Angle (degrees)', type: 'range', min: 0, max: 360, int: true,
           placeholder: 90, style: 'margin-top:8px;', condition: angled },
-        { id: 'opacity', label: 'Opacity (%)', type: 'range', min: 0, max: 100, int: true, placeholder: 100 },
+        { id: 'opacity', label: 'Opacity (%)', type: 'range', min: 0, max: 100, int: true,
+          placeholder: 100, framedBy: 'paint' },
       ] },
 
       { type: 'details', label: '📊 Data source for colour calculation',
@@ -225,17 +227,12 @@ class ScColorEditor extends LitElement {
       ] },
 
       { type: 'details', label: '🎬 Animation & mode', fields: [
-        { id: 'animation', label: 'Effect', type: 'select', width: '60%', options: pat => [
-          { value: 'none', label: 'None (background only)', selected: pat.animation === 'none' },
-          { value: 'pulse', label: 'Pulse (opacity)', selected: pat.animation === 'pulse' },
-          { value: 'pump', label: 'Pump (scale the background)', selected: pat.animation === 'pump' },
-          { value: 'pump_all', label: 'Pump (scale everything, content included)', selected: pat.animation === 'pump_all' },
-          { value: 'ripple', label: 'Rings (concentric)', selected: pat.animation === 'ripple' },
-          { value: 'waves', label: 'Waves (linear traveling)', selected: pat.animation === 'waves' },
-          { value: 'wobble_radial', label: 'Water drop (radial fade-out)', selected: pat.animation === 'wobble_radial' },
-          { value: 'wobble_linear', label: 'Shockwave (linear fade-out)', selected: pat.animation === 'wobble_linear' },
-          { value: 'fluid', label: 'Liquid (undulating mesh)', selected: pat.animation === 'fluid' },
-        ] },
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'paint',
+          label: 'The effect is on the canvas while this one is selected - it is the '
+               + 'list under its chip.' },
+        { id: 'animation', label: 'Effect', type: 'select', width: '60%', framedBy: 'paint',
+          options: pat => PATTERN_ANIMATIONS.map(
+            a => ({ ...a, selected: (pat.animation || 'none') === a.value })) },
 
         { type: 'group', class: 'row', condition: wobble,
           style: 'background:rgba(3,169,244,0.1); padding:8px; border-radius:6px; margin-top:4px;', fields: [
@@ -307,18 +304,11 @@ class ScColorEditor extends LitElement {
     const gradient = pat.bg_type !== 'solid' || pat.animation === 'fluid';
     const stopList = normalizeStops(
       pat.gradient_stops ?? { colors: pat.colors, stops: pat.stops }, { fill: false });
-    const solidColor = stopList[0]?.color || '#ff9800';
+    const solidColor = solidColorOf(pat);
     // The preview strip is the one in the stop editor, so a pattern hands it
-    // the gradient it actually paints - its angle, or the radial's centre -
-    // rather than a left-to-right stand-in.
-    const previewCss = pat.animation === 'fluid'
-      ? ''
-      : pat.bg_type === 'radial'
-        ? 'radial-gradient(circle at ' + (pat.radial_x ?? 50) + '% '
-          + (pat.radial_y ?? 50) + '%, ' + stopsToCss(stopList) + ')'
-        : 'linear-gradient(' + (pat.gradient_angle ?? 90) + 'deg, '
-          + stopsToCss(stopList) + ')';
-    const setSolid = value => ctx.setStops([{ pos: stopList[0]?.pos ?? null, color: value }]);
+    // what it actually paints.
+    const previewCss = patternPreviewCss(pat);
+    const setSolid = value => ctx.setStops(solidColorPatch(pat, value).gradient_stops);
 
     return html`
       <div class="col"><label>Colours ${pat.animation === 'fluid' && gradient
@@ -556,7 +546,8 @@ class ScColorPanel extends ScColorEditor {
   static get properties() {
     return { slot: { type: Object }, hass: { type: Object }, commitFn: { type: Function },
              target: { type: String }, label: { type: String },
-             switchless: { type: Boolean }, noPump: { type: Boolean } };
+             switchless: { type: Boolean }, noPump: { type: Boolean },
+             framed: { type: Array } };
   }
 
   static get styles() {
@@ -570,54 +561,15 @@ class ScColorPanel extends ScColorEditor {
     `];
   }
 
-  _list() { return Array.isArray(this.slot?.color_patterns) ? this.slot.color_patterns : []; }
+  _list() { return patternList(this.slot); }
 
-  /**
-   * Write one change, making the pattern first if there is none yet. A
-   * switchless panel has no other moment to create it: the fold is opened to
-   * look as often as to paint.
-   *
-   * @param {Record<string, any>} patch
-   */
-  _apply(patch) {
-    const list = this._list();
-    const idx = list.findIndex(p => p.target === this.target);
-    if (idx < 0) {
-      this._commit([...list, { ...defaultColorPattern(this.target), ...patch }]);
-      return;
-    }
-    const n = structuredClone(list);
-    Object.assign(n[idx], patch);
-    this._commit(n);
-  }
+  /** @param {Record<string, any>} patch */
+  _apply(patch) { this._commit(patchPattern(this._list(), this.target, patch)); }
 
-  /**
-   * The colour stops, written the way the list editor writes them - the
-   * pattern is made first if there is none, and the stale parallel arrays go
-   * in the same edit.
-   *
-   * @param {any[]} stops
-   */
-  _applyStops(stops) {
-    const list = this._list();
-    const idx = list.findIndex(p => p.target === this.target);
-    if (idx < 0) {
-      this._commit([...list, { ...defaultColorPattern(this.target), gradient_stops: stops }]);
-      return;
-    }
-    const n = structuredClone(list);
-    delete n[idx].colors;
-    delete n[idx].stops;
-    n[idx].gradient_stops = stops;
-    this._commit(n);
-  }
+  /** @param {any[]} stops */
+  _applyStops(stops) { this._commit(patchPatternStops(this._list(), this.target, stops)); }
 
-  _switch(on) {
-    const list = this._list();
-    const idx = list.findIndex(p => p.target === this.target);
-    if (idx < 0) { this._commit([...list, { ...defaultColorPattern(this.target), enabled: on }]); return; }
-    this._commit(SC.withPatch(list, idx, 'enabled', on));
-  }
+  _switch(on) { this._apply({ enabled: on }); }
 
   render() {
     if (!this.slot || !this.target) return html``;
@@ -627,8 +579,9 @@ class ScColorPanel extends ScColorEditor {
     const on = !!pat?.enabled;
     let fields = this._fields().filter(f => f.id !== 'name' && f.id !== 'target');
     if (this.noPump) fields = fields.map(dropPump);
+    const framed = new Set(Array.isArray(this.framed) ? this.framed : []);
     const body = (entry) => SC.renderFields(fields, {
-      entry, slot: this.slot, hass: this.hass,
+      entry, slot: this.slot, hass: this.hass, framed,
       targets: getTargets(this.slot), usedTargets: [],
       set: (key, value) => this._apply({ [key]: value }),
       setMany: (fields2) => this._apply(fields2),
@@ -1101,6 +1054,17 @@ Object.assign(window.SupercardModules['color'], (() => {
       const zIndex = isMain ? '200' : '-1';
       const bgImp  = allowImportantOnBg ? ' !important' : '';
 
+      // A bow outward is paint beyond the box, so the layer is grown by the
+      // room one may need and the clip path hands back everything but the
+      // shape. The box has to stop clipping its own contents to show it -
+      // which is why only a pattern that actually bows outward asks for that.
+      const bends = bendsOf(pat);
+      const clip = bendClipPath(bends);
+      const bentStr = clip ? `inset: -${BEND_ROOM}% !important; clip-path: ${clip};` : '';
+      if (clip && bendEscapes(bends) && boxSelector) {
+        styleStr += `${boxSelector} { overflow: visible !important; }\n`;
+      }
+
       const bgSizeStr = pat.animation === 'fluid' ? 'background-size: 115% 115% !important;' : 'background-size: 100% 100% !important;';
       const bgPosStr  = 'background-position: center !important;';
       const bgRepStr  = 'background-repeat: no-repeat !important;';
@@ -1110,6 +1074,7 @@ Object.assign(window.SupercardModules['color'], (() => {
   display: block !important;
   position: absolute !important;
   inset: 0 !important;
+  ${bentStr}
   background: ${bgValue}${bgImp};
   ${bgSizeStr}
   ${bgPosStr}
