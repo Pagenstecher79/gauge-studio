@@ -100,6 +100,13 @@ Three things that were each wrong once:
   and keep the margin for the fit *button*.
 - **Never zoom out on the way in.** Floor the fit at the zoom already set. The
   way in should only ever be a way closer.
+- **Going back out is a preference, not a rule.** Leaving happens by clicking
+  beside the element at least as often as by pressing the button, and someone
+  working their way around one element at a time loses the magnification every
+  time their aim is off. So there is a switch in the zoom row, and it is read
+  on the way *out* rather than on the way in, so throwing it while an element
+  is open means it. It lives beside the zoom memory, for the same reason: a
+  preference of the bench, never written to a card.
 - **The window's shape is a variable.** If the zoom window carries the canvas'
   aspect ratio, a flat canvas (12 columns by 2 rows) has no vertical room at
   all: the height is already the tight axis at 100%, and the fit comes out
@@ -202,7 +209,7 @@ Two smaller lessons came with it:
   the part that turns a measurement into a render loop if it is wrong - is
   written once.
 
-## 12. Two grips, one value
+## 12. Grips on the frame: the corners and the sides
 
 A corner radius is set by a grip in a corner, and there are two of them, at the
 bottom left and the top right, both writing the same number. **Which grip is
@@ -239,6 +246,33 @@ The rest of the arithmetic is worth stating because it is not obvious:
   under the rim of the window, where a press that misses by a pixel takes hold
   of the view and pans it. `RIM_FILL` is the air that buys, and the kind asks
   for it simply by having corners.
+
+### Bending the sides
+
+Each side has a grip on its middle that bows it out into a barrel or in into a
+waist. Four of them rather than one, because one control could not say a waist
+on the left and a barrel on the right, and that is a shape people actually
+want. The same rule as the corners: the grip stands on the middle of the *bent*
+side, so it is always on the thing it moves.
+
+- The outline is a **`clip-path: polygon()` of per cents**, not an SVG path.
+  Per cents are read per axis against the box being clipped, so one string is
+  the shape at every size the box is ever drawn at, needs no element in the
+  document to point at, and costs nothing when the canvas is rescaled. Curves
+  cost points instead, and points are cheap - eight segments a side puts the
+  worst error under a third of a per cent of the box.
+- **The corners are left where they are.** They are shared with the
+  neighbouring side, and a corner that moved would tear the outline apart
+  wherever two bends disagreed. So the bow is a parabola: nothing at either
+  end, the full bend in the middle - which is also why reading a bend back
+  off the grip needs no factor, and is an exact inverse.
+- **A clip can only take paint away.** A side bowing outward has to have paint
+  out there to keep, so the layer is grown by the room a bow may need and the
+  path hands back all of it but the shape. Growing it is free because the path
+  clips it straight back; what it costs is that the box has to stop clipping
+  its own contents, so only a box that *actually* bows outward is asked to.
+- Bending and rounding compose - both clip, and the result is the
+  intersection - so a bent box can still have a corner radius.
 
 ## 13. The bench is not the work
 
