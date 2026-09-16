@@ -845,8 +845,20 @@ class ScGauge extends LitElement {
       extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
     }
     if (this._get('show_multiplier_label',false) && tCount > 1) {
-      let mValDisp = this._get('multiplier_divide_ticks',false) ? smartMVal : range/div;
-      const mStr=`${this._get('multiplier_prepend','x')}${parseFloat(mValDisp.toFixed(parseInt(this._get('multiplier_decimals',0))))}${data.unitPrefix}`;
+      // The multiplier is what the printed numbers have to be multiplied by
+      // to be read as the real value - so it is the factor the labels were
+      // actually divided by, and nothing else. Where they are not divided at
+      // all that factor is 1. It used to be `range/div` there, which is the
+      // step from one tick to the next: a true number about the scale, but
+      // not this one, so a dial whose labels already said 300 to 2500 was
+      // captioned "x100".
+      let mValDisp = this._get('multiplier_divide_ticks',false) ? smartMVal : 1;
+      const mDec = parseInt(this._get('multiplier_decimals',0));
+      // A factor below one rounds to "x0" at no decimals, and a gauge that
+      // says multiply by zero says the scale is worthless. Whole numbers keep
+      // the setting; a fraction is drawn at the places it needs.
+      const mNum = parseFloat(mValDisp.toFixed(mDec)) || parseFloat(mValDisp.toPrecision(2));
+      const mStr=`${this._get('multiplier_prepend','x')}${mNum}${data.unitPrefix}`;
       const mCol=resolveColor(this._get('multiplier_color_type','adaptive'),this._get('multiplier_color',null));
       extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="multiplier" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${mStr}</text>`);
     }
