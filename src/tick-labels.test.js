@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { autoStep, staggerRows, labelBox, EM_WIDTH, LINE_HEIGHT, MIN_GAP } from './tick-labels.js';
+import { autoStep, staggerRows, labelBox, boxReach,
+         EM_WIDTH, LINE_HEIGHT, MIN_GAP } from './tick-labels.js';
 
 /**
  * The demo's largest gauge, read off the running card: 23 ticks over a semi
@@ -97,5 +98,50 @@ describe('staggerRows', () => {
     // A row apart is ROW_GAP of type, which is more than the gap asked for.
     expect(MIN_GAP).toBeLessThan(LINE_HEIGHT);
     expect(rows.some(r => r === 1)).toBe(true);
+  });
+});
+
+describe('boxReach', () => {
+  it('reaches half a width sideways and half a height up', () => {
+    const box = { w: 6, h: 2 };
+    expect(boxReach(box, 1, 0)).toBe(3);
+    expect(boxReach(box, 0, 1)).toBe(1);
+  });
+
+  it('answers the nearer edge, never the corner past it', () => {
+    // A wide, low box at 45 degrees leaves its top edge first, not its side.
+    const box = { w: 6, h: 2 };
+    const d = Math.SQRT1_2;
+    expect(boxReach(box, d, d)).toBeCloseTo(1 / d);
+  });
+
+  it('moves with the angle rather than jumping at a threshold', () => {
+    const box = { w: 4, h: 1.5 };
+    let prev = boxReach(box, Math.cos(0), Math.sin(0));
+    for (let deg = 1; deg <= 360; deg++) {
+      const a = (deg * Math.PI) / 180;
+      const now = boxReach(box, Math.cos(a), Math.sin(a));
+      expect(Math.abs(now - prev)).toBeLessThan(0.2);
+      prev = now;
+    }
+  });
+
+  it('puts a long label and a short one the same distance from the ticks', () => {
+    // Which is what the switching anchors could not do: the edge facing the
+    // ticks is on the circle whatever the number says.
+    const r = 20;
+    const at = (text, deg) => {
+      const a = (deg * Math.PI) / 180;
+      const box = labelBox(text, 2);
+      return r - boxReach(box, Math.cos(a), Math.sin(a));
+    };
+    for (const deg of [0, 37, 90, 145, 180, 250]) {
+      const edge = (text) => {
+        const a = (deg * Math.PI) / 180;
+        return at(text, deg) + boxReach(labelBox(text, 2), Math.cos(a), Math.sin(a));
+      };
+      expect(edge('7')).toBeCloseTo(r);
+      expect(edge('12345')).toBeCloseTo(r);
+    }
   });
 });

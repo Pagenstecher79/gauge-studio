@@ -1,6 +1,6 @@
 import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops } from "./gradient-stops.js";
-import { autoStep, staggerRows, ROW_GAP } from "./tick-labels.js";
+import { autoStep, staggerRows, ROW_GAP, labelBox, boxReach } from "./tick-labels.js";
 import { ringRadius, ringPartRadius } from "./gauge-inner-boxes.js";
 
 const SC = window.SupercardUtils;
@@ -777,25 +777,25 @@ class ScGauge extends LitElement {
           const rad = ang * Math.PI / 180;
           const cosA = Math.cos(rad), sinA = Math.sin(rad);
           const isOut = tlOff >= 0;
-          
-          let tAnchor = "middle";
-          if (cosA > 0.3) tAnchor = isOut ? "start" : "end";
-          else if (cosA < -0.3) tAnchor = isOut ? "end" : "start";
 
-          let dBase = "central";
-          if (sinA > 0.5) dBase = isOut ? "hanging" : "baseline";
-          else if (sinA < -0.5) dBase = isOut ? "baseline" : "hanging";
-
-          const curveAdjust = isOut ? (Math.abs(sinA) * (tlSize * 0.25)) : 0;
+          // Every label is a box centred on its own point, pushed off the
+          // label circle by its own reach so that what lies on the circle is
+          // the edge facing the ticks. Anchor and baseline used to be
+          // switched at fixed thresholds instead, which moved a label's box
+          // a half-width sideways or a half-height down the moment its tick
+          // crossed one - a kink in a row of numbers otherwise on a perfect
+          // arc. The points were round; the type was not.
           const rowShift = (labelRows[i] || 0) * (isOut ? 1 : -1) * ROW_GAP * tlSize;
-          const pL = polarToCart(this.CENTER, this.CENTER, radius + tlOff + curveAdjust + rowShift, ang);
+          const reach = boxReach(labelBox(tStr, tlSize), cosA, sinA);
+          const pL = polarToCart(this.CENTER, this.CENTER,
+                                 radius + tlOff + rowShift + (isOut ? reach : -reach), ang);
           
           if (sinA < -0.75 && Math.abs(cosA) > 0.02) {
              const intensity = (sinA + 0.75) / -0.25; 
              pL.x += (cosA > 0 ? 1 : -1) * tlSpread * intensity;
           }
 
-          tLabels.push(svg`<text class="layer-elm-static" x="${pL.x.toFixed(3)}" y="${pL.y.toFixed(3)}" fill="${tlCol}" font-size="${tlSize}px" text-anchor="${tAnchor}" dominant-baseline="${dBase}">${tStr}</text>`);
+          tLabels.push(svg`<text class="layer-elm-static" x="${pL.x.toFixed(3)}" y="${pL.y.toFixed(3)}" fill="${tlCol}" font-size="${tlSize}px" text-anchor="middle" dominant-baseline="central">${tStr}</text>`);
         }
       }
     }

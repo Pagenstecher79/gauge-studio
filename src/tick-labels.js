@@ -63,6 +63,33 @@ export function labelBox(text, fontSize) {
 }
 
 /**
+ * How far a label's centre stands from the point its box just touches.
+ *
+ * A label is placed against a circle, and what should lie on that circle is
+ * the edge of its box, not its middle - otherwise a long number reaches
+ * further in towards the ticks than a short one at the same radius. So the
+ * centre is pushed off the circle by the distance from the centre of an
+ * axis-aligned box to its own boundary in the radial direction, which is the
+ * nearer of the two half-extents once each is divided by how much of that
+ * direction it has to cover.
+ *
+ * This is continuous in the angle, which is the whole point. The placement
+ * it replaces switched `text-anchor` and `dominant-baseline` at fixed
+ * thresholds, so a label's box jumped a half-width sideways or a half-height
+ * downwards the moment its tick crossed one - a kink in a row of numbers
+ * that are otherwise on a perfect arc, and the reason the top of a dial read
+ * as out of round.
+ *
+ * @param {{w: number, h: number}} box @param {number} cos @param {number} sin
+ */
+export function boxReach(box, cos, sin) {
+  const ax = Math.abs(cos), ay = Math.abs(sin);
+  const tx = ax > 1e-6 ? box.w / 2 / ax : Infinity;
+  const ty = ay > 1e-6 ? box.h / 2 / ay : Infinity;
+  return Math.min(tx, ty);
+}
+
+/**
  * Whether two placed labels leave each other enough air.
  *
  * Two boxes clear each other as soon as they are apart on either axis, which
@@ -93,17 +120,11 @@ function place(spec, step) {
     const row = spec.rows ? spec.rows[i] || 0 : 0;
     const r = radius + row * (out ? 1 : -1) * ROW_GAP * fontSize;
     const box = labelBox(texts[i] ?? '', fontSize);
-    let x = r * cos, y = r * sin;
-    // The same anchor and baseline the renderer picks. They are what keeps the
-    // labels down one side of a dial off each other - a label anchored at its
-    // start hangs a whole width to one side of the point it is placed at - so
-    // a plan that ignored them would read the sides as far tighter than they
-    // are and thin a scale that has room.
-    if (cos > 0.3) x += out ? box.w / 2 : -box.w / 2;
-    else if (cos < -0.3) x += out ? -box.w / 2 : box.w / 2;
-    if (sin > 0.5) y += out ? box.h / 2 : -box.h / 2;
-    else if (sin < -0.5) y += out ? -box.h / 2 : box.h / 2;
-    boxes.push({ i, row, x, y, w: box.w, h: box.h });
+    // The same placement the renderer uses: the box stands clear of the label
+    // circle by its own reach, so a plan reads the sides of a dial as roomy
+    // and the top as tight, which is what they are.
+    const rc = r + (out ? 1 : -1) * boxReach(box, cos, sin);
+    boxes.push({ i, row, x: rc * cos, y: rc * sin, w: box.w, h: box.h });
   }
   return boxes;
 }
