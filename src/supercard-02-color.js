@@ -1,5 +1,7 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
+import { PATTERN_ANIMATIONS, defaultColorPattern, patchPattern, patchPatternStops,
+         patternList, solidColorOf, solidColorPatch } from "./color-pattern.js";
 
 const SC = window.SupercardUtils;
 
@@ -20,25 +22,6 @@ function getTargets(slot) {
     if (id !== 'empty' && SC.showsElement(slot, id)) targets.push({ id: `elm_${id}`, label });
   }
   return targets;
-}
-
-/**
- * A pattern nobody has touched yet. The list and the per-target panels both
- * start from this, so a pattern made in one place is the pattern made in the
- * other.
- *
- * @param {string} target
- */
-function defaultColorPattern(target) {
-  return {
-    id: Date.now(), enabled: true, name: 'New pattern', target,
-    bg_condition: [], anim_condition: [], bg_type: 'solid',
-    gradient_stops: [{ pos: 100, color: '#ff9800' }], opacity: 100, gradient_angle: 90, animation: 'none',
-    anim_duration: 3, wave_count: 3, wave_c1: '#03a9f4', wave_c2: 'transparent',
-    border_radius: '', border_radius_unit: 'px', wave_invert: false, pump_scale: 1.1,
-    radial_x: 50, radial_y: 50, wave_balance: 50,
-    wobble_amplitude: 100, wobble_freq: 4, wobble_pause: 2
-  };
 }
 
 /**
@@ -225,17 +208,9 @@ class ScColorEditor extends LitElement {
       ] },
 
       { type: 'details', label: '🎬 Animation & mode', fields: [
-        { id: 'animation', label: 'Effect', type: 'select', width: '60%', options: pat => [
-          { value: 'none', label: 'None (background only)', selected: pat.animation === 'none' },
-          { value: 'pulse', label: 'Pulse (opacity)', selected: pat.animation === 'pulse' },
-          { value: 'pump', label: 'Pump (scale the background)', selected: pat.animation === 'pump' },
-          { value: 'pump_all', label: 'Pump (scale everything, content included)', selected: pat.animation === 'pump_all' },
-          { value: 'ripple', label: 'Rings (concentric)', selected: pat.animation === 'ripple' },
-          { value: 'waves', label: 'Waves (linear traveling)', selected: pat.animation === 'waves' },
-          { value: 'wobble_radial', label: 'Water drop (radial fade-out)', selected: pat.animation === 'wobble_radial' },
-          { value: 'wobble_linear', label: 'Shockwave (linear fade-out)', selected: pat.animation === 'wobble_linear' },
-          { value: 'fluid', label: 'Liquid (undulating mesh)', selected: pat.animation === 'fluid' },
-        ] },
+        { id: 'animation', label: 'Effect', type: 'select', width: '60%',
+          options: pat => PATTERN_ANIMATIONS.map(
+            a => ({ ...a, selected: (pat.animation || 'none') === a.value })) },
 
         { type: 'group', class: 'row', condition: wobble,
           style: 'background:rgba(3,169,244,0.1); padding:8px; border-radius:6px; margin-top:4px;', fields: [
@@ -307,7 +282,7 @@ class ScColorEditor extends LitElement {
     const gradient = pat.bg_type !== 'solid' || pat.animation === 'fluid';
     const stopList = normalizeStops(
       pat.gradient_stops ?? { colors: pat.colors, stops: pat.stops }, { fill: false });
-    const solidColor = stopList[0]?.color || '#ff9800';
+    const solidColor = solidColorOf(pat);
     // The preview strip is the one in the stop editor, so a pattern hands it
     // the gradient it actually paints - its angle, or the radial's centre -
     // rather than a left-to-right stand-in.
@@ -318,7 +293,7 @@ class ScColorEditor extends LitElement {
           + (pat.radial_y ?? 50) + '%, ' + stopsToCss(stopList) + ')'
         : 'linear-gradient(' + (pat.gradient_angle ?? 90) + 'deg, '
           + stopsToCss(stopList) + ')';
-    const setSolid = value => ctx.setStops([{ pos: stopList[0]?.pos ?? null, color: value }]);
+    const setSolid = value => ctx.setStops(solidColorPatch(pat, value).gradient_stops);
 
     return html`
       <div class="col"><label>Colours ${pat.animation === 'fluid' && gradient
@@ -570,54 +545,15 @@ class ScColorPanel extends ScColorEditor {
     `];
   }
 
-  _list() { return Array.isArray(this.slot?.color_patterns) ? this.slot.color_patterns : []; }
+  _list() { return patternList(this.slot); }
 
-  /**
-   * Write one change, making the pattern first if there is none yet. A
-   * switchless panel has no other moment to create it: the fold is opened to
-   * look as often as to paint.
-   *
-   * @param {Record<string, any>} patch
-   */
-  _apply(patch) {
-    const list = this._list();
-    const idx = list.findIndex(p => p.target === this.target);
-    if (idx < 0) {
-      this._commit([...list, { ...defaultColorPattern(this.target), ...patch }]);
-      return;
-    }
-    const n = structuredClone(list);
-    Object.assign(n[idx], patch);
-    this._commit(n);
-  }
+  /** @param {Record<string, any>} patch */
+  _apply(patch) { this._commit(patchPattern(this._list(), this.target, patch)); }
 
-  /**
-   * The colour stops, written the way the list editor writes them - the
-   * pattern is made first if there is none, and the stale parallel arrays go
-   * in the same edit.
-   *
-   * @param {any[]} stops
-   */
-  _applyStops(stops) {
-    const list = this._list();
-    const idx = list.findIndex(p => p.target === this.target);
-    if (idx < 0) {
-      this._commit([...list, { ...defaultColorPattern(this.target), gradient_stops: stops }]);
-      return;
-    }
-    const n = structuredClone(list);
-    delete n[idx].colors;
-    delete n[idx].stops;
-    n[idx].gradient_stops = stops;
-    this._commit(n);
-  }
+  /** @param {any[]} stops */
+  _applyStops(stops) { this._commit(patchPatternStops(this._list(), this.target, stops)); }
 
-  _switch(on) {
-    const list = this._list();
-    const idx = list.findIndex(p => p.target === this.target);
-    if (idx < 0) { this._commit([...list, { ...defaultColorPattern(this.target), enabled: on }]); return; }
-    this._commit(SC.withPatch(list, idx, 'enabled', on));
-  }
+  _switch(on) { this._apply({ enabled: on }); }
 
   render() {
     if (!this.slot || !this.target) return html``;
