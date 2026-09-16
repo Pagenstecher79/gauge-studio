@@ -526,6 +526,25 @@ const ZOOM_STEPS = Object.freeze([0.5, 0.75, 1, 1.5, 2, 3, 4]);
  */
 const zoomMemory = new Map();
 
+/**
+ * Where a chip has been put by hand, for as long as the page lives.
+ *
+ * A chip stands where its part is, which is the right place for it right up
+ * to the moment the part it names is under it - a tick label behind the
+ * subticks' numbers, a colour cluster over the very corner being rounded. So
+ * a chip can be picked up and put down anywhere on the element, and it takes
+ * its own numbers with it.
+ *
+ * Like the zoom, this is not config: it is the bench the work is done on, not
+ * the work. Writing it would put one person's arrangement of the editor into
+ * everybody's dashboard. It is keyed by the element and the part, so each
+ * chip is remembered on its own, and a chip that has been moved is put back
+ * where its part says by double-clicking it.
+ */
+const chipPlace = new Map();
+
+const chipKey = (/** @type {string} */ id, /** @type {string} */ part) => id + '\u0000' + part;
+
 /** How much of the window a "zoom to the selection" leaves around it. */
 const FIT_MARGIN = 0.85;
 
@@ -1551,7 +1570,7 @@ class ScCanvasEditor extends LitElement {
         display: flex; align-items: center; gap: 3px; z-index: 6;
         font-size: 11.5px; line-height: 1; padding: 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
-        opacity: 0.85; cursor: ns-resize; touch-action: none;
+        opacity: 0.85; cursor: grab; touch-action: none;
         box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
       .ring-tag.sel { opacity: 1;
         background: var(--sc-part-sel); color: var(--sc-part-sel-ink); }
@@ -2753,6 +2772,27 @@ class ScCanvasEditor extends LitElement {
     if (!target) return;
     e.stopPropagation();
     e.preventDefault();
+    // A chip is grabbed as itself. It used to pass the press on to its ring,
+    // so dragging one resized the thing it named - a lever on a part rather
+    // than the part, which the ring's own band already is and does better.
+    if (mode === 'chip') {
+      const box = this._innerBoxRect();
+      const chip = e.currentTarget.getBoundingClientRect();
+      if (box) {
+        // Measured off the chip rather than worked out again: it is drawn
+        // about its own middle, so that middle is the very per cent being set.
+        this._innerDrag = { part, mode, box, started: false,
+                            startX: e.clientX, startY: e.clientY,
+                            from: { l: (chip.left + chip.width / 2 - box.left) / box.width * 100,
+                                    t: (chip.top + chip.height / 2 - box.top) / box.height * 100 } };
+        this._ptr = { x: e.clientX, y: e.clientY };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
+      }
+      const fresh2 = this._innerSel !== part;
+      this._innerSel = part;
+      if (fresh2) this._revealPart(part);
+      return;
+    }
     // A corner grip belongs to the element rather than to any one part, so it
     // is taken hold of without taking anything else out of hand.
     if (mode === 'corner') {
@@ -2859,8 +2899,13 @@ class ScCanvasEditor extends LitElement {
                   y: (at.tail.y + at.tip.y) / 2 + 4 * Math.cos(a) };
     const l = Math.max(2, Math.min(98, svgBox.l + svgBox.w * mid.x / GAUGE_VIEW));
     const t = Math.max(2, Math.min(98, svgBox.t + svgBox.h * mid.y / GAUGE_VIEW));
-    root.querySelectorAll('.ring-tag[data-part="pointer"], .ring-steps[data-part="pointer"]')
-      .forEach((/** @type {any} */ n) => { n.style.left = l + '%'; n.style.top = t + '%'; });
+    // Unless it has been put somewhere by hand, in which case that is where it
+    // stays - a chip moved out of the way is no use if the needle keeps
+    // fetching it back.
+    if (!chipPlace.has(chipKey(this._inner, 'pointer'))) {
+      root.querySelectorAll('.ring-tag[data-part="pointer"], .ring-steps[data-part="pointer"]')
+        .forEach((/** @type {any} */ n) => { n.style.left = l + '%'; n.style.top = t + '%'; });
+    }
     return a;
   }
 
@@ -2869,6 +2914,15 @@ class ScCanvasEditor extends LitElement {
     const d = this._innerDrag;
     const p = this._ptr;
     if (!d || !p) return;
+    if (d.mode === 'chip') {
+      const at = (/** @type {number} */ v) => Math.max(2, Math.min(98, v));
+      chipPlace.set(chipKey(this._inner, d.part), {
+        l: at(d.from.l + (p.x - d.startX) / d.box.width * 100),
+        t: at(d.from.t + (p.y - d.startY) / d.box.height * 100),
+      });
+      this.requestUpdate();
+      return;
+    }
     if (d.mode === 'corner') {
       this._writeInner({ [d.spec.key]: radiusFromGrip(p, d.box, d.end, d.spec.unit),
                          ...(d.spec.with || {}) }, d.started);
@@ -3363,10 +3417,14 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     if (!target) return '';
     const sel = this._innerSel === part;
+    const at = chipPlace.get(chipKey(target.id, part)) || { l, t };
     return html`
       <span class="ring-tag ${sel ? 'sel' : ''}" data-part=${part}
-            style="left:${l}%; top:${t}%;"
-            @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'ring')}>
+            style="left:${at.l}%; top:${at.t}%;"
+            title=${`${spec.label} - drag to move this out of the way, `
+                    + 'double-click to put it back'}
+            @dblclick=${() => this._putChipBack(part)}
+            @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'chip')}>
         ${spec.label}
         ${spec.shapes && sel ? this._renderSwap(spec.label, spec.shapes, 'Make') : ''}
         ${spec.turnOff ? html`
@@ -3375,7 +3433,12 @@ class ScCanvasEditor extends LitElement {
                   @pointerdown=${swallow}
                   @click=${() => this._setInnerRing(part, false)}>−</button>` : ''}
       </span>
-      ${sel ? this._renderSteppers(l, t) : ''}`;
+      ${sel ? this._renderSteppers(at.l, at.t) : ''}`;
+  }
+
+  /** Put a chip back where the part it names says it should stand. */
+  _putChipBack(part) {
+    if (chipPlace.delete(chipKey(this._inner, part))) this.requestUpdate();
   }
 
   /**
