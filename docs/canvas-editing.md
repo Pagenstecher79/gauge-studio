@@ -72,11 +72,19 @@ far side is a dial people draw on purpose and must not stick on the way. The
 tip gets none: it is lined up against a ring that is drawn, and where it
 should sit is something you can see.
 
-A rest lands on the value, not on the pixel, and a field that steps in tenths
-can only be so exact - at `gauge_scale: 0.95` the nearest tenth of a length
-leaves the tail three hundredths of a unit off the pivot. That is the
-slider's granularity showing through, not the rest failing, and it is the
-same limit the number in the form has.
+**A rest lands on the value, not near it**, and that is worth the one place
+where the two rules collide. Every one of these drags writes on the tenth its
+slider steps in, but the length that puts the tail on the pivot is the ring's
+radius over the scale, and the ring sits half a stroke in from the edge - a
+`stroke_width` of 0.5 leaves that length on a quarter. Rounded to the
+nearest tenth it lands beside the pivot by as much as the rest is wide, which
+is the rest failing at exactly its job. So the snapped length is the
+exception that is written finer.
+
+Worth knowing before reaching for the scale: it is not in this. The tip is
+`ring - offset * scale` and the ring is itself a multiple of the scale, so
+the scale cancels out of `tip / scale` entirely. `gauge_scale` cannot make
+this land or miss, and no default for it would have.
 
 ## 3. Only one edge of a band can move
 

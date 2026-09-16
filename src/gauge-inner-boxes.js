@@ -35,6 +35,18 @@ function tenth(v) {
 }
 
 /**
+ * Three decimals, for the one value a drag may write off that step.
+ *
+ * Landing exactly on something and stepping in tenths are not always the same
+ * wish: the radius a rest is aiming at is built out of other fields, and
+ * nothing says their arithmetic comes out on a tenth. Rounding at all is only
+ * to keep float noise out of a number a person will read in the form.
+ */
+function fine(v) {
+  return Math.round(v * 1000) / 1000;
+}
+
+/**
  * Where a part sits after being dragged `dxPx, dyPx` from where it was.
  *
  * `scale` is the gauge's own, because an offset is multiplied by it before it
@@ -195,9 +207,17 @@ export function needleFromRadius(end, at, offset, length, ring, scale) {
   const ends = needleEnds(offset, length, ring, s);
   if (end === 'tail') {
     // The pivot is the one place on this line worth landing on exactly, and
-    // the tail is hidden behind the hub just as it gets there.
-    const to = Math.abs(at) <= NEEDLE_CENTRE_SNAP ? 0 : at;
-    return { pointer_length: clamp(tenth((ends.tip - to) / s), 0, POINTER_LENGTH_MAX) };
+    // the tail is hidden behind the hub just as it gets there. Exactly is
+    // meant literally, so this is the one drag that may write off the tenth
+    // the slider steps in: the length that puts the tail on the pivot is the
+    // ring's radius over the scale, and the ring is half a stroke in from the
+    // edge - a stroke of 0.5 leaves it on a quarter, not a tenth. Rounding
+    // to the nearest tenth there would land beside the very thing the rest is
+    // for, by as much as the rest is wide.
+    if (Math.abs(at) <= NEEDLE_CENTRE_SNAP) {
+      return { pointer_length: clamp(fine(ends.tip / s), 0, POINTER_LENGTH_MAX) };
+    }
+    return { pointer_length: clamp(tenth((ends.tip - at) / s), 0, POINTER_LENGTH_MAX) };
   }
   const off = clamp(tenth((ring - at) / s), -POINTER_OFFSET_LIMIT, POINTER_OFFSET_LIMIT);
   return {

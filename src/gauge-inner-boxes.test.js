@@ -183,6 +183,21 @@ describe('the needle', () => {
     expect(needleFromRadius('tail', past, 2, 10, 20, 1).pointer_length).toBe(18 - past);
   });
 
+  it('lands the tail on the pivot when the length is not a tenth', () => {
+    // A stroke of 0.5 puts the ring on 23.75, which is not a tenth. The rest
+    // is meant literally, so this is the one drag written finer.
+    const ring = ringRadius(0.5, 1);
+    const p = needleFromRadius('tail', 0.2, 0, 10, ring, 1);
+    expect(p.pointer_length).toBe(23.75);
+    expect(needleEnds(0, p.pointer_length, ring, 1).tail).toBe(0);
+  });
+
+  it('keeps the tenth for every length that is not the rest', () => {
+    const ring = ringRadius(0.5, 1);
+    const p = needleFromRadius('tail', 2, 0, 10, ring, 1);
+    expect(p.pointer_length).toBe(21.8);
+  });
+
   it('measures the rest in what is drawn, not in what is written', () => {
     // Half the scale draws the same needle half the size, so the same reach
     // around the pivot is twice as many of the pointer's own units.
