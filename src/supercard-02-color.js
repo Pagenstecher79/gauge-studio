@@ -1,5 +1,6 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
+import { BEND_ROOM, bendsOf, bendClipPath, bendEscapes } from "./canvas-bend.js";
 import { PATTERN_ANIMATIONS, defaultColorPattern, patchPattern, patchPatternStops,
          patternList, patternPreviewCss, solidColorOf,
          solidColorPatch } from "./color-pattern.js";
@@ -136,6 +137,9 @@ class ScColorEditor extends LitElement {
         { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
           label: 'The corners are on the canvas - drag either grip, at the bottom '
                + 'left or the top right.' },
+        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
+          label: 'Each side can be bowed out or in from the grip on its middle. '
+               + 'Double-click one to put that side straight again.' },
         { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox',
           value: autoBorder, framedBy: 'corners' },
         { type: 'custom', condition: pat => !autoBorder(pat), framedBy: 'corners',
@@ -1050,6 +1054,17 @@ Object.assign(window.SupercardModules['color'], (() => {
       const zIndex = isMain ? '200' : '-1';
       const bgImp  = allowImportantOnBg ? ' !important' : '';
 
+      // A bow outward is paint beyond the box, so the layer is grown by the
+      // room one may need and the clip path hands back everything but the
+      // shape. The box has to stop clipping its own contents to show it -
+      // which is why only a pattern that actually bows outward asks for that.
+      const bends = bendsOf(pat);
+      const clip = bendClipPath(bends);
+      const bentStr = clip ? `inset: -${BEND_ROOM}% !important; clip-path: ${clip};` : '';
+      if (clip && bendEscapes(bends) && boxSelector) {
+        styleStr += `${boxSelector} { overflow: visible !important; }\n`;
+      }
+
       const bgSizeStr = pat.animation === 'fluid' ? 'background-size: 115% 115% !important;' : 'background-size: 100% 100% !important;';
       const bgPosStr  = 'background-position: center !important;';
       const bgRepStr  = 'background-repeat: no-repeat !important;';
@@ -1059,6 +1074,7 @@ Object.assign(window.SupercardModules['color'], (() => {
   display: block !important;
   position: absolute !important;
   inset: 0 !important;
+  ${bentStr}
   background: ${bgValue}${bgImp};
   ${bgSizeStr}
   ${bgPosStr}

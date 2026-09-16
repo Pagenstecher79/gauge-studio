@@ -17,6 +17,8 @@ import { templatesFor, templateEntry, previewFor } from "./element-templates.js"
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
+import { BEND_SIDES, BEND_ROOM, bendKey, bendsOf, bendEscapes,
+         bendClipPath, bendGripHome, bendFromGrip } from "./canvas-bend.js";
 import { PATTERN_ANIMATIONS, patternList, patternFor, patchPattern,
          defaultColorPattern, patternPreviewCss, patternRadiusCss,
          solidColorOf, solidColorPatch } from "./color-pattern.js";
@@ -527,6 +529,20 @@ const ZOOM_STEPS = Object.freeze([0.5, 0.75, 1, 1.5, 2, 3, 4]);
 const zoomMemory = new Map();
 
 /**
+ * Whether leaving an element's own parts takes the canvas back to the zoom it
+ * was being arranged at.
+ *
+ * Going in magnifies, because the parts are a couple of viewBox units across
+ * and cannot otherwise be aimed at; coming back out undoes that, because the
+ * arrangement is what the canvas is for. But leaving happens by clicking
+ * beside the element as often as by pressing the button, and someone working
+ * their way around one element at a time loses the magnification every time
+ * their aim is off. So it is a choice, kept here for the same reason the zoom
+ * itself is - a preference of the bench, never written to a card.
+ */
+let zoomBack = true;
+
+/**
  * Where a chip has been put by hand, for as long as the page lives.
  *
  * A chip stands where its part is, which is the right place for it right up
@@ -987,6 +1003,9 @@ const INNER_KINDS = Object.freeze({
     // to round - the paint is what has a shape. Taking a grip in hand is also
     // what says the radius is set by hand, which is the switch the menu offers
     // above the same number.
+    // Every side of a box can be bowed, and the keys are always the same, so
+    // the kind has nothing to say here beyond that it can be.
+    sides: true,
     corners: (/** @type {any} */ cfg) => ({
       key: 'border_radius',
       unit: cfg.border_radius_unit === '%' ? '%' : 'px',
@@ -1059,6 +1078,7 @@ class ScCanvasEditor extends LitElement {
       _placing: { type: String, state: true },
       _ghost: { type: Object, state: true },
       _zoom: { type: Number, state: true },
+      _zoomBack: { type: Boolean, state: true },
       _space: { type: Boolean, state: true },
       _inner: { type: String, state: true },
       _innerRects: { type: Object, state: true },
@@ -1094,6 +1114,7 @@ class ScCanvasEditor extends LitElement {
     this._placingEntry = null;
     this._ghost = null;
     this._zoom = 1;
+    this._zoomBack = zoomBack;
     // The zoom the canvas was being arranged at before a gauge was opened,
     // and null whenever none is being held for it.
     this._zoomBefore = null;
@@ -1258,7 +1279,9 @@ class ScCanvasEditor extends LitElement {
     if (!this._innerOn && this._zoomBefore != null) {
       const back = this._zoomBefore;
       this._zoomBefore = null;
-      if (back !== this._zoom) this._applyZoom(back);
+      // Read here rather than on the way in, so the switch can be thrown while
+      // an element is open and mean it.
+      if (this._zoomBack && back !== this._zoom) this._applyZoom(back);
     }
     this._measureInner();
     this._placeNeedle();
@@ -1419,6 +1442,11 @@ class ScCanvasEditor extends LitElement {
          add menu. */
       .el { position: absolute; isolation: isolate; box-sizing: border-box; cursor: grab; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; border-radius: 2px; background: rgba(3,169,244,0.3); border: 1px solid var(--primary-color); overflow: hidden; }
       .el.surface { background: rgba(255,193,7,0.18); border-style: dashed; border-color: #ffc107; }
+      /* A side bowed outward is paint beyond the box, and the grip that set
+         it stands out there too. Only while it is bent: the box clips its own
+         contents the rest of the time, which is what keeps a chip inside the
+         element it belongs to. */
+      .el.bent { overflow: visible; }
       .el.sel { background: rgba(3,169,244,0.55); border-width: 2px; z-index: 3; }
       /* A pinned element says so twice: the cursor, which answers before the
          press, and the badge, which answers from across the canvas. The border
@@ -1680,6 +1708,16 @@ class ScCanvasEditor extends LitElement {
         border-radius: 50%; z-index: 9; background: var(--sc-part-sel);
         touch-action: none;
         box-shadow: 0 0 0 1.5px rgba(0,0,0,0.7), 0 0 0 2.5px rgba(255,255,255,0.85); }
+      /* Round like the corner grips, because they do the same kind of work,
+         and told apart by the arrow the cursor takes on: a side moves along
+         one axis only, and which one is the whole of what there is to know. */
+      .side-grip { position: absolute; width: 11px; height: 11px;
+        border-radius: 50%; z-index: 9; background: var(--sc-part-sel);
+        touch-action: none; transform: translate(-50%, -50%);
+        box-shadow: 0 0 0 1.5px rgba(0,0,0,0.7), 0 0 0 2.5px rgba(255,255,255,0.85); }
+      .side-grip[data-side="top"], .side-grip[data-side="bottom"] { cursor: ns-resize; }
+      .side-grip[data-side="left"], .side-grip[data-side="right"] { cursor: ew-resize; }
+      .side-grip::after { content: ''; position: absolute; inset: -7px; }
       .corner-grip[data-corner="bl"] { transform: translate(-50%, -100%);
         cursor: ew-resize; }
       .corner-grip[data-corner="tr"] { transform: translate(-100%, -50%);
@@ -2836,8 +2874,8 @@ class ScCanvasEditor extends LitElement {
     }
     // A corner grip belongs to the element rather than to any one part, so it
     // is taken hold of without taking anything else out of hand.
-    if (mode === 'corner') {
-      const spec = target.k.corners?.(target.cfg);
+    if (mode === 'corner' || mode === 'side') {
+      const spec = mode === 'side' ? target.k.sides : target.k.corners?.(target.cfg);
       const box = this._innerBoxRect();
       if (!spec || !box) return;
       this._innerDrag = { part: null, mode, end, spec, box, started: false };
@@ -2964,6 +3002,11 @@ class ScCanvasEditor extends LitElement {
       this.requestUpdate();
       return;
     }
+    if (d.mode === 'side') {
+      this._writeInner({ [bendKey(d.end)]: bendFromGrip(p, d.box, d.end) }, d.started);
+      d.started = true;
+      return;
+    }
     if (d.mode === 'corner') {
       this._writeInner({ [d.spec.key]: radiusFromGrip(p, d.box, d.end, d.spec.unit),
                          ...(d.spec.with || {}) }, d.started);
@@ -3088,12 +3131,28 @@ class ScCanvasEditor extends LitElement {
     if (!pat || pat.enabled === false) return '';
     const bg = patternPreviewCss(pat);
     if (!bg) return '';
+    const bends = bendsOf(pat);
+    const clip = bendClipPath(bends);
     // A layer inside the box rather than the box itself: the pattern's own
     // opacity belongs to the paint, and setting it on the box would take the
     // chips and the grips standing on it down with it.
+    //
+    // Bent, the layer is grown by the room a bow may need and the clip path
+    // hands all of it back but the shape - a clip can only take paint away,
+    // so a side bowing outward has to have paint out there to keep.
     return html`<div class="surface-skin"
       style="background:${bg}; opacity:${(pat.opacity ?? 100) / 100};
-             border-radius:${patternRadiusCss(pat) || 'inherit'};"></div>`;
+             border-radius:${patternRadiusCss(pat) || 'inherit'};
+             ${clip ? `inset:-${BEND_ROOM}%; clip-path:${clip};` : ''}"></div>`;
+  }
+
+  /**
+   * Whether an element is bowed outward anywhere, and so has to be let out of
+   * its own box.
+   */
+  _bentEl(el) {
+    if (!el?.surface) return false;
+    return bendEscapes(bendsOf(patternFor(patternList(this.slot), 'elm_' + el.id)));
   }
 
   /** The box of the element being edited, on the screen. */
@@ -3306,6 +3365,7 @@ class ScCanvasEditor extends LitElement {
                 @click=${() => this._setInnerPart(part, true)}>+ ${spec.label}</button>`;
     })}
     ${this._renderCorners()}
+    ${this._renderSides()}
     ${this._renderRings(swallow)}
     ${Object.entries(target.rings).map(([part, spec]) => {
       const cfg = target.cfg;
@@ -3506,6 +3566,34 @@ class ScCanvasEditor extends LitElement {
              title=${`Slide ${c.what} to round the corners - ${now}${spec.unit} now`}
              @pointerdown=${(/** @type {any} */ e) =>
                this._innerDown(e, null, 'corner', corner)}></div>`;
+    })}`;
+  }
+
+  /**
+   * A grip on the middle of each side, for bowing it out or in.
+   *
+   * Four of them rather than one, because a side is bent on its own: a box
+   * with a waist on the left and a barrel on the right is a shape people
+   * actually want, and one control could not say it. Each stands on the
+   * middle of the side it bends, bow and all, so it is always on the thing it
+   * moves - the same rule the corner grips follow. Double-click puts a side
+   * straight again, which is the one value a drag cannot reliably land on.
+   */
+  _renderSides() {
+    const target = this._innerTarget;
+    if (!target?.k.sides || !this._innerRects?.px) return '';
+    const bends = bendsOf(target.cfg);
+    return html`${Object.entries(BEND_SIDES).map(([side, s]) => {
+      const home = bendGripHome(bends[side], side);
+      const now = bends[side];
+      return html`
+        <div class="side-grip" data-side=${side}
+             style="left:${home.l}%; top:${home.t}%;"
+             title=${`Drag to bow ${s.what} out or in - ${
+               now ? (now > 0 ? now + '% out' : -now + '% in') : 'straight'} now`}
+             @dblclick=${() => this._writeInner({ [bendKey(side)]: 0 })}
+             @pointerdown=${(/** @type {any} */ e) =>
+               this._innerDown(e, null, 'side', side)}></div>`;
     })}`;
   }
 
@@ -4471,7 +4559,7 @@ class ScCanvasEditor extends LitElement {
               const live = this._live ? this._liveContent(el) : null;
               const pinned = isPinned(el);
               return html`
-              <div class="el ${el.surface ? 'surface' : ''} ${live ? 'live' : ''} ${this._isSel(el.id) ? 'sel' : ''} ${pinned ? 'pinned' : ''} ${this._pushed(el.id) ? 'pushed' : ''}"
+              <div class="el ${el.surface ? 'surface' : ''} ${this._bentEl(el) ? 'bent' : ''} ${live ? 'live' : ''} ${this._isSel(el.id) ? 'sel' : ''} ${pinned ? 'pinned' : ''} ${this._pushed(el.id) ? 'pushed' : ''}"
                    style="left:${pct(el.x, c.w)}; top:${pct(el.y, c.h)}; width:${pct(el.w, c.w)}; height:${pct(el.h, c.h)};"
                    data-item-id=${el.id} title=${this._title(el, pinned)}
                    @pointerdown=${e => this._onDown(e, idx, 'move')}>
@@ -4557,6 +4645,11 @@ class ScCanvasEditor extends LitElement {
                       : 'Select an element to zoom in on it'}
                     ?disabled=${!selected.length}
                     @click=${() => this._zoomToSelection()}>⊡</button>
+            <button class="toggle ${this._zoomBack ? '' : 'on'}"
+                    title=${this._zoomBack
+                      ? 'Leaving an element takes the canvas back to the zoom it was being arranged at. Press to keep the magnification instead - useful when one element after another is being worked on close up.'
+                      : 'The magnification stays when an element is left. Press to have the canvas go back to the zoom it was being arranged at.'}
+                    @click=${() => { zoomBack = this._zoomBack = !this._zoomBack; }}>📌</button>
             <button title="Back to 100%, the size at which the whole canvas fits. Zoomed in, the middle button or space and the left one move the view; Ctrl or Cmd with the wheel - or two fingers - zooms where the pointer is, and Ctrl or Cmd with +, - and 0 does it from the keyboard."
                     ?disabled=${this._zoom === 1} @click=${() => this._applyZoom(1)}>⟲</button>
           </div>
