@@ -15,6 +15,7 @@ import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          needleEnds, needleFromRadius,
          ringInnerEdge, strokeFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor } from "./element-templates.js";
+import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
@@ -666,6 +667,44 @@ const SHADOW_MODE = Object.freeze([
 const hasShadow = (/** @type {any} */ cfg) =>
   (cfg.pointer_shadow_type || 'none') !== 'none';
 
+/**
+ * How a ring is coloured, and what each answer then asks for.
+ *
+ * The same four the form has always offered. Manual is a list of stops and the
+ * list stays in the form - a row of draggable colours is not a control that
+ * fits under a chip - but the ramp that fills it does fit, as one menu of
+ * ready-made ones.
+ */
+const RING_COLOUR_MODE = Object.freeze([
+  { value: 'manual', label: 'Manual (list)', short: 'List' },
+  { value: 'symmetriccustom', label: 'Symmetric (custom)', short: 'Sym.\u00A0custom' },
+  { value: 'symmetric', label: 'Symmetric (default)', short: 'Symmetric' },
+  { value: 'linear', label: 'Linear traffic light', short: 'Linear' },
+]);
+
+/** Whether the ring is being coloured from a list of stops. */
+const isStopList = (/** @type {any} */ cfg) =>
+  ['manual', undefined, ''].includes(cfg.gradient_preset);
+
+/** Whether the ring is one of the two that are three colours and no list. */
+const isThreeColour = (/** @type {any} */ cfg) =>
+  ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset);
+
+/** The ready-made ramps, as the menu reads them: a name and what it is for. */
+const RAMP_PICKS = Object.freeze([
+  { value: '', label: 'Ramp\u2026', short: 'Ramp\u2026' },
+  ...GRADIENT_PRESETS.map(pr => ({ value: pr.id, label: pr.label + ' \u2013 ' + pr.hint,
+                                   short: pr.label })),
+]);
+
+/** One swatch on the ring, for the presets that are three colours rather than a list. */
+const ringColour = (/** @type {string} */ key, /** @type {string} */ what,
+                    /** @type {string} */ dflt, /** @type {any} */ condition) => ({
+  icon: '\u25A0', what, paint: true, condition,
+  read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
+  patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }),
+});
+
 /** Fixed or adaptive: the same two answers for every mark a gauge draws. */
 const COLOUR_MODE = Object.freeze([
   { value: 'fixed', label: 'Fixed', short: 'Fixed' },
@@ -759,6 +798,56 @@ const GAUGE_RINGS = Object.freeze({
         read: (/** @type {any} */ cfg) => cfg.gauge_type || 'full',
         picks: [{ value: 'full', label: 'Full 360\u00B0', short: '360\u00B0' },
                 { value: 'semi', label: 'Semi 270\u00B0', short: '270\u00B0' }] },
+      { key: 'gradient_preset', icon: '\u{1F3A8}', what: 'colour mode', picks: RING_COLOUR_MODE,
+        read: (/** @type {any} */ cfg) => cfg.gradient_preset || 'manual' },
+      // A ramp is not a mode and nothing remembers it was picked: it writes a
+      // list of stops and steps back out of the way, which is why this row
+      // reads its own name rather than a value.
+      { icon: '\u{1F308}', what: 'ready-made ramp', picks: RAMP_PICKS,
+        condition: isStopList, read: () => '',
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => gradientPresetPatch(v) },
+      { key: 'gradient_mode', icon: '\u25A4', what: 'gradient type', condition: isStopList,
+        read: (/** @type {any} */ cfg) => cfg.gradient_mode || 'smooth',
+        picks: [{ value: 'smooth', label: 'Smooth', short: 'Smooth' },
+                { value: 'stepped', label: 'Stepped', short: 'Stepped' }] },
+      ringColour('color1', 'outer colour', '#4caf50', isThreeColour),
+      ringColour('color2', 'middle colour', '#ffeb3b', isThreeColour),
+      ringColour('color3', 'centre colour', '#f44336', isThreeColour),
+      { key: 'threshold1', icon: '\u2460', slide: true, by: 1, min: 0, max: 98, dflt: 40,
+        what: 'centre to middle (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      { key: 'threshold2', icon: '\u2461', slide: true, by: 1, min: 0, max: 100, dflt: 75,
+        what: 'middle to outer (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      { key: 'threshold3', icon: '\u2591', slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
+        what: 'width of the first transition (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      { key: 'threshold4', icon: '\u2592', slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
+        what: 'width of the second transition (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      ringColour('color1', 'start colour', '#4caf50',
+                 (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
+      ringColour('color2', 'middle colour', '#ffeb3b',
+                 (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
+      ringColour('color3', 'end colour', '#f44336',
+                 (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
+      { key: 'threshold1', icon: '\u2460', slide: true, by: 1, min: 0, max: 100, dflt: 20,
+        what: 'start spread (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear' },
+      { key: 'threshold2', icon: '\u2461', slide: true, by: 1, min: 0, max: 100, dflt: 60,
+        what: 'mid spread (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear' },
+      // Last, because it is the one row here that is not about which colour
+      // goes where but about how finely the ring is cut to draw it.
+      { key: 'gradient_resolution', icon: '\u25EB', what: 'gradient resolution',
+        read: (/** @type {any} */ cfg) => cfg.gradient_resolution || 'auto',
+        picks: [{ value: 'auto', label: 'Automatic (size-dependent)', short: 'Auto' },
+                { value: 'coarse', label: 'Coarse (1\u00D7 colour zones)', short: '1\u00D7' },
+                { value: 'medium', label: 'Medium (12\u00D7)', short: '12\u00D7' },
+                { value: 'fine', label: 'Fine (24\u00D7)', short: '24\u00D7' },
+                { value: 'superfine', label: 'Superfine (48\u00D7)', short: '48\u00D7' },
+                { value: 'ultrafine', label: 'Ultrafine (96\u00D7)', short: '96\u00D7' },
+                { value: 'megafine', label: 'Megafine (192\u00D7)', short: '192\u00D7' }] },
     ],
   },
   ticks: {
@@ -4226,8 +4315,19 @@ class ScCanvasEditor extends LitElement {
         <span class="ring-group">${icon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
                   @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
-                  @change=${(/** @type {any} */ e) =>
-                    this._writeInner({ [st.key]: e.target.value }, false)}>
+                  @change=${(/** @type {any} */ e) => {
+                    // A row that sets one key names it; one that drops a whole
+                    // design on the part - a ramp of colours - hands back the
+                    // patch instead, and answers nothing for the line that is
+                    // only the menu's own name for itself.
+                    const patch = st.patch ? st.patch(cfg, e.target.value)
+                                           : { [st.key]: e.target.value };
+                    if (patch) this._writeInner(patch, false);
+                    // Nothing records which ramp was picked, so the menu goes
+                    // back to saying what it is rather than what was last done
+                    // with it.
+                    if (st.patch) e.target.value = String(now(st));
+                  }}>
             ${st.picks.map((/** @type {any} */ o) => html`
               <option value=${o.value} ?selected=${o.value === now(st)}>${o.short || o.label}</option>`)}
           </select>

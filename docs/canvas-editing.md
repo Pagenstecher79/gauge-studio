@@ -160,8 +160,25 @@ Not everything fits on a chip. What worked:
   number would, so every row still reads as one line of the grid. A swatch is
   worth it because a colour is one of the things a mark *is*; a picker that
   needs a dialog of its own is not.
+- **A slider** for a value that is a taste rather than a count - a blur, an
+  opacity, an angle, a width. It takes two of the four cells and hands the last
+  to the number, because a slider with nothing reading out of it says only
+  "about here". Steppers stay where the answer is a specific number and the
+  next one up is a real choice.
+- **A menu that drops a whole design.** A list of ready-made ramps is one
+  `<select>` and writes half a dozen keys at once. Two things make it read as
+  an offer rather than a mode: nothing records which one was picked, and the
+  menu snaps back to its own name afterwards, so it never claims to be showing
+  the state of anything. Such a row hands back a patch instead of naming a key.
+- **A row that has nothing to set is not drawn.** Every row may carry a
+  condition on the config: the four that shape a shadow are not offered while
+  there is no shadow, and the three colours of a symmetric ramp are not offered
+  while the ring is being coloured from a list. A panel that is eight rows deep
+  whatever the part is doing is a panel nobody reads to the bottom.
 - **Not a text field, not a free colour value.** A name, an entity, an
-  `rgba()` someone types out - those stay in the form.
+  `rgba()` someone types out - those stay in the form. A list that is edited by
+  dragging its items about - a gradient's stops - stays there too: it is not
+  one control but a small editor, and it needs the room the form has.
 - **All of it, or the part will be looked for in both places.** Once a chip
   carries a part's settings it carries the whole of them, minus only what the
   frame already does by being dragged. A chip with three of a part's eight
@@ -206,6 +223,26 @@ two rules finish the job:
   already applied is read back off the element rather than remembered, because
   lit rewrites the whole style attribute whenever the chip moves and takes the
   property with it.
+- **The other chips step aside, and they step aside from each other too.** The
+  panel is placed from where its own chip belongs and never moves for anything;
+  every chip is then walked once, the selected one first, and each takes the
+  shortest way out along one axis that is both inside the canvas and clear of
+  everything already placed - then joins the list of what is in the way. One
+  axis, because a chip that goes round a corner reads as a chip that has
+  wandered. Without the second half of that rule a chip that had dodged the
+  panel landed on its neighbour, which is the same fault one step further on.
+- **The open element stops clipping.** An element's own box draws its chips,
+  and a box with `overflow: hidden` cuts the chip it has just pushed outwards
+  in half. Only the element being worked on gets `overflow: visible`, so
+  nothing else on the canvas gains the right to spill.
+- **What clips at zoom is the view, not the canvas.** Past fit-to-window the
+  canvas is larger than the frame it scrolls inside, so the room a panel
+  actually has is the canvas intersected with the view - and it is measured
+  again on scroll.
+- **A second press on the chip puts the panel away.** A press that turned into
+  a drag moved the chip and is not a press; a plain second press on the chip
+  that is already selected lets the part go. Without it the only way out of a
+  ten-row panel was to take hold of something else.
 
 ## 11. The second kind is where the design is tested, the third is the proof
 

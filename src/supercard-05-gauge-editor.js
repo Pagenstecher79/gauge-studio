@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GAUGE_DEFAULT } from "./element-templates.js";
+import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 
 const SC = window.SupercardUtils;
 
@@ -188,10 +189,11 @@ const STYLE_FIELDS = [
 
   { id: '_section_color',    label: '── 🎨 Colour & Gradient',   type: 'section' },
   { id: 'stroke_width',        label: 'Ring thickness',            type: 'range',    min: 0, max: 5, step: 0.01,  placeholder: '3', framedBy: 'gauge_ring'   },
-  { id: 'gradient_preset',   label: 'Colour mode',             type: 'select', options: [ { value: 'manual', label: 'Manual (list)' }, { value: 'symmetriccustom', label: 'Symmetric (custom)' }, { value: 'symmetric', label: 'Symmetric (default)' }, { value: 'linear', label: 'Linear traffic light' } ] },
+  { id: 'gradient_ramp',     type: 'gradient_ramp', condition: cfg => ['manual', undefined, ''].includes(cfg.gradient_preset) },
+  { id: 'gradient_preset',   label: 'Colour mode',             type: 'select', framedBy: 'gauge_ring', options: [ { value: 'manual', label: 'Manual (list)' }, { value: 'symmetriccustom', label: 'Symmetric (custom)' }, { value: 'symmetric', label: 'Symmetric (default)' }, { value: 'linear', label: 'Linear traffic light' } ] },
 
-  { id: 'gradient_mode',     label: 'Gradient type',           type: 'select', options: [ { value: 'smooth', label: 'Smooth' }, { value: 'stepped', label: 'Stepped' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
-  { id: 'gradient_resolution', label: 'Gradient resolution', type: 'select', options: [ { value: 'auto', label: 'Automatic (size-dependent)' }, { value: 'coarse', label: 'Coarse (1× colour zones)' }, { value: 'medium', label: 'Medium (12× colour zones)' }, { value: 'fine', label: 'Fine (24×) — default' }, { value: 'superfine', label: 'Superfine (48×)' }, { value: 'ultrafine', label: 'Ultrafine (96×)' }, { value: 'megafine', label: 'Megafine (192×)' }  ]},
+  { id: 'gradient_mode', framedBy: 'gauge_ring',     label: 'Gradient type',           type: 'select', options: [ { value: 'smooth', label: 'Smooth' }, { value: 'stepped', label: 'Stepped' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
+  { id: 'gradient_resolution', framedBy: 'gauge_ring', label: 'Gradient resolution', type: 'select', options: [ { value: 'auto', label: 'Automatic (size-dependent)' }, { value: 'coarse', label: 'Coarse (1× colour zones)' }, { value: 'medium', label: 'Medium (12× colour zones)' }, { value: 'fine', label: 'Fine (24×) — default' }, { value: 'superfine', label: 'Superfine (48×)' }, { value: 'ultrafine', label: 'Ultrafine (96×)' }, { value: 'megafine', label: 'Megafine (192×)' }  ]},
 
   { id: 'threshold_unit',    label: 'Threshold unit',     type: 'select',
     hint: 'Thresholds can be given as absolute values or in %.', options: [ { value: 'percent', label: 'Percent (%)' }, { value: 'absolute', label: 'Absolute' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
@@ -200,19 +202,19 @@ const STYLE_FIELDS = [
 
   { id: 'manual_stops',      type: 'manual_stops', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
 
-  { id: 'color1',     label: 'Outer colour',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
-  { id: 'color2',     label: 'Middle colour',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
-  { id: 'color3',     label: 'Centre colour',  type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
-  { id: 'threshold1', label: 'Transition centre→middle (%)', type: 'range', min: 0, max: 98, step: 1, placeholder: '40', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
-  { id: 'threshold2', label: 'Transition middle→outer (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '75', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
-  { id: 'threshold3', label: 'Gradient width transition 1 (%)', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
-  { id: 'threshold4', label: 'Gradient width transition 2 (%)', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'color1',     label: 'Outer colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
+  { id: 'color2',     label: 'Middle colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
+  { id: 'color3',     label: 'Centre colour', framedBy: 'gauge_ring',  type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
+  { id: 'threshold1', label: 'Transition centre→middle (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 98, step: 1, placeholder: '40', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'threshold2', label: 'Transition middle→outer (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '75', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'threshold3', label: 'Gradient width transition 1 (%)', framedBy: 'gauge_ring', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'threshold4', label: 'Gradient width transition 2 (%)', framedBy: 'gauge_ring', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
 
-  { id: 'color1',     label: 'Start colour',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'color2',     label: 'Middle colour',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'color3',     label: 'End colour',     type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'threshold1', label: 'Start spread (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '20', condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'threshold2', label: 'Mid spread (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '60', condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'color1',     label: 'Start colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'color2',     label: 'Middle colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'color3',     label: 'End colour', framedBy: 'gauge_ring',     type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'threshold1', label: 'Start spread (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '20', condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'threshold2', label: 'Mid spread (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '60', condition: cfg => cfg.gradient_preset === 'linear' },
 
   { id: '_section_pointer',       label: '── 🧭 Pointer',                  type: 'section' },
   { id: 'pointer_type',           label: 'Pointer shape',                type: 'select',  options: [ { value: 'needle', label: 'Needle' }, { value: 'triangle', label: 'Triangle' } ], framedBy: 'pointer' },
@@ -387,6 +389,14 @@ class ScGaugeEditor extends LitElement {
          springs shut on the way. */
       details.inner-section.wanted { order: -1; border-color: var(--primary-color,#03a9f4); }
       .framed-note { font-size: 12px; color: var(--secondary-text-color); font-style: italic; }
+      .ramp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .ramp { display: flex; flex-direction: column; gap: 4px; padding: 4px;
+              border: 1px solid var(--divider-color,#444); border-radius: 6px;
+              background: none; color: inherit; cursor: pointer; font: inherit; }
+      .ramp:hover { border-color: var(--primary-color,#03a9f4); }
+      .ramp-bar { height: 10px; border-radius: 5px; }
+      .ramp-name { font-size: 11px; line-height: 1.2; color: var(--secondary-text-color);
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .inner-content { padding: 0 12px 12px 12px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--divider-color,#444); margin-top: 4px; padding-top: 12px; }
       ha-entity-picker, ha-selector { display: block; width: 100%; }
       .entity-row { display: flex; flex-direction: column; gap: 4px; }
@@ -807,7 +817,10 @@ class ScGaugeEditor extends LitElement {
     // dragged is the inner edge and the note has to say which.
     return html`<div class="framed-note">${framed.framedBy === 'gauge_ring'
       ? html`Thickness is on the canvas while this one is selected - drag the
-             ring's inner edge, which is the edge of it that moves.`
+             ring's inner edge, which is the edge of it that moves - and so is
+             how it is coloured, under its chip. The list of stops stays here:
+             a row of colours to be dragged about is not a control that fits
+             on a dial.`
       : framed.framedBy === 'pointer'
       ? html`Shape, length and offset are on the canvas while this one is
              selected - drag either end of the needle, or use the buttons on
@@ -875,6 +888,29 @@ class ScGaugeEditor extends LitElement {
               this.commitFn('gauges', SC.withPatch(gauges, idx, 'bg_manual_stops', newStops));
             }, entry.gradient_resolution)} </div>
         `;
+        break;
+      }
+      case 'gradient_ramp': {
+        // Swatches rather than a menu of names: a ramp is a picture, and
+        // "Fresh to stuffy" only means something once the purple at the top
+        // has been seen. What each one is *for* is the balloon on it, because
+        // that line is read once and then never again.
+        content = html`
+          <div class="col" style="gap:6px;">
+            <label>Start from a ramp ${SC.tipDot('A set of colour stops that suit each other, written straight into the list below. Every stop stays yours to move, and nothing remembers which ramp you picked.')}</label>
+            <div class="ramp-grid">
+              ${GRADIENT_PRESETS.map(pr => html`
+                <button class="ramp" title=${pr.label + ' \u2013 ' + pr.hint}
+                        @click=${() => {
+                          const n = structuredClone(gauges);
+                          Object.assign(n[idx], gradientPresetPatch(pr.id));
+                          this.commitFn('gauges', n);
+                        }}>
+                  <span class="ramp-bar" style="background:${gradientPresetCss(pr)}"></span>
+                  <span class="ramp-name">${pr.label}</span>
+                </button>`)}
+            </div>
+          </div>`;
         break;
       }
       case 'tick_preset': {
