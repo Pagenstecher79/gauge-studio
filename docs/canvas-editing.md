@@ -235,13 +235,31 @@ two rules finish the job:
   and a box with `overflow: hidden` cuts the chip it has just pushed outwards
   in half. Only the element being worked on gets `overflow: visible`, so
   nothing else on the canvas gains the right to spill.
+- **One invisible frame, not a margin at each place that places something.**
+  The room anything floating may use is the seen rectangle drawn in a little,
+  and the panel, the chips and the add buttons are all held inside that one
+  rectangle - the panel clamped to it and capped in height by it, every chip
+  pulled inside it whether or not anything else is in its way. A margin written
+  out at three call sites is three chances to write a different one, and a
+  control flush with the edge reads as clipped even when it is not: a rounded
+  corner, a focus ring and the view's own scrollbar all live in those last few
+  pixels.
+- **Fitting once is not always enough.** Moving the panel can change what it is
+  measured against - a row that reflows, a scrollbar that appears as the canvas
+  grows - so the second reading lands a few pixels from the first, which is
+  exactly the few pixels that show. It repeats while anything is still moving
+  and gives up after a handful of frames rather than chasing something that
+  will not settle.
 - **What clips at zoom is the view, not the canvas.** Past fit-to-window the
   canvas is larger than the frame it scrolls inside, so the room a panel
   actually has is the canvas intersected with the view - and it is measured
   again on scroll.
 - **A second press on the chip puts the panel away.** A press that turned into
-  a drag moved the chip and is not a press; a plain second press on the chip
-  that is already selected lets the part go. Without it the only way out of a
+  a drag moved the chip and is not a press - a chip writes no config, so the
+  flag that means "already committed once" everywhere else here has to be set
+  by hand for it, past a few pixels of slop, or the panel shuts every time the
+  chip is put somewhere else. A plain second press on the chip that is already
+  selected lets the part go. Without it the only way out of a
   ten-row panel was to take hold of something else.
 
 ## 11. The second kind is where the design is tested, the third is the proof

@@ -1026,8 +1026,23 @@ const RING_CHIP_ANGLE = Object.freeze({ gauge_ring: 120, ticks: -90, sub_ticks: 
 /** How long Apply stays on "Saved" before it is a button again. */
 const APPLY_SAVED_MS = 2000;
 
+/** How far a press may wander and still be a press rather than a drag, in px. */
+const CHIP_DRAG_SLOP = 3;
+
 /** How near the pivot a chip may stand, in viewBox units. */
 const RING_CHIP_MIN = 7;
+
+/**
+ * How far anything that floats over the canvas keeps off the edge of what
+ * can be seen, in pixels.
+ *
+ * A panel pushed to within a hair of the edge is a panel that reads as
+ * clipped even when it is not: the rounded corner and the focus ring of a
+ * select inside it sit outside the box the browser measures, and the
+ * scrollbar of the view crosses the last few pixels. Wide enough that the
+ * gap is visible as a gap.
+ */
+const CANVAS_EDGE = 12;
 
 /**
  * Which way the needle is pointing at this instant, in degrees clockwise from
@@ -1711,8 +1726,7 @@ class ScCanvasEditor extends LitElement {
     this._measureInner();
     this._placeNeedle();
     this._followInner();
-    this._fitSteps();
-    this._clearChips();
+    this._settleFloating();
     // The first canvas to arrive brings back the zoom this shape was last
     // looked at. Only the first: afterwards the zoom is whatever the person
     // at the keyboard has made it.
@@ -3460,6 +3474,15 @@ class ScCanvasEditor extends LitElement {
         l: at(d.from.l + (p.x - d.startX) / d.box.width * 100),
         t: at(d.from.t + (p.y - d.startY) / d.box.height * 100),
       });
+      // A chip writes no config, so this flag is not the undo coalescing it is
+      // everywhere else here - it is what says the gesture was a drag. Letting
+      // go of a chip that has been moved must not be read as the second press
+      // that puts its panel away, or the panel closes every time the chip is
+      // put somewhere else. Past a few pixels, because a press with a shaking
+      // hand is still a press.
+      if (!d.started && Math.hypot(p.x - d.startX, p.y - d.startY) > CHIP_DRAG_SLOP) {
+        d.started = true;
+      }
       this.requestUpdate();
       return;
     }
@@ -4127,6 +4150,29 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
+   * The same rectangle, drawn in a little - the frame nothing floating is let
+   * out of.
+   *
+   * An invisible frame rather than a margin applied at each of the places that
+   * place something: the panel, the chips and the add buttons all have to
+   * agree on where the edge is, and a margin written out three times is three
+   * chances to write a different one. Here it is one rectangle, and staying
+   * inside it is the whole rule.
+   */
+  _safeRect() {
+    const c = this._seenRect();
+    if (!c) return null;
+    const left = c.left + CANVAS_EDGE;
+    const top = c.top + CANVAS_EDGE;
+    const right = c.right - CANVAS_EDGE;
+    const bottom = c.bottom - CANVAS_EDGE;
+    // A view too small for its own margins keeps the room it has: an inside
+    // out rectangle would push everything to one corner and pin it there.
+    if (right <= left || bottom <= top) return c;
+    return { left, top, right, bottom, width: right - left, height: bottom - top };
+  }
+
+  /**
    * Scrolling the view moves what can be seen of the canvas, and the panel and
    * the chips are placed against that. Once per frame at most: a scroll fires
    * far oftener than anything here needs to be worked out again.
@@ -4135,44 +4181,66 @@ class ScCanvasEditor extends LitElement {
     if (this._fitting) return;
     this._fitting = requestAnimationFrame(() => {
       this._fitting = 0;
-      this._fitSteps();
-      this._clearChips();
+      this._settleFloating();
     });
   };
+
+  /**
+   * Put the panel and the chips inside the frame, and look again.
+   *
+   * Once is not always enough. Moving the panel can change what it is measured
+   * against - a row that reflows, a scrollbar that appears in the view as the
+   * canvas is zoomed - and the second reading is then a few pixels from the
+   * first, which is exactly the few pixels that show as a clipped edge. So it
+   * repeats while anything is still moving, and gives up after a handful of
+   * frames rather than chasing something that will not settle.
+   *
+   * @param {number} [left] frames still allowed
+   */
+  _settleFloating(left = 4) {
+    const moved = this._fitSteps();
+    this._clearChips();
+    if (!moved || left <= 0) return;
+    if (this._settling) cancelAnimationFrame(this._settling);
+    this._settling = requestAnimationFrame(() => {
+      this._settling = 0;
+      this._settleFloating(left - 1);
+    });
+  }
 
   _fitSteps() {
     const root = this.shadowRoot;
     const box = /** @type {any} */ (root?.querySelector('.ring-steps'));
-    const canvas = this._seenRect();
-    if (!box || !canvas) return;
+    const canvas = this._safeRect();
+    if (!box || !canvas) return false;
     const was = {
       x: parseFloat(box.style.getPropertyValue('--sc-steps-dx')) || 0,
       y: parseFloat(box.style.getPropertyValue('--sc-steps-dy')) || 0,
     };
     const c = canvas;
-    if (!c.height) return;
+    if (!c.height) return false;
     // A per cent would be read against the element the panel hangs on, which
     // is the gauge and not the canvas, so how tall it may be is measured here
     // too. Set before the box is, because it is what the box will be.
-    const room = Math.round(c.height) - 8;
+    const room = Math.round(c.height);
     const cap = room > 0 ? room + 'px' : 'none';
     if (box.style.maxHeight !== cap) box.style.maxHeight = cap;
     const b = box.getBoundingClientRect();
-    if (!b.width) return;
+    if (!b.width) return false;
     // Where it would stand with no nudge at all.
     const l = b.left - was.x;
     const t = b.top - was.y;
-    const M = 4;
     // Pushed off the far edge first and the near one second, so a panel too
-    // big for the canvas is pinned at the top left and scrolls rather than
-    // hiding its first row.
-    let dx = Math.min(0, (c.right - M) - (l + b.width));
-    let dy = Math.min(0, (c.bottom - M) - (t + b.height));
-    dx = Math.max(dx, (c.left + M) - l);
-    dy = Math.max(dy, (c.top + M) - t);
-    if (Math.abs(dx - was.x) < 0.5 && Math.abs(dy - was.y) < 0.5) return;
+    // big for the canvas is pinned at the top left of the frame and scrolls
+    // rather than hiding its first row.
+    let dx = Math.min(0, c.right - (l + b.width));
+    let dy = Math.min(0, c.bottom - (t + b.height));
+    dx = Math.max(dx, c.left - l);
+    dy = Math.max(dy, c.top - t);
+    if (Math.abs(dx - was.x) < 0.5 && Math.abs(dy - was.y) < 0.5) return false;
     box.style.setProperty('--sc-steps-dx', dx + 'px');
     box.style.setProperty('--sc-steps-dy', dy + 'px');
+    return true;
   }
 
   /**
@@ -4197,7 +4265,7 @@ class ScCanvasEditor extends LitElement {
    */
   _clearChips() {
     const root = this.shadowRoot;
-    const c = this._seenRect();
+    const c = this._safeRect();
     if (!root || !c) return;
     const box = /** @type {any} */ (root.querySelector('.ring-steps'));
     const M = 4;
@@ -4227,7 +4295,15 @@ class ScCanvasEditor extends LitElement {
       const inside = (/** @type {any} */ w) =>
         h.l + w.x >= c.left && h.l + w.x + h.w <= c.right
         && h.t + w.y >= c.top && h.t + w.y + h.h <= c.bottom;
-      let best = { x: 0, y: 0 };
+      // The frame is not only something to keep out of the way of - it is the
+      // first thing a chip is brought inside, whether anything else is in its
+      // way or not. A chip hanging half out of the view is clipped by it, and
+      // that is the same fault as lying under the panel.
+      const held = (/** @type {any} */ w) => ({
+        x: Math.max(Math.min(w.x, c.right - (h.l + h.w)), c.left - h.l),
+        y: Math.max(Math.min(w.y, c.bottom - (h.t + h.h)), c.top - h.t),
+      });
+      let best = held({ x: 0, y: 0 });
       if (!free(best)) {
         // One axis at a time, past every edge of everything already placed:
         // a chip that goes round a corner reads as a chip that has wandered.
@@ -4236,7 +4312,7 @@ class ScCanvasEditor extends LitElement {
           ways.push({ x: o.left - M - (h.l + h.w), y: 0 }, { x: o.right + M - h.l, y: 0 },
                     { x: 0, y: o.top - M - (h.t + h.h) }, { x: 0, y: o.bottom + M - h.t });
         }
-        const ok = ways.filter(inside).filter(free)
+        const ok = ways.map(held).filter(inside).filter(free)
           .sort((/** @type {any} */ p, /** @type {any} */ q) =>
             (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
         if (ok.length) best = ok[0];
