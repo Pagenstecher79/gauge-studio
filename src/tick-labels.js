@@ -63,6 +63,25 @@ export function labelBox(text, fontSize) {
 }
 
 /**
+ * The box of the widest label in a row.
+ *
+ * A row of numbers is placed against one circle, so it has to be pushed off
+ * that circle by one reach - the widest one. Reaching by its own width
+ * instead is what made a dial read as out of round: 9 and 10 sit a degree
+ * apart at the side of a face, where the width governs, so the two-digit
+ * one went half a digit further in than its neighbour and the row stepped.
+ * Flush edges are worth having where the labels are of one length and cost
+ * more than they are worth the moment they are not.
+ *
+ * @param {string[]} texts @param {number} fontSize
+ */
+export function rowBox(texts, fontSize) {
+  let widest = 1;
+  for (const t of texts || []) widest = Math.max(widest, String(t ?? '').length);
+  return { w: widest * EM_WIDTH * fontSize, h: fontSize * LINE_HEIGHT };
+}
+
+/**
  * How far a label's centre stands from the point its box just touches.
  *
  * A label is placed against a circle, and what should lie on that circle is
@@ -114,6 +133,9 @@ function place(spec, step) {
   const out = spec.outward;
   const div = count > 1 ? count - 1 : 1;
   const boxes = [];
+  // One reach for the whole row, so the numbers share a circle; each label
+  // still crowds its neighbour with its own width.
+  const reachBox = rowBox(texts.filter((_, i) => i % step === 0), fontSize);
   for (let i = 0; i < count; i += step) {
     const ang = rad(startAngle + (i / div) * totalAngle);
     const cos = Math.cos(ang), sin = Math.sin(ang);
@@ -123,7 +145,7 @@ function place(spec, step) {
     // The same placement the renderer uses: the box stands clear of the label
     // circle by its own reach, so a plan reads the sides of a dial as roomy
     // and the top as tight, which is what they are.
-    const rc = r + (out ? 1 : -1) * boxReach(box, cos, sin);
+    const rc = r + (out ? 1 : -1) * boxReach(reachBox, cos, sin);
     boxes.push({ i, row, x: rc * cos, y: rc * sin, w: box.w, h: box.h });
   }
   return boxes;
