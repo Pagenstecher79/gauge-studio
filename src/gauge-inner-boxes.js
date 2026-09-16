@@ -180,6 +180,35 @@ export function needleFromRadius(end, at, offset, length, ring, scale) {
   };
 }
 
+/**
+ * The whole needle slid in or out, from a grab that began at `at0` and has
+ * reached `at` - both signed radii along the needle's own line.
+ *
+ * Only the offset moves. The length is what the two end handles are for, and
+ * a line taken hold of bodily is asking for the other thing: keep the needle
+ * as long as it is and put it somewhere else on its own line. So the tail
+ * follows the tip and nothing but where it sits changes.
+ *
+ * Relative rather than absolute, unlike the ends: a handle is a point and can
+ * simply be dragged to where the pointer is, but a line is grabbed somewhere
+ * along its length, and jumping its tip to the pointer would throw the needle
+ * by however far from the tip it was taken hold of.
+ *
+ * The tip's radius is the ring less the offset, so a needle pulled outward -
+ * a growing radius - is one whose offset falls.
+ *
+ * @param {number} at the radius the grab has reached
+ * @param {number} at0 the radius it began at
+ * @param {number} offset `pointer_offset` when the grab began
+ * @param {number} scale the gauge's `gauge_scale`
+ */
+export function needleSlide(at, at0, offset, scale) {
+  return {
+    pointer_offset: clamp(tenth(offset - (at - at0) / (scale || 1)),
+                          -POINTER_OFFSET_LIMIT, POINTER_OFFSET_LIMIT),
+  };
+}
+
 /** The thickest the ring's own slider allows. */
 export const STROKE_MAX = 5;
 

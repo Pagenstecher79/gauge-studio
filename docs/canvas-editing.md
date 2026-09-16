@@ -42,6 +42,22 @@ gesture cannot reach a value the setting can hold, the handle is modelling the
 wrong thing.** Look for the geometry the value actually lives in before adding
 a second handle or a clamp.
 
+The line between the two ends is a third grip, and it asks the other question:
+the ends say how long the needle is, the line says where on its own axis it
+sits. So it writes `pointer_offset` and leaves `pointer_length` alone, and the
+tail follows the tip.
+
+That one is **relative where the ends are absolute**. An end is a point and
+can be dragged to wherever the pointer is; a line is taken hold of somewhere
+along its length, and jumping the tip to the pointer would throw the needle by
+however far from the tip the hand happened to grab it. So the grab records the
+radius it began at and follows the travel from there.
+
+The line is also what a press selects the pointer by, which is why it is the
+one grip with a slop: under `CHIP_DRAG_SLOP` pixels nothing is written, and a
+press with a shaking hand stays a press. A handle needs no such guard - nobody
+reaches for a 2.4-unit circle by accident.
+
 ## 3. Only one edge of a band can move
 
 A ring drawn with a stroke centred on radius `r` has its outer edge at

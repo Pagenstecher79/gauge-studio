@@ -12,7 +12,7 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
 import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
 import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
-         needleEnds, needleFromRadius,
+         needleEnds, needleFromRadius, needleSlide,
          ringInnerEdge, strokeFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor } from "./element-templates.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
@@ -2119,11 +2119,11 @@ class ScCanvasEditor extends LitElement {
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
       .ring-hit { fill: none; stroke: transparent; stroke-width: 2.4;
         pointer-events: stroke; cursor: ns-resize; touch-action: none; }
-      /* The needle itself, which selects the pointer but drags nothing - the
-         two ends do that, and they are drawn after this so they win the press
-         where the two overlap. */
+      /* The needle itself, which selects the pointer and slides it in and out
+         along its own line. The two ends set its length instead, and they are
+         drawn after this so they win the press where the two overlap. */
       .needle-hit { fill: none; stroke: transparent; stroke-width: 3;
-        pointer-events: stroke; cursor: pointer; touch-action: none; }
+        pointer-events: stroke; cursor: move; touch-action: none; }
       /* The needle's two ends. Filled, unlike the bands: a grip is small
          enough that taking every press inside it is what it is for, and the
          needle has nothing underneath it worth reading through. */
@@ -3460,7 +3460,14 @@ class ScCanvasEditor extends LitElement {
         ? { offset: SC.safeFloat(cfg.pointer_offset, 2),
             length: SC.safeFloat(cfg.pointer_length, 10) }
         : null;
-      this._innerDrag = { part, mode, end, from, ...geo, started: false };
+      // Where along the line the hand took hold of it. An end handle is a
+      // point and is simply dragged to the pointer; the line is grabbed
+      // anywhere along its length, so what it follows is the travel from
+      // here rather than the pointer's own radius.
+      const at0 = end === 'line'
+        ? this._needleRadius({ x: e.clientX, y: e.clientY }, geo) : 0;
+      this._innerDrag = { part, mode, end, from, at0, ...geo,
+                          startX: e.clientX, startY: e.clientY, started: false };
       this._ptr = { x: e.clientX, y: e.clientY };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
@@ -3481,6 +3488,23 @@ class ScCanvasEditor extends LitElement {
     };
     this._ptr = { x: e.clientX, y: e.clientY };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
+  }
+
+  /**
+   * How far out along the needle's own line a point stands, in viewBox units.
+   *
+   * Signed, not a distance: a distance would fold the far side of the pivot
+   * back onto the near one, and the far side is exactly where a tail is
+   * dragged to. Measured against the angle the needle is drawn at this
+   * instant rather than the one the config asks for, because mid-animation
+   * those are two different numbers.
+   *
+   * @param {{x: number, y: number}} p the point, in screen pixels
+   * @param {any} geo the gesture's geometry - centre and pixels per unit
+   */
+  _needleRadius(p, geo) {
+    const ang = (this._innerRects?.angle ?? 0) * Math.PI / 180;
+    return ((p.x - geo.cx) * Math.cos(ang) + (p.y - geo.cy) * Math.sin(ang)) / geo.pxPerUnit;
   }
 
   /**
@@ -3575,13 +3599,17 @@ class ScCanvasEditor extends LitElement {
       return;
     }
     if (d.mode === 'needle') {
-      // Along the needle's own line, signed: a distance would fold the far
-      // side of the pivot back onto the near one, and the far side is exactly
-      // where a tail is dragged to.
-      const ang = (this._innerRects?.angle ?? 0) * Math.PI / 180;
-      const at = ((p.x - d.cx) * Math.cos(ang) + (p.y - d.cy) * Math.sin(ang)) / d.pxPerUnit;
-      this._writeInner(needleFromRadius(d.end, at, d.from.offset, d.from.length,
-                                        d.ring, d.scale), d.started);
+      const at = this._needleRadius(p, d);
+      if (d.end === 'line') {
+        // The line is also what a press selects the pointer by, so a hand
+        // that shook while pressing must not nudge the needle. Past a few
+        // pixels it is a drag and stays one.
+        if (!d.started && Math.hypot(p.x - d.startX, p.y - d.startY) <= CHIP_DRAG_SLOP) return;
+        this._writeInner(needleSlide(at, d.at0, d.from.offset, d.scale), d.started);
+      } else {
+        this._writeInner(needleFromRadius(d.end, at, d.from.offset, d.from.length,
+                                          d.ring, d.scale), d.started);
+      }
       d.started = true;
       return;
     }
@@ -4029,8 +4057,10 @@ class ScCanvasEditor extends LitElement {
                   x1=${n.tail.x} y1=${n.tail.y} x2=${n.tip.x} y2=${n.tip.y}></line>
             <line class="needle-line needle-hit"
                   x1=${n.tail.x} y1=${n.tail.y} x2=${n.tip.x} y2=${n.tip.y}
-                  @pointerdown=${(/** @type {any} */ ev) => this._innerDown(ev, part, 'ring')}>
-              <title>${'Select the ' + spec.label.toLowerCase()}</title>
+                  @pointerdown=${(/** @type {any} */ ev) =>
+                    this._innerDown(ev, part, 'needle', 'line')}>
+              <title>${'Drag the ' + spec.label.toLowerCase()
+                       + ' in or out, or either end to set its length'}</title>
             </line>
             ${Object.entries(NEEDLE_ENDS).map(([end, e2]) => svg`
               <circle class="ring-grip ${sel ? 'sel' : ''}" data-end=${end}

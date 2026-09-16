@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { offsetsFromDrag, fontFromResize, estimateRect, clamp,
          ringRadius, ringPartRadius, offsetFromRadius,
          OFFSET_LIMIT, FONT_MAX, FONT_MIN, GAUGE_CENTER,
-         needleEnds, needleFromRadius,
+         needleEnds, needleFromRadius, needleSlide,
          ringInnerEdge, strokeFromRadius } from './gauge-inner-boxes.js';
 
 describe('offsetsFromDrag', () => {
@@ -191,5 +191,41 @@ describe('the ring thickness', () => {
   it('never writes a thickness its own slider would refuse', () => {
     expect(strokeFromRadius(-99, 1)).toBe(5);
     expect(strokeFromRadius(99, 1)).toBe(0);
+  });
+});
+
+describe('needleSlide', () => {
+  it('moves the offset by how far the grab travelled, not to where it landed', () => {
+    // Grabbed at 15, dragged out to 18: three units further out, wherever on
+    // the line the hand happened to take hold of it.
+    expect(needleSlide(18, 15, 2, 1)).toEqual({ pointer_offset: -1 });
+    // The same three units, grabbed somewhere else entirely.
+    expect(needleSlide(8, 5, 2, 1)).toEqual({ pointer_offset: -1 });
+  });
+
+  it('pulls the offset up when the needle is pushed inward', () => {
+    expect(needleSlide(12, 15, 2, 1)).toEqual({ pointer_offset: 5 });
+  });
+
+  it('stands still for a grab that has not moved', () => {
+    expect(needleSlide(15, 15, 2, 1)).toEqual({ pointer_offset: 2 });
+  });
+
+  it('changes the number twice as fast on a gauge drawn half size', () => {
+    expect(needleSlide(18, 15, 2, 0.5)).toEqual({ pointer_offset: -4 });
+  });
+
+  it('keeps the needle as long as it was', () => {
+    const ring = 20, scale = 1;
+    const was = needleEnds(2, 10, ring, scale);
+    const p = needleSlide(18, 15, 2, scale);
+    const now = needleEnds(p.pointer_offset, 10, ring, scale);
+    expect(now.tip - now.tail).toBeCloseTo(was.tip - was.tail, 6);
+    expect(now.tip).toBeCloseTo(was.tip + 3, 6);
+  });
+
+  it('never writes an offset its own slider would refuse', () => {
+    expect(needleSlide(999, 0, 2, 1).pointer_offset).toBe(-10);
+    expect(needleSlide(-999, 0, 2, 1).pointer_offset).toBe(10);
   });
 });
