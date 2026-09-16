@@ -178,7 +178,7 @@ a neighbouring chip. **Whatever hangs off a label is part of that label's
 footprint.** Re-check the spacing whenever anything is added to it, and measure
 it - the gap is a number, not an impression.
 
-## 11. The second kind is where the design is tested
+## 11. The second kind is where the design is tested, the third is the proof
 
 Everything above was written for one kind of element. Adding a second - a
 surface, whose parts are a colour and a corner rather than a ring and a needle
@@ -195,6 +195,9 @@ know a gauge from a surface.
 cost of finding out later is every call site that named the first kind out
 loud.
 
+The third kind - a bar - cost an entry, five `spot` parts and nothing else.
+That is what the second kind was for.
+
 Two smaller lessons came with it:
 
 - **Not every part is on a ring.** A part that is told where to stand - a
@@ -202,6 +205,12 @@ Two smaller lessons came with it:
   number, and pressing it is only ever taking it in hand. The needle was
   already that and had a special case of its own; naming the general thing
   retired the special case.
+- **Can and is are different questions.** `on` says the part is switched on;
+  `can` says the element is the sort of thing that has one at all. Running them
+  together is how a bar drawn as a ring came to be offered a pill it can never
+  draw - the offer is for a part that is off, and off is not the same as
+  impossible. A part with no `can` is one every element of its kind can have,
+  which is most of them.
 - **A measurement is per kind, the sameness check is not.** A gauge
   letterboxes a viewBox inside its box, has text rects to follow and a needle
   that is still moving; a box is its own frame and holds still. Both answer

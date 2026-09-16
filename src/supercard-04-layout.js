@@ -7,7 +7,8 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
          sectionColumns, sectionWidthPx,
          canDuplicate, reorderElement, overlappingElements,
          alignElements, restorePatch,
-         NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview } from "./canvas-model.js";
+         NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview,
+         barIsCircular } from "./canvas-model.js";
 import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
 import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
@@ -684,6 +685,15 @@ const GAUGE_RINGS = Object.freeze({
       ringInnerEdge(SC.safeFloat(cfg.stroke_width, 3), scale),
     fromRadius: (/** @type {number} */ r, /** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
       ({ stroke_width: strokeFromRadius(r, scale) }),
+    // How far the ring goes round is the ring's own business, and the ring is
+    // what is in hand while this is showing. Two values, so it reads as the
+    // switch it is rather than as a list with two things in it.
+    steps: [
+      { key: 'gauge_type', icon: '\u25D4', what: 'sweep',
+        read: (/** @type {any} */ cfg) => cfg.gauge_type || 'full',
+        picks: [{ value: 'full', label: 'Full 360\u00B0', short: '360\u00B0' },
+                { value: 'semi', label: 'Semi 270\u00B0', short: '270\u00B0' }] },
+    ],
   },
   ticks: {
     label: 'Ticks', offset: 'tick_offset', doffset: 0, limit: 10,
@@ -861,6 +871,129 @@ const SURFACE_PARTS = Object.freeze({
   },
 });
 
+/**
+ * What a bar has that can be worked on where it is drawn.
+ *
+ * None of them is a ring, so none has a radius and none is dragged in or out:
+ * a bar's parts are along it, not around a centre, and what there is to set
+ * about each is a count, a step or a shape rather than a distance. So they are
+ * `spot` parts - a chip standing where it is told, with the numbers under it -
+ * and the frames, the offers and the letting go are the same machinery the
+ * gauge's rings already use.
+ *
+ * Where each stands is a starting place, not a decision: every chip can be
+ * picked up and put down, and on a bar - which is usually far wider than it is
+ * tall - that is what the person will want to do.
+ *
+ * Only a line has ticks and a pill. A bar drawn as a ring has neither, so
+ * those parts simply are not on.
+ */
+const lineOnly = (/** @type {any} */ cfg) => !barIsCircular(cfg);
+
+const BAR_PARTS = Object.freeze({
+  label: {
+    label: 'Label', section: '_section_label', spot: { l: 25, t: 28 },
+    on: (/** @type {any} */ cfg) => !!cfg.show_label,
+    turnOn: { show_label: true }, turnOff: { show_label: false },
+    steps: [
+      { key: 'label_font_size', icon: 'A', by: 1, min: 4, max: 60, dflt: 12,
+        what: 'label type' },
+      { key: 'label_rotation', icon: '\u21BB', what: 'label rotation',
+        read: (/** @type {any} */ cfg) => String(cfg.label_rotation ?? '0'),
+        picks: [{ value: '0', label: 'Horizontal', short: '0\u00B0' },
+                { value: '90', label: 'Quarter turn', short: '90\u00B0' },
+                { value: '-90', label: 'Quarter turn back', short: '-90\u00B0' }] },
+    ],
+  },
+  pill: {
+    label: 'Pill', section: '_section_indicator', spot: { l: 62, t: 28 },
+    can: lineOnly,
+    on: (/** @type {any} */ cfg) => !!cfg.show_indicator && !!cfg.indicator_value,
+    // The pill rides the indicator line, so switching it on brings the line
+    // with it; switching it off leaves the line, which is a mark of its own.
+    turnOn: { show_indicator: true, indicator_value: true },
+    turnOff: { indicator_value: false },
+    steps: [
+      { key: 'indicator_value_decimals', icon: '.0', by: 1, min: 0, max: 3, dflt: 0,
+        what: 'decimal places' },
+      { key: 'indicator_value_opacity', icon: '\u25D0', by: 5, min: 0, max: 100, dflt: 100,
+        what: 'pill opacity' },
+      { key: 'indicator_glass_effect', icon: '\u{1F48A}', what: 'glass effect',
+        read: (/** @type {any} */ cfg) => cfg.indicator_glass_effect || 'none',
+        picks: [{ value: 'none', label: 'No effect', short: 'Flat' },
+                { value: 'glass_gooey', label: 'Liquid and gooey', short: 'Gooey' },
+                { value: 'glass_clean', label: 'Clean frost', short: 'Frost' },
+                { value: 'glass_clear', label: 'Clear 3D glass', short: 'Clear' },
+                { value: 'glass_lens', label: 'Convex lens', short: 'Lens' },
+                { value: 'glass_dark', label: 'Dark tinted glass', short: 'Dark' },
+                { value: 'glass_liquid', label: 'Liquid glass', short: 'Liquid' },
+                { value: 'glass_liquid_heavy', label: 'Liquid glass, thick',
+                  short: 'Liquid+' }] },
+    ],
+  },
+  ticks: {
+    label: 'Ticks', section: '_section_scale', spot: { l: 25, t: 72 },
+    can: lineOnly,
+    on: (/** @type {any} */ cfg) => !!cfg.show_ticks,
+    turnOn: { show_ticks: true }, turnOff: { show_ticks: false },
+    steps: [
+      { key: 'tick_count', icon: '#', by: 1, min: 0, max: 51, dflt: 10, what: 'ticks' },
+      { key: 'tick_align', icon: '\u2195', what: 'tick alignment',
+        read: (/** @type {any} */ cfg) => cfg.tick_align || 'center',
+        picks: [{ value: 'center', label: 'Centred', short: 'Centre' },
+                { value: 'start', label: 'At the top or left edge', short: 'Edge' },
+                { value: 'end', label: 'At the opposite edge', short: 'Far' },
+                { value: 'full', label: 'The full width', short: 'Full' }] },
+    ],
+  },
+  sub_ticks: {
+    label: 'Subticks', section: '_section_subticks', spot: { l: 50, t: 88 },
+    can: lineOnly,
+    on: (/** @type {any} */ cfg) => !!cfg.show_ticks && !!cfg.show_subticks,
+    turnOn: { show_subticks: true }, turnOff: { show_subticks: false },
+    // Subticks are drawn between ticks, so a bar with none gets ticks too.
+    seed: { show_ticks: true },
+    steps: [
+      { key: 'subtick_count', icon: '#', by: 1, min: 1, max: 20, dflt: 4,
+        what: 'sub-ticks per interval' },
+      { key: 'subtick_pos', icon: '\u2195', what: 'sub-tick alignment',
+        read: (/** @type {any} */ cfg) => cfg.subtick_pos || 'main',
+        picks: [{ value: 'main', label: 'As the main ticks', short: 'As ticks' },
+                { value: 'center', label: 'Centred', short: 'Centre' },
+                { value: 'start', label: 'At the top or left edge', short: 'Edge' },
+                { value: 'end', label: 'At the opposite edge', short: 'Far' },
+                { value: 'full', label: 'The full width', short: 'Full' }] },
+    ],
+  },
+  tick_labels: {
+    label: 'Tick labels', section: '_section_tick_labels', spot: { l: 75, t: 72 },
+    can: lineOnly,
+    on: (/** @type {any} */ cfg) => !!cfg.show_ticks && !!cfg.show_tick_labels,
+    turnOn: { show_tick_labels: true }, turnOff: { show_tick_labels: false },
+    seed: { show_ticks: true },
+    steps: [
+      { key: 'tick_label_step', icon: '#', by: 1, min: 1, max: 10, dflt: 1,
+        what: 'labelled ticks' },
+      { key: 'tick_labels_decimals', icon: '.0', by: 1, min: 0, max: 3, dflt: 0,
+        what: 'decimal places' },
+    ],
+  },
+});
+
+/**
+ * Whether an element can have this part at all, as opposed to whether it has
+ * it now.
+ *
+ * Two different questions, and running them together is how a circular bar
+ * came to be offered a pill it can never draw. `on` says the part is switched
+ * on; `can` says the element is the sort of thing that has one. A part with no
+ * `can` is one every element of its kind can have, which is most of them.
+ */
+const partCan = (spec, cfg) => !spec.can || spec.can(cfg);
+
+/** Whether the part is actually being drawn right now. */
+const partOn = (spec, cfg) => partCan(spec, cfg) && spec.on(cfg);
+
 /** One shared empty map, for a kind that has no parts of that sort. */
 const NO_PARTS = Object.freeze({});
 
@@ -987,6 +1120,33 @@ const INNER_KINDS = Object.freeze({
       if (!next[t.idx]) return null;
       Object.assign(next[t.idx], patch);
       return { key: 'gauges', value: next };
+    },
+  },
+  bar: {
+    match: /^progressbar_(\d+)$/,
+    noun: 'bar',
+    holds: 'its ticks, its pill, its label',
+    editor: 'sc-progressbar-editor',
+    parts: NO_PARTS,
+    rings: BAR_PARTS,
+    measure: boxFrame,
+    // Two keys for one idea, because a line and a ring round their corners in
+    // different units: a line's radius is a length, a ring's is a share of its
+    // own thickness. The renderer reads whichever the orientation calls for,
+    // so the grips have to write the same one.
+    corners: (/** @type {any} */ cfg) => (barIsCircular(cfg)
+      ? { key: 'circular_border_radius', unit: '%' }
+      : { key: 'border_radius', unit: 'px' }),
+    config: (/** @type {any} */ slot, /** @type {string} */ _id, /** @type {number} */ idx) => {
+      if (!slot.progressbar_active || !Array.isArray(slot.progressbars)) return null;
+      return slot.progressbars[idx] || null;
+    },
+    drawn: () => [],
+    write: (/** @type {any} */ slot, /** @type {any} */ t, /** @type {any} */ patch) => {
+      if (!Array.isArray(slot.progressbars) || !slot.progressbars[t.idx]) return null;
+      const next = structuredClone(slot.progressbars);
+      Object.assign(next[t.idx], patch);
+      return { key: 'progressbars', value: next };
     },
   },
   surface: {
@@ -3243,6 +3403,11 @@ class ScCanvasEditor extends LitElement {
    * three offers on one gauge do not land on top of each other.
    */
   _ringHome(part) {
+    // A part that is told where to stand is told in per cent of the box, which
+    // is the answer this is on its way to - and it has no radius to work one
+    // out from, so asking for its ring would answer nothing.
+    const told = this._innerTarget?.rings[part]?.spot;
+    if (told) return { l: told.l, t: told.t };
     const box = this._ringBox(part);
     if (!box) return null;
     const ang = (RING_CHIP_ANGLE[part] ?? -90) * Math.PI / 180;
@@ -3369,7 +3534,9 @@ class ScCanvasEditor extends LitElement {
     ${this._renderRings(swallow)}
     ${Object.entries(target.rings).map(([part, spec]) => {
       const cfg = target.cfg;
-      if (spec.on(cfg)) return '';
+      // Offered only to an element that could have it: a bar drawn as a ring
+      // has nowhere to put a pill, and an offer it cannot take is noise.
+      if (!partCan(spec, cfg) || spec.on(cfg)) return '';
       const home = this._ringHome(part);
       if (!home) return '';
       return html`
@@ -3407,7 +3574,7 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     const cfg = target?.cfg;
     if (!svgBox || !cfg) return '';
-    const live = Object.entries(target.rings).filter(([, spec]) => spec.on(cfg));
+    const live = Object.entries(target.rings).filter(([, spec]) => partOn(spec, cfg));
     if (!live.length) return '';
     // What is drawn as a band, and what only ever stands somewhere. A part
     // with a spot has no radius, so none of the arithmetic below is asked of
@@ -4255,7 +4422,10 @@ class ScCanvasEditor extends LitElement {
     if ((m = id.match(/^progressbar_(\d+)$/))) {
       return wrap('Progressbar settings', html`
         <sc-progressbar-editor .hass=${props.hass} .slot=${props.slot}
-                               .commitFn=${props.commitFn} .only=${Number(m[1])}></sc-progressbar-editor>`);
+                               .commitFn=${props.commitFn} .only=${Number(m[1])}
+                               .priority=${this._innerOn && this._innerSel
+                                 ? (this._selSpec?.section || '') : ''}
+                               .framed=${this._innerFramed}></sc-progressbar-editor>`);
     }
     if ((m = id.match(/^gauge_(\d+)$/))) {
       return wrap('Gauge settings', html`

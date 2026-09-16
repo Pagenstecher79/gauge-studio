@@ -142,8 +142,22 @@ export function isSquareLocked(el, slot) {
   if (el.id.startsWith('gauge_')) return true;
   const m = /^progressbar_(\d+)$/.exec(el.id);
   if (!m) return false;
-  const bar = slot?.progressbars?.[Number(m[1])];
-  return typeof bar?.orientation === 'string' && bar.orientation.startsWith('circular');
+  return barIsCircular(slot?.progressbars?.[Number(m[1])]);
+}
+
+/**
+ * Whether a bar is drawn as a ring rather than as a line.
+ *
+ * Half of what a bar offers depends on this - ticks, subticks and the pill are
+ * a line's, and the two radius keys are different keys - so the test is worth
+ * having in one place rather than spelled out at each of them. Written to read
+ * an *entry*, because that is what every caller has.
+ *
+ * @param {any} cfg a progressbar entry
+ * @returns {boolean}
+ */
+export function barIsCircular(cfg) {
+  return String(cfg?.orientation ?? '').startsWith('circular');
 }
 
 /**

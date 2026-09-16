@@ -491,20 +491,39 @@ Object.assign(window.SupercardUtils, (() => {
    * @param {any} field
    * @param {any} ctx
    */
+  /**
+   * Whether a field has been handed over to the canvas and should not be
+   * drawn here.
+   *
+   * Two rules, one answer. `framedBy` names the part whose frame replaces the
+   * field, and the field goes while that part is framed - two live controls
+   * for one value is worse than one badly placed control. It may be a function
+   * of the entry, for where that depends on what is being edited: a solid
+   * colour is a swatch on the drawing, a gradient is a list and is not.
+   * `framedWhen` is the mirror, for the line that stands in for what has gone,
+   * so a fold that has lost most of its rows does not read as one that is
+   * missing something.
+   *
+   * Here rather than inside `renderField` because one editor - the bar's -
+   * draws its own fields, and the rule has to be the same rule there.
+   *
+   * @param {any} field
+   * @param {any} entry the config being edited
+   * @param {Set<string>|undefined} framed the parts the canvas has taken over
+   * @returns {boolean} true when the field is not to be drawn
+   */
+  const fieldFramed = (field, entry, framed) => {
+    if (!field) return false;
+    const by = typeof field.framedBy === 'function'
+      ? field.framedBy(entry) : field.framedBy;
+    if (by && framed?.has?.(by)) return true;
+    return !!field.framedWhen && !framed?.has?.(field.framedWhen);
+  };
+
   const renderField = (field, ctx) => {
     if (!field) return html``;
     if (field.condition && !field.condition(ctx.entry, ctx.slot)) return html``;
-    // A setting the canvas has taken over is not offered here as well: two
-    // live controls for one value is worse than one badly placed control.
-    // A function where what it is framed by depends on the entry - a solid
-    // colour is a swatch on the drawing, a gradient is a list and is not.
-    const framedBy = typeof field.framedBy === 'function'
-      ? field.framedBy(ctx.entry, ctx) : field.framedBy;
-    if (framedBy && ctx.framed?.has?.(framedBy)) return html``;
-    // The mirror of it: the line that stands in for what has just gone. A fold
-    // that has lost most of its rows otherwise reads as a fold that is missing
-    // something.
-    if (field.framedWhen && !ctx.framed?.has?.(field.framedWhen)) return html``;
+    if (fieldFramed(field, ctx.entry, ctx.framed)) return html``;
 
     // A field usually reads its own key; `value` is for the few that do not -
     // a default that falls back through an older key, a switch that is on
@@ -793,7 +812,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     resolveAlias, withPatch, gaugeIsResponsive, onCanvas, cardIsPill, cardRadius,
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, slider, sliderRow, sliderField, tipDot,
-    renderField, renderFields,
+    renderField, renderFields, fieldFramed,
     editorStyles, formStyles
   });
 })());
