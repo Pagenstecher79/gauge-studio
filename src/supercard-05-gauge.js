@@ -1,6 +1,7 @@
 import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops } from "./gradient-stops.js";
-import { autoStep, staggerRows, ROW_GAP } from "./tick-labels.js";
+import { autoStep, staggerRows, ROW_GAP, labelBox, boxReach } from "./tick-labels.js";
+import { gaugeScale, NO_TIER_STATE } from "./gauge-scale.js";
 import { ringRadius, ringPartRadius } from "./gauge-inner-boxes.js";
 
 const SC = window.SupercardUtils;
@@ -118,7 +119,7 @@ class ScGauge extends LitElement {
     super();
     this.SIZE = 50;
     this.CENTER = 25;
-    this._tierState = null;
+    this._tierState = NO_TIER_STATE;
     this._thresholdActive = false;
     this._bgColorThresholdActive = false;
     this._isInitialized = false;
@@ -147,52 +148,28 @@ class ScGauge extends LitElement {
     }
   }
 
+  /**
+   * The scale this render is drawn against.
+   *
+   * The arithmetic is `gaugeScale`, which is pure; what lives here is the one
+   * thing it cannot hold - where the two hystereses were on the render before
+   * this one.
+   */
   _calculateGaugeData(rawVal) {
-    const autoScale  = this._get('value_autoscale',   false) === true;
-    const autoRange  = this._get('value_autorange',   false) === true;
-    const dynamicMax = this._get('dynamic_max_scale', false) === true;
-    const hysPct     = parseFloat(this._get('autoscale_hysteresis', 10));
     const rawMin = this._get('min', ''), rawMax = this._get('max', '');
-    let userMin = (rawMin === '' || rawMin === null) ? 0   : parseFloat(rawMin);
-    let userMax = (rawMax === '' || rawMax === null) ? 100 : parseFloat(rawMax);
-    if (isNaN(userMin)) userMin = 0; if (isNaN(userMax)) userMax = 100;
-    let gaugeMin = userMin, gaugeMax = userMax, gaugeVal = rawVal;
-    let displayUnit = '', currentTierBase = 1, finalTier = 0;
-
-    if (autoRange) {
-      const absVal = isFinite(rawVal) ? Math.abs(rawVal) : 0;
-      const absMax = Math.abs(userMax) || 1;
-      const tiers = []; let t = 10;
-      while (t < absMax) { tiers.push(t); t *= 10; } tiers.push(absMax);
-      let idealIdx = tiers.findIndex(tier => absVal <= tier);
-      if (idealIdx === -1) idealIdx = tiers.length - 1;
-      if (this._tierState !== null) {
-        if (idealIdx > this._tierState) { if (absVal <= tiers[this._tierState]*(1+hysPct/100)) idealIdx = this._tierState; }
-        else if (idealIdx < this._tierState) { if (absVal > tiers[idealIdx]*(1-hysPct/100)) idealIdx = this._tierState; }
-      }
-      finalTier = Math.min(idealIdx, tiers.length - 1);
-      gaugeMin = userMin < 0 ? -tiers[finalTier] : 0; gaugeMax = tiers[finalTier]; gaugeVal = rawVal;
-    }
-    if (dynamicMax && !autoRange) {
-      const absVal = isFinite(rawVal) ? Math.abs(rawVal) : 0;
-      const trackedMax = Math.max(absVal, Math.abs(userMax));
-      gaugeMin = userMin < 0 ? -trackedMax : 0; gaugeMax = trackedMax; gaugeVal = rawVal;
-    }
-    if (autoScale) {
-      const absVal = isFinite(rawVal) ? Math.abs(rawVal) : 0;
-      let tier = 0; if (absVal >= 1000) tier = Math.floor(Math.log10(absVal) / 3);
-      if (this._tierState !== null && !autoRange) {
-        if (tier > this._tierState) { if (absVal < Math.pow(1000, this._tierState+1)*(1+hysPct/100)) tier = this._tierState; }
-        else if (tier < this._tierState) { if (absVal > Math.pow(1000, tier)*(1-hysPct/100)) tier = this._tierState; }
-      }
-      const prefixes = ['', 'k', 'M', 'G', 'T', 'P'];
-      finalTier = Math.min(tier, prefixes.length - 1);
-      currentTierBase = Math.pow(1000, finalTier);
-      gaugeMax /= currentTierBase; gaugeMin /= currentTierBase;
-      gaugeVal = rawVal / currentTierBase; displayUnit = prefixes[finalTier];
-    }
-    this._tierState = finalTier;
-    return { min: gaugeMin, max: gaugeMax, val: gaugeVal, unitPrefix: displayUnit, tierBase: currentTierBase, resultTier: finalTier };
+    const blank = (/** @type {any} */ v) => v === '' || v === null || v === undefined;
+    const data = gaugeScale({
+      value: rawVal,
+      min: blank(rawMin) ? 0 : parseFloat(rawMin),
+      max: blank(rawMax) ? 100 : parseFloat(rawMax),
+      autoRange:  this._get('value_autorange',   false) === true,
+      autoScale:  this._get('value_autoscale',   false) === true,
+      dynamicMax: this._get('dynamic_max_scale', false) === true,
+      hysteresis: parseFloat(this._get('autoscale_hysteresis', 10)),
+      state: this._tierState,
+    });
+    this._tierState = data.state;
+    return data;
   }
 
   _getParsedManualStops(stopsArray, min, max, unit = 'percent', gStart = min, gEnd = max) {
@@ -777,25 +754,25 @@ class ScGauge extends LitElement {
           const rad = ang * Math.PI / 180;
           const cosA = Math.cos(rad), sinA = Math.sin(rad);
           const isOut = tlOff >= 0;
-          
-          let tAnchor = "middle";
-          if (cosA > 0.3) tAnchor = isOut ? "start" : "end";
-          else if (cosA < -0.3) tAnchor = isOut ? "end" : "start";
 
-          let dBase = "central";
-          if (sinA > 0.5) dBase = isOut ? "hanging" : "baseline";
-          else if (sinA < -0.5) dBase = isOut ? "baseline" : "hanging";
-
-          const curveAdjust = isOut ? (Math.abs(sinA) * (tlSize * 0.25)) : 0;
+          // Every label is a box centred on its own point, pushed off the
+          // label circle by its own reach so that what lies on the circle is
+          // the edge facing the ticks. Anchor and baseline used to be
+          // switched at fixed thresholds instead, which moved a label's box
+          // a half-width sideways or a half-height down the moment its tick
+          // crossed one - a kink in a row of numbers otherwise on a perfect
+          // arc. The points were round; the type was not.
           const rowShift = (labelRows[i] || 0) * (isOut ? 1 : -1) * ROW_GAP * tlSize;
-          const pL = polarToCart(this.CENTER, this.CENTER, radius + tlOff + curveAdjust + rowShift, ang);
+          const reach = boxReach(labelBox(tStr, tlSize), cosA, sinA);
+          const pL = polarToCart(this.CENTER, this.CENTER,
+                                 radius + tlOff + rowShift + (isOut ? reach : -reach), ang);
           
           if (sinA < -0.75 && Math.abs(cosA) > 0.02) {
              const intensity = (sinA + 0.75) / -0.25; 
              pL.x += (cosA > 0 ? 1 : -1) * tlSpread * intensity;
           }
 
-          tLabels.push(svg`<text class="layer-elm-static" x="${pL.x.toFixed(3)}" y="${pL.y.toFixed(3)}" fill="${tlCol}" font-size="${tlSize}px" text-anchor="${tAnchor}" dominant-baseline="${dBase}">${tStr}</text>`);
+          tLabels.push(svg`<text class="layer-elm-static" x="${pL.x.toFixed(3)}" y="${pL.y.toFixed(3)}" fill="${tlCol}" font-size="${tlSize}px" text-anchor="middle" dominant-baseline="central">${tStr}</text>`);
         }
       }
     }
@@ -845,8 +822,20 @@ class ScGauge extends LitElement {
       extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
     }
     if (this._get('show_multiplier_label',false) && tCount > 1) {
-      let mValDisp = this._get('multiplier_divide_ticks',false) ? smartMVal : range/div;
-      const mStr=`${this._get('multiplier_prepend','x')}${parseFloat(mValDisp.toFixed(parseInt(this._get('multiplier_decimals',0))))}${data.unitPrefix}`;
+      // The multiplier is what the printed numbers have to be multiplied by
+      // to be read as the real value - so it is the factor the labels were
+      // actually divided by, and nothing else. Where they are not divided at
+      // all that factor is 1. It used to be `range/div` there, which is the
+      // step from one tick to the next: a true number about the scale, but
+      // not this one, so a dial whose labels already said 300 to 2500 was
+      // captioned "x100".
+      let mValDisp = this._get('multiplier_divide_ticks',false) ? smartMVal : 1;
+      const mDec = parseInt(this._get('multiplier_decimals',0));
+      // A factor below one rounds to "x0" at no decimals, and a gauge that
+      // says multiply by zero says the scale is worthless. Whole numbers keep
+      // the setting; a fraction is drawn at the places it needs.
+      const mNum = parseFloat(mValDisp.toFixed(mDec)) || parseFloat(mValDisp.toPrecision(2));
+      const mStr=`${this._get('multiplier_prepend','x')}${mNum}${data.unitPrefix}`;
       const mCol=resolveColor(this._get('multiplier_color_type','adaptive'),this._get('multiplier_color',null));
       extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="multiplier" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${mStr}</text>`);
     }

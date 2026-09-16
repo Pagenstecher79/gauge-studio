@@ -723,6 +723,20 @@ const colourRows = (/** @type {string} */ mode, /** @type {string} */ key,
     patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }) },
 ];
 
+/**
+ * Where a part stands and how big it is the first time it is switched on.
+ *
+ * A part used to arrive at whatever the renderer falls back to when a card
+ * says nothing, and those numbers were never chosen as a starting point -
+ * they are the oldest defaults in the file, and several of them put a text
+ * outside the 50-unit box the gauge is clipped to. Switching a thing on and
+ * seeing nothing is the worst first answer an editor can give.
+ *
+ * So each part carries the place and the size it should arrive at, read off
+ * a dial that had been arranged by hand until it looked right (the demo's
+ * CO₂ gauge). They are written only where the card says nothing, so a card
+ * that has been arranged already keeps every number it has.
+ */
 const GAUGE_PARTS = Object.freeze({
   gauge_label: { label: 'Label', x: 'gauge_label_offset_x', y: 'gauge_label_offset_y',
                  size: 'gauge_label_font_size', dx: 0, dy: -8, dsize: 8,
@@ -734,6 +748,8 @@ const GAUGE_PARTS = Object.freeze({
                  // switching it on here seeds the form's own placeholder -
                  // otherwise the button would look broken.
                  needs: 'gauge_label_text', seed: 'Gauge',
+                 place: { gauge_label_offset_x: 0, gauge_label_offset_y: 10.7,
+                          gauge_label_font_size: 4.1 },
                  weight: textWeights('gauge_label_font_weight', '500'),
                  steps: colourRows('gauge_label_color_type', 'gauge_label_color',
                                    'label', '#ffffff', 'adaptive') },
@@ -743,6 +759,7 @@ const GAUGE_PARTS = Object.freeze({
            // The value's y is a baseline - the label's is the text's middle - so
            // its chip has to stand half a cap height above the number it offers.
            baseline: true, active: 'show_value',
+           place: { value_offset_x: 0, value_offset_y: 20, value_font_size: 4.9 },
            weight: textWeights('value_font_weight', '700'),
            // Size, place and weight are the frame and the chip's own button.
            // What is left is what the number says and in what colour - a
@@ -765,6 +782,13 @@ const GAUGE_PARTS = Object.freeze({
   scale_label: { label: 'Scale', x: 'scale_label_offset_x', y: 'scale_label_offset_y',
                  size: 'scale_label_font_size', dx: 0, dy: -18, dsize: 10,
                  section: '_section_labels', baseline: true, active: 'show_scale_label',
+                 // A line under the multiplier and in the same type: these two
+                 // say the same kind of thing and are read together. The dial
+                 // the other places come from has no scale label of its own,
+                 // so this is the one that is placed by where its neighbour is
+                 // rather than copied.
+                 place: { scale_label_offset_x: 0, scale_label_offset_y: -4.4,
+                          scale_label_font_size: 2.4 },
                  // The prefix is the card's own and is not text anybody types;
                  // whether the unit follows it is, and that switch had no
                  // control at all until it got a chip.
@@ -788,7 +812,9 @@ const GAUGE_PARTS = Object.freeze({
                 // slider cannot even reach back to it. So a card that has
                 // never said where it goes is given somewhere it can be seen.
                 needs: (/** @type {any} */ cfg) => SC.safeFloat(cfg.tick_count, 0) > 1,
-                seed: { tick_count: 11 }, place: { multiplier_offset_y: -20 },
+                seed: { tick_count: 11 },
+                place: { multiplier_offset_x: 0, multiplier_offset_y: -8.4,
+                         multiplier_font_size: 2.4 },
                 steps: [
                   ...colourRows('multiplier_color_type', 'multiplier_color', 'multiplier',
                                 '#ffffff', 'adaptive'),
@@ -894,7 +920,11 @@ const GAUGE_RINGS = Object.freeze({
     label: 'Ticks', offset: 'tick_offset', doffset: 0, limit: 10,
     section: '_section_ticks',
     on: (/** @type {any} */ cfg) => SC.safeFloat(cfg.tick_count, 0) > 0,
-    turnOn: { tick_count: 11 }, turnOff: { tick_count: 0 }, seed: {},
+    turnOn: { tick_count: 11 }, turnOff: { tick_count: 0 },
+    // The count is not copied from the dial these shapes come from: how many
+    // ticks a scale wants is a fact about the scale, and 23 of them is the
+    // answer for 300 to 2500 in hundreds and for nothing else.
+    seed: { tick_length: 1.8, tick_width: 0.3, tick_offset: -0.9 },
     steps: [
       { key: 'tick_count', icon: '#', by: 1, min: 2, max: 50, dflt: 11, what: 'ticks' },
       { key: 'tick_length', icon: LONG, by: 0.1, min: 0, max: 6, dflt: 3, what: 'tick length' },
@@ -909,7 +939,8 @@ const GAUGE_RINGS = Object.freeze({
                                  && SC.safeFloat(cfg.tick_count, 0) > 1,
     turnOn: { sub_tick_count: 4 }, turnOff: { sub_tick_count: 0 },
     // Sub-ticks are drawn between ticks, so a gauge with none gets ticks too.
-    seed: { tick_count: 11 },
+    seed: { tick_count: 11, sub_tick_length: 0.8, sub_tick_width: 0.1,
+            sub_tick_offset: -1.2 },
     steps: [
       { key: 'sub_tick_count', icon: '#', by: 1, min: 1, max: 10, dflt: 4, what: 'sub-ticks' },
       { key: 'sub_tick_length', icon: LONG, by: 0.1, min: 0, max: 3, dflt: 1.5,
@@ -927,8 +958,13 @@ const GAUGE_RINGS = Object.freeze({
     turnOn: { show_tick_labels: true }, turnOff: { show_tick_labels: false },
     // The renderer's own default distance is +10, which is outside the 50-unit
     // box the gauge is clipped to - labels switched on and left at it are
-    // labels nobody sees. The form's placeholder has always said -8.
-    seed: { tick_count: 11, tick_label_offset: -8 },
+    // labels nobody sees.
+    //
+    // The interval is left at nothing on purpose, so the card works out for
+    // itself how many of these will fit; the dial's own 2 is an answer to its
+    // own 23 ticks.
+    seed: { tick_count: 11, tick_label_offset: -4.5, tick_label_font_size: 2.5,
+            tick_label_extra_length: 0.5 },
     // The whole of what a row of numbers is: how many of the ticks are
     // labelled, to how many places, how big, how far the tick they sit on is
     // drawn out, and in what colour. The distance from the ring is the frame's
@@ -1000,7 +1036,7 @@ const GAUGE_RINGS = Object.freeze({
   pointer_center: {
     label: 'Centre point', section: '_section_pointer',
     on: (/** @type {any} */ cfg) => SC.safeFloat(cfg.pointer_center_radius, 2) > 0,
-    turnOn: { pointer_center_radius: 2 }, turnOff: { pointer_center_radius: 0 },
+    turnOn: { pointer_center_radius: 2.5 }, turnOff: { pointer_center_radius: 0 },
     radiusOf: (/** @type {any} */ cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
       SC.safeFloat(cfg.pointer_center_radius, 2) * scale,
     fromRadius: (/** @type {number} */ r, /** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) => ({

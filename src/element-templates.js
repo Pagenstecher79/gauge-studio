@@ -84,33 +84,42 @@ const GAUGE_FACE = Object.freeze({
   // no middle left to put a number in, and the two lines together are what
   // makes a gauge legible in a grid of them - the name says which one this
   // is, and the figure is read after it, not instead of it.
+  //
+  // The two sizes and the two distances are read off a dial that was arranged
+  // by hand until it looked right - the demo's CO2 gauge - rather than picked
+  // one at a time. A name at 6 units crowds the hub on a semicircle and a
+  // reading at 5.5 runs into the scale beneath it; these are the numbers that
+  // leave both of them room.
   gauge_label_active: true,
-  gauge_label_font_size: 6,
-  gauge_label_offset_y: 8.5,
+  gauge_label_font_size: 4.1,
+  gauge_label_offset_y: 10.7,
   gauge_label_color_type: 'adaptive',
 
   show_value: true,
-  value_font_size: 5.5,
-  value_offset_y: 21,
+  value_font_size: 4.9,
+  value_offset_y: 20,
   value_color_type: 'adaptive',
   // With no entity there is no unit to inherit, so the template carries its
   // own in `value_custom_unit` - which this switch is what reads.
   value_show_raw_unit: true,
 
+  // The same dial's scale: marks a touch longer than they are far from the
+  // ring, numbers small enough that a dozen of them do not touch, and far
+  // enough in that they sit on the face rather than on the arc.
   show_tick_labels: true,
   tick_width: 0.3,
-  tick_length: 1.6,
+  tick_length: 1.8,
   tick_offset: -0.9,
   tick_color_type: 'adaptive',
-  tick_label_font_size: 3,
-  tick_label_offset: -3,
+  tick_label_font_size: 2.5,
+  tick_label_offset: -4.5,
   tick_label_step: 2,
-  tick_label_extra_length: 0.6,
+  tick_label_extra_length: 0.5,
   tick_label_color_type: 'adaptive',
   sub_tick_count: 4,
-  sub_tick_width: 0.15,
-  sub_tick_offset: -1,
-  sub_tick_length: 0.7,
+  sub_tick_width: 0.1,
+  sub_tick_offset: -1.2,
+  sub_tick_length: 0.8,
   sub_tick_color_type: 'adaptive',
 });
 
@@ -119,13 +128,14 @@ const GAUGE_FACE = Object.freeze({
  *
  * Eleven four-digit labels around a 270-degree arc touch each other, and a
  * scale whose numbers touch is read as no scale at all - so there are fewer of
- * them and they are smaller.
+ * them. Not smaller: the face's size is already one that four digits are read
+ * at, and shrinking the numbers as well would buy room nobody needs at the
+ * cost of the one thing the scale is for.
  *
  * Only the scale. The reading is at the bottom of the dial, where it has the
  * whole width to itself and nothing to collide with.
  */
 const WIDE_NUMBERS = Object.freeze({
-  tick_label_font_size: 3.2,
   tick_label_step: 4,
 });
 
@@ -240,22 +250,9 @@ export const GAUGE_DEFAULT = Object.freeze({
   // them there is a mark to point at, and a wedge would cover three.
   pointer_width: 0.7,
 
+  // How many marks is the one thing a template answers for itself; the shape
+  // of them is the face's, and repeating it here is how the two drifted apart.
   tick_count: 21,
-  tick_width: 0.4,
-  tick_length: 1.7,
-  tick_offset: -1.2,
-  sub_tick_count: 4,
-  sub_tick_width: 0.3,
-  sub_tick_length: 0.5,
-  sub_tick_offset: -1.8,
-
-  // Every second tick labelled is eleven numbers round the arc, which is why
-  // they are smaller than a template's: eleven at the template's size touch,
-  // and a scale whose numbers touch is read as no scale at all.
-  tick_label_step: 2,
-  tick_label_font_size: 2.5,
-  tick_label_offset: -4.6,
-  tick_label_extra_length: 0.7,
 
   // Green through to red across the range, in per cent so the colours survive
   // the first change of min and max - the same reasoning as the templates'.
@@ -402,8 +399,9 @@ export const GAUGE_TEMPLATES = Object.freeze([
       value_custom_unit: 'V',
       tick_count: 13,
       // Seven labels, none of which starts with a 1 that could be dropped:
-      // they need the room that a scale counting from zero does not.
-      tick_label_font_size: 3.4,
+      // they need the room that a scale counting from zero does not, so these
+      // are the one set drawn a little larger than the face's.
+      tick_label_font_size: 2.8,
       // The one template that is a whole instrument rather than a dial: mains
       // voltage is the reading people read off a moving-coil meter, and it is
       // also the clearest place to show that the pointer can be one.
