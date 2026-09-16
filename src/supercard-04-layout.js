@@ -758,6 +758,46 @@ const GAUGE_PARTS = Object.freeze({
                what: 'replace the unit',
                condition: (/** @type {any} */ cfg) => !!cfg.value_show_raw_unit },
            ] },
+  // The two that say what scale the number is being read on: the k/M/G the
+  // card has auto-scaled to, and how much of the range one tick interval is
+  // worth. Both are baselined like the value, and neither has a weight of its
+  // own - they are drawn at 500 and always have been.
+  scale_label: { label: 'Scale', x: 'scale_label_offset_x', y: 'scale_label_offset_y',
+                 size: 'scale_label_font_size', dx: 0, dy: -18, dsize: 10,
+                 section: '_section_labels', baseline: true, active: 'show_scale_label',
+                 // The prefix is the card's own and is not text anybody types;
+                 // whether the unit follows it is, and that switch had no
+                 // control at all until it got a chip.
+                 steps: [
+                   ...colourRows('scale_label_color_type', 'scale_label_color', 'scale',
+                                 '#ffffff', 'adaptive'),
+                   { key: 'scale_label_show_raw_unit', icon: '\u{1F517}', flag: true,
+                     what: 'show the unit' },
+                 ] },
+  multiplier: { label: 'Multiplier', x: 'multiplier_offset_x', y: 'multiplier_offset_y',
+                size: 'multiplier_font_size', dx: 0, dy: -30, dsize: 10,
+                section: '_section_labels', baseline: true, active: 'show_multiplier_label',
+                // A multiplier is the range shared between tick intervals, so
+                // a gauge with fewer than two ticks has nothing to divide and
+                // the renderer draws none. Switching it on brings ticks with
+                // it, the way switching tick labels on does.
+                //
+                // And its own default offset is -30, which at any ordinary
+                // scale is above the top of the 50-unit box - switched on and
+                // left at it, it is a label nobody sees, and the form's
+                // slider cannot even reach back to it. So a card that has
+                // never said where it goes is given somewhere it can be seen.
+                needs: (/** @type {any} */ cfg) => SC.safeFloat(cfg.tick_count, 0) > 1,
+                seed: { tick_count: 11 }, place: { multiplier_offset_y: -20 },
+                steps: [
+                  ...colourRows('multiplier_color_type', 'multiplier_color', 'multiplier',
+                                '#ffffff', 'adaptive'),
+                  { key: 'multiplier_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
+                    what: 'decimals' },
+                  { key: 'multiplier_divide_ticks', icon: '\u00F7', flag: true,
+                    what: 'divide the tick labels by it',
+                    condition: (/** @type {any} */ cfg) => !!cfg.show_tick_labels },
+                ] },
 });
 
 /**
@@ -1255,6 +1295,41 @@ const BAR_PARTS = Object.freeze({
  */
 const partCan = (spec, cfg) => !spec.can || spec.can(cfg);
 
+/**
+ * What has to be written alongside the switch for a part to actually appear.
+ *
+ * A switch is not always enough. A label with no text draws nothing however
+ * active it is; a multiplier is a range divided between ticks, so a gauge
+ * with no ticks draws none however loudly it is asked to - and a part
+ * switched on from the canvas that then fails to appear reads as a broken
+ * button rather than as a setting that is missing something.
+ *
+ * Two rules, because they answer two questions.
+ *
+ * `needs` is what the part stands on, and `seed` what to write when it is not
+ * standing on it: a key and a value where one field is missing, a predicate
+ * and a patch where what is missing is a condition rather than a field. Where
+ * the predicate already holds nothing is written at all, so a gauge that has
+ * 21 ticks keeps them - and where it does not hold, the patch goes in whole,
+ * because a card that says `tick_count: 0` has said something that does not
+ * work rather than nothing.
+ *
+ * `place` is where the part goes, and that one is written only where the card
+ * says nothing: a part somebody has already put somewhere stays there.
+ */
+const partSeed = (spec, cfg) => {
+  const patch = {};
+  for (const [k, v] of Object.entries(spec.place || {})) {
+    if (cfg[k] === undefined) patch[k] = v;
+  }
+  if (typeof spec.needs === 'function') {
+    if (!spec.needs(cfg)) Object.assign(patch, spec.seed);
+  } else if (spec.needs && !cfg[spec.needs]) {
+    patch[spec.needs] = spec.seed;
+  }
+  return patch;
+};
+
 /** Whether the part is actually being drawn right now. */
 const partOn = (spec, cfg) => partCan(spec, cfg) && spec.on(cfg);
 
@@ -1387,6 +1462,8 @@ const INNER_KINDS = Object.freeze({
       const on = [];
       if (cfg.gauge_label_text && cfg.gauge_label_active !== false) on.push('gauge_label');
       if (cfg.show_value) on.push('value');
+      if (cfg.show_scale_label) on.push('scale_label');
+      if (cfg.show_multiplier_label && SC.safeFloat(cfg.tick_count, 0) > 1) on.push('multiplier');
       return on;
     },
     write: (/** @type {any} */ slot, /** @type {any} */ t, /** @type {any} */ patch) => {
@@ -3549,8 +3626,7 @@ class ScCanvasEditor extends LitElement {
       // sliders would stay hidden behind a frame that is not there.
       this._innerSel = null;
     }
-    const patch = { [spec.active]: on };
-    if (on && spec.needs && !target.cfg[spec.needs]) patch[spec.needs] = spec.seed;
+    const patch = { [spec.active]: on, ...(on ? partSeed(spec, target.cfg) : null) };
     this._writeInner(patch, false);
   }
 

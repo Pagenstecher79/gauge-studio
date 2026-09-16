@@ -842,13 +842,13 @@ class ScGauge extends LitElement {
     if (this._get('show_scale_label',false)) {
       const lTxt = data.unitPrefix+(this._get('scale_label_show_raw_unit',false)?this._get('scale_label_custom_unit',stateObj?.attributes?.unit_of_measurement||''):'');
       const lCol = resolveColor(this._get('scale_label_color_type','adaptive'),this._get('scale_label_color',null));
-      extraLabels.push(svg`<text class="layer-elm-dynamic" x="${this.CENTER}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
+      extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
     }
     if (this._get('show_multiplier_label',false) && tCount > 1) {
       let mValDisp = this._get('multiplier_divide_ticks',false) ? smartMVal : range/div;
       const mStr=`${this._get('multiplier_prepend','x')}${parseFloat(mValDisp.toFixed(parseInt(this._get('multiplier_decimals',0))))}${data.unitPrefix}`;
       const mCol=resolveColor(this._get('multiplier_color_type','adaptive'),this._get('multiplier_color',null));
-      extraLabels.push(svg`<text class="layer-elm-dynamic" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${mStr}</text>`);
+      extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="multiplier" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${mStr}</text>`);
     }
     if (this._get('gauge_label_text','') && this._get('gauge_label_active',true)) {
       const glTxt=this._get('gauge_label_text',''), glSize=safeFloat(this._get('gauge_label_font_size',8),8)*scale;
