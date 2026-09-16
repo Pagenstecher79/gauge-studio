@@ -780,8 +780,57 @@ function needleAngle(el) {
   }
 }
 
-/** Either kind of inner part, looked up by the one name the editor holds. */
-const innerSpec = (/** @type {string} */ part) => GAUGE_PARTS[part] || GAUGE_RINGS[part];
+/** One shared empty map, for a kind that has no parts of that sort. */
+const NO_PARTS = Object.freeze({});
+
+/**
+ * The kinds of element whose own parts the canvas can take in hand, and what
+ * each one is made of.
+ *
+ * The frames, the chips, the steppers and the zoom do the same thing whatever
+ * is being edited. What differs is three things: where the config lives, which
+ * parts there are, and which editor holds their settings. That difference is
+ * here and nowhere else, so a new kind is an entry rather than a second copy
+ * of the machinery.
+ *
+ * `config` answers the entry being edited, or null when this element is not
+ * one that can be; `drawn` names the parts it is actually drawing right now,
+ * because only those have something on the canvas to take hold of; `write`
+ * answers the one `_send` that puts a patch where that kind keeps it.
+ */
+const INNER_KINDS = Object.freeze({
+  gauge: {
+    match: /^gauge_(\d+)$/,
+    editor: 'sc-gauge-editor',
+    parts: GAUGE_PARTS,
+    rings: GAUGE_RINGS,
+    config: (/** @type {any} */ slot, /** @type {string} */ _id, /** @type {number} */ idx) => {
+      if (!slot.gauge_active) return null;
+      const gauges = Array.isArray(slot.gauges) && slot.gauges.length ? slot.gauges : [slot];
+      return gauges[idx] || null;
+    },
+    // Only what the gauge actually draws can be taken hold of, and the same
+    // two conditions the renderer itself goes by decide that.
+    drawn: (/** @type {any} */ cfg) => {
+      const on = [];
+      if (cfg.gauge_label_text && cfg.gauge_label_active !== false) on.push('gauge_label');
+      if (cfg.show_value) on.push('value');
+      return on;
+    },
+    write: (/** @type {any} */ slot, /** @type {any} */ t, /** @type {any} */ patch) => {
+      // A card written before the list existed keeps its one gauge on the slot
+      // itself; cloning that into a `gauges` array would copy the whole card
+      // into it, so those fields are merged where they already live.
+      if (!Array.isArray(slot.gauges) || !slot.gauges.length) {
+        return t.idx === 0 ? { key: '__merge__', value: { ...patch } } : null;
+      }
+      const next = structuredClone(slot.gauges);
+      if (!next[t.idx]) return null;
+      Object.assign(next[t.idx], patch);
+      return { key: 'gauges', value: next };
+    },
+  },
+});
 
 /**
  * The two align buttons that keep a meaning for a gauge's own label and value.
@@ -2390,31 +2439,35 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * The gauge whose own parts can be edited on the canvas: exactly one
-   * selected, and a gauge. Two of them have no one frame between them, and
-   * nothing else draws a label and a value of its own yet.
+   * The element whose own parts can be edited on the canvas: exactly one
+   * selected, and of a kind that has parts. Two of them have no one frame
+   * between them.
+   *
+   * `parts` and `rings` come off the kind so every call site asks the thing in
+   * hand what it is made of, rather than one global map that only a gauge
+   * could answer for.
    */
   get _innerTarget() {
     const sel = this._selection;
     if (sel.length !== 1) return null;
-    const m = /^gauge_(\d+)$/.exec(sel[0]);
-    if (!m) return null;
-    const cfg = this._gaugeConfig(Number(m[1]));
-    if (!cfg) return null;
-    // Only what the gauge actually draws can be taken hold of, and the same
-    // two conditions the renderer itself goes by decide that.
-    const drawn = [];
-    if (cfg.gauge_label_text && cfg.gauge_label_active !== false) drawn.push('gauge_label');
-    if (cfg.show_value) drawn.push('value');
-    return { id: sel[0], idx: Number(m[1]), cfg, drawn };
+    const slot = this.slot || {};
+    for (const [kind, k] of Object.entries(INNER_KINDS)) {
+      const m = k.match.exec(sel[0]);
+      if (!m) continue;
+      const idx = Number(m[1]);
+      const cfg = k.config(slot, sel[0], idx);
+      if (!cfg) return null;
+      return { id: sel[0], kind, k, idx, cfg, drawn: k.drawn(cfg),
+               parts: k.parts || NO_PARTS, rings: k.rings || NO_PARTS };
+    }
+    return null;
   }
 
-  /** The gauge at `idx`, read the way the card reads it. */
-  _gaugeConfig(idx) {
-    const slot = this.slot || {};
-    if (!slot.gauge_active) return null;
-    const gauges = Array.isArray(slot.gauges) && slot.gauges.length ? slot.gauges : [slot];
-    return gauges[idx] || null;
+  /** The spec of the part in hand, whichever kind of element it belongs to. */
+  get _selSpec() {
+    const t = this._innerTarget;
+    const part = this._innerSel;
+    return (t && part) ? (t.parts[part] || t.rings[part] || null) : null;
   }
 
   /** Whether the frames are up for the element that is selected now. */
@@ -2465,6 +2518,7 @@ class ScCanvasEditor extends LitElement {
     // inside it, so this is what an offset in viewBox units is a fraction of.
     const svg = gauge?.shadowRoot?.querySelector('svg');
     const texts = gauge?.shadowRoot?.querySelectorAll('[data-sc-part]') || [];
+    const parts = this._innerTarget?.parts || NO_PARTS;
     const needle = gauge?.shadowRoot?.querySelector('[data-sc-needle]');
     if (!box || !svg) {
       if (this._innerRects) this._innerRects = null;
@@ -2489,7 +2543,7 @@ class ScCanvasEditor extends LitElement {
     };
     texts.forEach((/** @type {any} */ t) => {
       const part = t.dataset.scPart;
-      if (!GAUGE_PARTS[part]) return;
+      if (!parts[part]) return;
       const r = t.getBoundingClientRect();
       if (!r.width && !r.height) return;
       // Per part, not once: the value is drawn in a layer of its own, and a
@@ -2584,7 +2638,7 @@ class ScCanvasEditor extends LitElement {
     if (mode === 'ring' || mode === 'needle') {
       // A needle has no ring, so its chip names the part and nothing more -
       // the dragging is done by the handles on its two ends.
-      if (mode === 'ring' && GAUGE_RINGS[part]?.needle) return;
+      if (mode === 'ring' && target.rings[part]?.needle) return;
       const geo = this._ringGeometry(part);
       if (!geo) return;
       // The needle's other end is taken once, here, and held for the whole
@@ -2596,15 +2650,15 @@ class ScCanvasEditor extends LitElement {
         ? { offset: SC.safeFloat(cfg.pointer_offset, 2),
             length: SC.safeFloat(cfg.pointer_length, 10) }
         : null;
-      this._innerDrag = { idx: target.idx, part, mode, end, from, ...geo, started: false };
+      this._innerDrag = { part, mode, end, from, ...geo, started: false };
       this._ptr = { x: e.clientX, y: e.clientY };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
     }
-    const spec = GAUGE_PARTS[part];
+    const spec = target.parts[part];
     const cfg = target.cfg;
     this._innerDrag = {
-      idx: target.idx, part, mode,
+      part, mode,
       startX: e.clientX, startY: e.clientY,
       from: {
         x: SC.safeFloat(cfg[spec.x], spec.dx),
@@ -2682,28 +2736,29 @@ class ScCanvasEditor extends LitElement {
       // where a tail is dragged to.
       const ang = (this._innerRects?.angle ?? 0) * Math.PI / 180;
       const at = ((p.x - d.cx) * Math.cos(ang) + (p.y - d.cy) * Math.sin(ang)) / d.pxPerUnit;
-      this._writeGauge(d.idx, needleFromRadius(d.end, at, d.from.offset, d.from.length,
-                                               d.ring, d.scale), d.started);
+      this._writeInner(needleFromRadius(d.end, at, d.from.offset, d.from.length,
+                                        d.ring, d.scale), d.started);
       d.started = true;
       return;
     }
     if (d.mode === 'ring') {
-      const spec = GAUGE_RINGS[d.part];
+      const spec = this._innerTarget?.rings[d.part];
       if (!spec) return;
       const dist = Math.hypot(p.x - d.cx, p.y - d.cy) / d.pxPerUnit;
       const cfg = this._innerTarget?.cfg || {};
-      this._writeGauge(d.idx, ringPartPatch(spec, dist, cfg, d.ring, d.scale), d.started);
+      this._writeInner(ringPartPatch(spec, dist, cfg, d.ring, d.scale), d.started);
       d.started = true;
       return;
     }
-    const spec = GAUGE_PARTS[d.part];
+    const spec = this._innerTarget?.parts[d.part];
+    if (!spec) return;
     const patch = d.mode === 'size'
       ? { [spec.size]: fontFromResize(d.from.size, p.y - d.startY, d.pxPerUnit, d.scale) }
       : (() => {
           const at = offsetsFromDrag(d.from, p.x - d.startX, p.y - d.startY, d.pxPerUnit, d.scale);
           return { [spec.x]: at.x, [spec.y]: at.y };
         })();
-    this._writeGauge(d.idx, patch, d.started);
+    this._writeInner(patch, d.started);
     d.started = true;
   }
 
@@ -2715,7 +2770,7 @@ class ScCanvasEditor extends LitElement {
    */
   _setInnerPart(part, on) {
     const target = this._innerTarget;
-    const spec = GAUGE_PARTS[part];
+    const spec = target?.parts[part];
     if (!target || !spec) return;
     if (on) {
       // A part just switched on is the one about to be placed, so it arrives
@@ -2729,7 +2784,7 @@ class ScCanvasEditor extends LitElement {
     }
     const patch = { [spec.active]: on };
     if (on && spec.needs && !target.cfg[spec.needs]) patch[spec.needs] = spec.seed;
-    this._writeGauge(target.idx, patch, false);
+    this._writeInner(patch, false);
   }
 
   /**
@@ -2742,7 +2797,7 @@ class ScCanvasEditor extends LitElement {
    */
   _setInnerRing(part, on) {
     const target = this._innerTarget;
-    const spec = GAUGE_RINGS[part];
+    const spec = target?.rings[part];
     if (!target || !spec) return;
     if (on) {
       this._innerSel = part;
@@ -2756,7 +2811,7 @@ class ScCanvasEditor extends LitElement {
     if (on) for (const [k, v] of Object.entries(spec.seed || {})) {
       if (target.cfg[k] === undefined) patch[k] = v;
     }
-    this._writeGauge(target.idx, patch, false);
+    this._writeInner(patch, false);
   }
 
   /**
@@ -2772,7 +2827,7 @@ class ScCanvasEditor extends LitElement {
     const was = SC.safeFloat(target.cfg[st.key], st.dflt);
     const next = Math.min(st.max, Math.max(st.min, Math.round((was + dir * st.by) * 10) / 10));
     if (next === was) return;
-    this._writeGauge(target.idx, { [st.key]: next }, false);
+    this._writeInner({ [st.key]: next }, false);
   }
 
   /**
@@ -2809,7 +2864,7 @@ class ScCanvasEditor extends LitElement {
    * why it never appeared.
    */
   _innerHome(part) {
-    const spec = GAUGE_PARTS[part];
+    const spec = this._innerTarget?.parts[part];
     const svg = this._innerRects?.svg;
     if (!spec || !svg) return null;
     const cfg = this._innerTarget?.cfg || {};
@@ -2834,7 +2889,7 @@ class ScCanvasEditor extends LitElement {
    * and a circle on the screen.
    */
   _ringBox(part) {
-    const spec = GAUGE_RINGS[part];
+    const spec = this._innerTarget?.rings[part];
     const svg = this._innerRects?.svg;
     if (!spec || !svg) return null;
     const cfg = this._innerTarget?.cfg || {};
@@ -2880,11 +2935,13 @@ class ScCanvasEditor extends LitElement {
    * dialog happens to be scrolled past them.
    */
   async _revealPart(part) {
-    const section = innerSpec(part)?.section;
-    if (!section) return;
+    const t = this._innerTarget;
+    const section = t && (t.parts[part] || t.rings[part])?.section;
+    if (!section || !t.k.editor) return;
     this._configOpen = true;
     await this.updateComplete;
-    const editor = /** @type {any} */ (this.shadowRoot?.querySelector('.el-config sc-gauge-editor'));
+    const editor = /** @type {any} */ (
+      this.shadowRoot?.querySelector('.el-config ' + t.k.editor));
     if (!editor) return;
     await editor.updateComplete;
     const fold = /** @type {any} */ (editor.shadowRoot?.querySelector(`details[data-section="${section}"]`));
@@ -2905,31 +2962,24 @@ class ScCanvasEditor extends LitElement {
   _innerAlign(axis) {
     const target = this._innerTarget;
     const part = this._innerSel;
-    if (!target || !part || !GAUGE_PARTS[part]) return;
-    const spec = GAUGE_PARTS[part];
-    this._writeGauge(target.idx, { [axis === 'x' ? spec.x : spec.y]: 0 }, false);
+    const spec = target?.parts[part];
+    if (!target || !part || !spec) return;
+    this._writeInner({ [axis === 'x' ? spec.x : spec.y]: 0 }, false);
   }
 
   /**
-   * Write fields onto one gauge. `quiet` keeps the write off the undo stack,
-   * which is what makes a whole drag one step rather than one per frame.
+   * Write fields onto whatever is being edited, wherever that kind keeps them.
+   * `quiet` keeps the write off the undo stack, which is what makes a whole
+   * drag one step rather than one per frame.
    */
-  _writeGauge(idx, patch, quiet) {
-    const slot = this.slot || {};
+  _writeInner(patch, quiet) {
+    const t = this._innerTarget;
+    const out = t && t.k.write(this.slot || {}, t, patch);
+    if (!out) return;
     const was = this._travelling;
     if (quiet) this._travelling = true;
     try {
-      // A card written before the list existed keeps its one gauge on the slot
-      // itself; cloning that into a `gauges` array would copy the whole card
-      // into it, so those fields are merged where they already live.
-      if (!Array.isArray(slot.gauges) || !slot.gauges.length) {
-        if (idx === 0) this._send('__merge__', { ...patch });
-        return;
-      }
-      const next = structuredClone(slot.gauges);
-      if (!next[idx]) return;
-      Object.assign(next[idx], patch);
-      this._send('gauges', next);
+      this._send(out.key, out.value);
     } finally {
       this._travelling = was;
     }
@@ -2945,12 +2995,14 @@ class ScCanvasEditor extends LitElement {
    * small a thing to take hold of.
    */
   _renderInner() {
-    const drawn = new Set(this._innerTarget?.drawn || []);
+    const target = this._innerTarget;
+    if (!target) return '';
+    const drawn = new Set(target.drawn);
     const rects = this._innerRects?.parts;
     // A press must not reach the element under it, or reaching for one of
     // these would start dragging the whole gauge.
     const swallow = (/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); };
-    return html`${Object.entries(GAUGE_PARTS).map(([part, spec]) => {
+    return html`${Object.entries(target.parts).map(([part, spec]) => {
       const r = rects?.[part];
       if (!drawn.has(part) || !r) return '';
       return html`
@@ -2968,7 +3020,7 @@ class ScCanvasEditor extends LitElement {
                @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'size')}></div>
         </div>`;
     })}
-    ${Object.entries(GAUGE_PARTS).map(([part, spec]) => {
+    ${Object.entries(target.parts).map(([part, spec]) => {
       // On the spot the part would take, so the press both switches it on and
       // says where it is about to appear.
       if (drawn.has(part)) return '';
@@ -2981,8 +3033,8 @@ class ScCanvasEditor extends LitElement {
                 @click=${() => this._setInnerPart(part, true)}>+ ${spec.label}</button>`;
     })}
     ${this._renderRings(swallow)}
-    ${Object.entries(GAUGE_RINGS).map(([part, spec]) => {
-      const cfg = this._innerTarget?.cfg || {};
+    ${Object.entries(target.rings).map(([part, spec]) => {
+      const cfg = target.cfg;
       if (spec.on(cfg)) return '';
       const home = this._ringHome(part);
       if (!home) return '';
@@ -3018,9 +3070,10 @@ class ScCanvasEditor extends LitElement {
    */
   _renderRings(swallow) {
     const svgBox = this._innerRects?.svg;
-    const cfg = this._innerTarget?.cfg;
+    const target = this._innerTarget;
+    const cfg = target?.cfg;
     if (!svgBox || !cfg) return '';
-    const live = Object.entries(GAUGE_RINGS).filter(([, spec]) => spec.on(cfg));
+    const live = Object.entries(target.rings).filter(([, spec]) => spec.on(cfg));
     if (!live.length) return '';
     const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
     const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale);
@@ -3137,8 +3190,8 @@ class ScCanvasEditor extends LitElement {
    * each would be wider than the gauge they stand on.
    */
   _renderRingSteppers(left, top) {
-    const spec = GAUGE_RINGS[this._innerSel || ''];
     const target = this._innerTarget;
+    const spec = target?.rings[this._innerSel || ''];
     // Not every ring has a number worth a pair of buttons - the hub is one
     // size and nothing else - and no cluster at all says so better than one
     // that does nothing.
@@ -3182,7 +3235,7 @@ class ScCanvasEditor extends LitElement {
               style=${sw.of[now].weight ? `font-weight:${sw.of[now].weight}` : ''}
               title=${`${verb} the ${label.toLowerCase()} ${sw.of[next].label}`}
               @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
-              @click=${() => this._writeGauge(target.idx, { [sw.key]: next }, false)}>
+              @click=${() => this._writeInner({ [sw.key]: next }, false)}>
         ${sw.of[now].glyph}</button>`;
   }
 
@@ -3752,7 +3805,7 @@ class ScCanvasEditor extends LitElement {
         <sc-gauge-editor .hass=${props.hass} .slot=${props.slot}
                          .commitFn=${props.commitFn} .only=${Number(m[1])}
                          .priority=${this._innerOn && this._innerSel
-                           ? (innerSpec(this._innerSel)?.section || '') : ''}
+                           ? (this._selSpec?.section || '') : ''}
                          .framed=${this._innerOn && this._innerSel ? [this._innerSel] : []}></sc-gauge-editor>`);
     }
     if ((m = id.match(/^label_(\d+)(?:_(?:icon|name|value))?$/))) {
@@ -3949,14 +4002,14 @@ class ScCanvasEditor extends LitElement {
     const selected = this._selection.filter(alive);
     const inner = this._innerTarget;
     // A frame in hand borrows the two middle-axis buttons for itself.
-    const centring = this._innerOn && this._innerSel && GAUGE_PARTS[this._innerSel];
+    const centring = this._innerOn && this._innerSel && inner?.parts[this._innerSel];
     const movers = this._distributable;
     // Three groups, in the order the work is usually done: the gaps first,
     // then the edges, then the middles - which are also the two a gauge's own
     // label and value borrow, so they sit together at the end.
     const alignBtn = ([edge, what]) => html`
       <button title=${centring && MIDDLE_AXIS[edge]
-                ? `Put the ${GAUGE_PARTS[this._innerSel].label.toLowerCase()} back on the gauge's ${MIDDLE_AXIS[edge].what} middle`
+                ? `Put the ${centring.label.toLowerCase()} back on the gauge's ${MIDDLE_AXIS[edge].what} middle`
                 : (movers < 2
                     ? 'Two selected elements that can move are needed to line anything up'
                     : `${what}. The outermost of them stays where it is.`)}
