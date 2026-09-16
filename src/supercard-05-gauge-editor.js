@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GAUGE_DEFAULT } from "./element-templates.js";
+import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 
 const SC = window.SupercardUtils;
 
@@ -188,10 +189,11 @@ const STYLE_FIELDS = [
 
   { id: '_section_color',    label: '── 🎨 Colour & Gradient',   type: 'section' },
   { id: 'stroke_width',        label: 'Ring thickness',            type: 'range',    min: 0, max: 5, step: 0.01,  placeholder: '3', framedBy: 'gauge_ring'   },
-  { id: 'gradient_preset',   label: 'Colour mode',             type: 'select', options: [ { value: 'manual', label: 'Manual (list)' }, { value: 'symmetriccustom', label: 'Symmetric (custom)' }, { value: 'symmetric', label: 'Symmetric (default)' }, { value: 'linear', label: 'Linear traffic light' } ] },
+  { id: 'gradient_ramp',     type: 'gradient_ramp', condition: cfg => ['manual', undefined, ''].includes(cfg.gradient_preset) },
+  { id: 'gradient_preset',   label: 'Colour mode',             type: 'select', framedBy: 'gauge_ring', options: [ { value: 'manual', label: 'Manual (list)' }, { value: 'symmetriccustom', label: 'Symmetric (custom)' }, { value: 'symmetric', label: 'Symmetric (default)' }, { value: 'linear', label: 'Linear traffic light' } ] },
 
-  { id: 'gradient_mode',     label: 'Gradient type',           type: 'select', options: [ { value: 'smooth', label: 'Smooth' }, { value: 'stepped', label: 'Stepped' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
-  { id: 'gradient_resolution', label: 'Gradient resolution', type: 'select', options: [ { value: 'auto', label: 'Automatic (size-dependent)' }, { value: 'coarse', label: 'Coarse (1× colour zones)' }, { value: 'medium', label: 'Medium (12× colour zones)' }, { value: 'fine', label: 'Fine (24×) — default' }, { value: 'superfine', label: 'Superfine (48×)' }, { value: 'ultrafine', label: 'Ultrafine (96×)' }, { value: 'megafine', label: 'Megafine (192×)' }  ]},
+  { id: 'gradient_mode', framedBy: 'gauge_ring',     label: 'Gradient type',           type: 'select', options: [ { value: 'smooth', label: 'Smooth' }, { value: 'stepped', label: 'Stepped' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
+  { id: 'gradient_resolution', framedBy: 'gauge_ring', label: 'Gradient resolution', type: 'select', options: [ { value: 'auto', label: 'Automatic (size-dependent)' }, { value: 'coarse', label: 'Coarse (1× colour zones)' }, { value: 'medium', label: 'Medium (12× colour zones)' }, { value: 'fine', label: 'Fine (24×) — default' }, { value: 'superfine', label: 'Superfine (48×)' }, { value: 'ultrafine', label: 'Ultrafine (96×)' }, { value: 'megafine', label: 'Megafine (192×)' }  ]},
 
   { id: 'threshold_unit',    label: 'Threshold unit',     type: 'select',
     hint: 'Thresholds can be given as absolute values or in %.', options: [ { value: 'percent', label: 'Percent (%)' }, { value: 'absolute', label: 'Absolute' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
@@ -200,19 +202,19 @@ const STYLE_FIELDS = [
 
   { id: 'manual_stops',      type: 'manual_stops', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
 
-  { id: 'color1',     label: 'Outer colour',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
-  { id: 'color2',     label: 'Middle colour',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
-  { id: 'color3',     label: 'Centre colour',  type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
-  { id: 'threshold1', label: 'Transition centre→middle (%)', type: 'range', min: 0, max: 98, step: 1, placeholder: '40', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
-  { id: 'threshold2', label: 'Transition middle→outer (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '75', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
-  { id: 'threshold3', label: 'Gradient width transition 1 (%)', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
-  { id: 'threshold4', label: 'Gradient width transition 2 (%)', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'color1',     label: 'Outer colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
+  { id: 'color2',     label: 'Middle colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
+  { id: 'color3',     label: 'Centre colour', framedBy: 'gauge_ring',  type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
+  { id: 'threshold1', label: 'Transition centre→middle (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 98, step: 1, placeholder: '40', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'threshold2', label: 'Transition middle→outer (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '75', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'threshold3', label: 'Gradient width transition 1 (%)', framedBy: 'gauge_ring', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
+  { id: 'threshold4', label: 'Gradient width transition 2 (%)', framedBy: 'gauge_ring', type: 'range', min: 0.5, max: 30, step: 0.5, placeholder: '8', condition: cfg => cfg.gradient_preset === 'symmetriccustom' },
 
-  { id: 'color1',     label: 'Start colour',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'color2',     label: 'Middle colour',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'color3',     label: 'End colour',     type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'threshold1', label: 'Start spread (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '20', condition: cfg => cfg.gradient_preset === 'linear' },
-  { id: 'threshold2', label: 'Mid spread (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '60', condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'color1',     label: 'Start colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'color2',     label: 'Middle colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'color3',     label: 'End colour', framedBy: 'gauge_ring',     type: 'color',  condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'threshold1', label: 'Start spread (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '20', condition: cfg => cfg.gradient_preset === 'linear' },
+  { id: 'threshold2', label: 'Mid spread (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '60', condition: cfg => cfg.gradient_preset === 'linear' },
 
   { id: '_section_pointer',       label: '── 🧭 Pointer',                  type: 'section' },
   { id: 'pointer_type',           label: 'Pointer shape',                type: 'select',  options: [ { value: 'needle', label: 'Needle' }, { value: 'triangle', label: 'Triangle' } ], framedBy: 'pointer' },
@@ -220,20 +222,20 @@ const STYLE_FIELDS = [
   { id: 'pointer_length',         label: 'Pointer length',               type: 'range',    min: 0, max: 50, step: 0.1,  placeholder: '10', framedBy: 'pointer'  },
   { id: 'pointer_offset',         label: 'Pointer offset from ring',     type: 'range',    min: -10, max: 10, step: 0.1,  placeholder: '2', framedBy: 'pointer'   },
   { id: 'pointer_center_radius',  label: 'Centre point size',          type: 'range',    min: 0, max: 10, step: 0.1, placeholder: '2', framedBy: 'pointer_center'   },
-  { id: 'pointer_color_type',     label: 'Pointer colour mode',          type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'pointer_color',          label: 'Pointer colour (fixed)',         type: 'color',   condition: cfg => cfg.pointer_color_type !== 'adaptive' },
-  { id: 'pointer_3d_effect',      label: '3D effect (plastic)',      type: 'checkbox' },
-  { id: 'pointer_dot_color_type', label: 'Dot colour mode',           type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'pointer_dot_color',      label: 'Dot colour (fixed)',          type: 'color',   condition: cfg => cfg.pointer_dot_color_type !== 'adaptive' },
-  { id: 'pointer_shadow_type',    label: 'Pointer shadow',            type: 'select',  options: [ { value: 'none', label: 'None' }, { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'pointer_shadow_color',   label: 'Shadow colour',             type: 'color',   condition: cfg => cfg.pointer_shadow_type === 'fixed' },
-  { id: 'pointer_shadow_blur',     label: 'Shadow blur',   type: 'range', min: 0,  max: 1, step: 0.01,  placeholder: '0.8', condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_color_type', framedBy: 'pointer',     label: 'Pointer colour mode',          type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'pointer_color', framedBy: 'pointer',          label: 'Pointer colour (fixed)',         type: 'color',   condition: cfg => cfg.pointer_color_type !== 'adaptive' },
+  { id: 'pointer_3d_effect', framedBy: 'pointer',      label: '3D effect (plastic)',      type: 'checkbox' },
+  { id: 'pointer_dot_color_type', framedBy: 'pointer_center', label: 'Dot colour mode',           type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'pointer_dot_color', framedBy: 'pointer_center',      label: 'Dot colour (fixed)',          type: 'color',   condition: cfg => cfg.pointer_dot_color_type !== 'adaptive' },
+  { id: 'pointer_shadow_type', framedBy: 'pointer',    label: 'Pointer shadow',            type: 'select',  options: [ { value: 'none', label: 'None' }, { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'pointer_shadow_color', framedBy: 'pointer',   label: 'Shadow colour',             type: 'color',   condition: cfg => cfg.pointer_shadow_type === 'fixed' },
+  { id: 'pointer_shadow_blur', framedBy: 'pointer',     label: 'Shadow blur',   type: 'range', min: 0,  max: 1, step: 0.01,  placeholder: '0.8', condition: cfg => cfg.pointer_shadow_type !== 'none' },
   // Not 'offset Y': the offset is only vertical while the angle is 90 degrees,
   // which is merely its default. The renderer still reads the old key for
   // configs written before the angle had a control.
-  { id: 'pointer_shadow_distance', label: 'Shadow distance',       type: 'range', min: -5, max: 5, step: 0.1,  placeholder: '0.5', condition: cfg => cfg.pointer_shadow_type !== 'none' },
-  { id: 'pointer_shadow_angle',    label: 'Shadow angle',          type: 'range', min: 0, max: 360, step: 5,   placeholder: '90',  condition: cfg => cfg.pointer_shadow_type !== 'none' },
-  { id: 'pointer_shadow_opacity',  label: 'Shadow opacity',        type: 'range', min: 0,  max: 1, step: 0.05, placeholder: '0.35', condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_shadow_distance', framedBy: 'pointer', label: 'Shadow distance',       type: 'range', min: -5, max: 5, step: 0.1,  placeholder: '0.5', condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_shadow_angle', framedBy: 'pointer',    label: 'Shadow angle',          type: 'range', min: 0, max: 360, step: 5,   placeholder: '90',  condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_shadow_opacity', framedBy: 'pointer',  label: 'Shadow opacity',        type: 'range', min: 0,  max: 1, step: 0.05, placeholder: '0.35', condition: cfg => cfg.pointer_shadow_type !== 'none' },
   { id: 'animation_duration',     label: 'Animation duration (s)',       type: 'range',    min: 0, max: 10, step: 0.1, placeholder: '0.8', condition: cfg => cfg.animation_easing !== 'spring' },
   { id: 'animation_spring_duration', label: 'Spring animation duration (s)', type: 'range', min: 0.1, max: 10, step: 0.1, placeholder: '1.5', condition: cfg => cfg.animation_easing === 'spring' },
   { id: 'animation_dynamic_speed',label: 'Dynamic pointer acceleration', type: 'checkbox' },
@@ -296,14 +298,14 @@ const STYLE_FIELDS = [
   { id: '_section_labels',        label: '── 🔢 Value & Labels',           type: 'section' },
   { id: 'show_value',             label: 'Show value',              type: 'checkbox' },
   { id: 'value_font_size',        label: 'Value font size',          type: 'range',    min: 0, max: 20, step: 0.1,  placeholder: '12',  condition: cfg => !!cfg.show_value, framedBy: 'value' },
-  { id: 'value_font_weight',      label: 'Value weight',             type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '600', label: 'Semi-Bold' }, { value: '700', label: 'Bold' } ], condition: cfg => !!cfg.show_value, framedBy: 'value' },
+  { id: 'value_font_weight',      label: 'Value weight',             type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => !!cfg.show_value, framedBy: 'value' },
   { id: 'value_offset_x',         label: 'Value offset X',              type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => !!cfg.show_value, framedBy: 'value' },
   { id: 'value_offset_y',         label: 'Value offset Y',              type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => !!cfg.show_value, framedBy: 'value' },
-  { id: 'value_color_type',       label: 'Value colour mode',            type: 'select',  options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_value },
-  { id: 'value_color',            label: 'Value colour (fixed)',           type: 'color',   condition: cfg => !!cfg.show_value && cfg.value_color_type !== 'adaptive' },
-  { id: 'value_decimals',         label: 'Decimals',             type: 'range',    min: 0, max: 6, step: 1, placeholder: '0',   condition: cfg => !!cfg.show_value },
-  { id: 'value_show_raw_unit',    label: 'Show unit',           type: 'checkbox', condition: cfg => !!cfg.show_value },
-  { id: 'value_replace_unit',     label: 'Replace original unit',  type: 'checkbox', condition: cfg => !!cfg.show_value && !!cfg.value_show_raw_unit },
+  { id: 'value_color_type', framedBy: 'value',       label: 'Value colour mode',            type: 'select',  options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_value },
+  { id: 'value_color', framedBy: 'value',            label: 'Value colour (fixed)',           type: 'color',   condition: cfg => !!cfg.show_value && cfg.value_color_type !== 'adaptive' },
+  { id: 'value_decimals', framedBy: 'value',         label: 'Decimals',             type: 'range',    min: 0, max: 6, step: 1, placeholder: '0',   condition: cfg => !!cfg.show_value },
+  { id: 'value_show_raw_unit', framedBy: 'value',    label: 'Show unit',           type: 'checkbox', condition: cfg => !!cfg.show_value },
+  { id: 'value_replace_unit', framedBy: 'value',     label: 'Replace original unit',  type: 'checkbox', condition: cfg => !!cfg.show_value && !!cfg.value_show_raw_unit },
   { id: 'value_custom_unit',      label: 'Custom unit (suffix)',    type: 'text',     placeholder: 'e.g. W', condition: cfg => !!cfg.show_value && !!cfg.value_show_raw_unit && !!cfg.value_replace_unit },
 
   { id: 'show_scale_label',       label: 'Show scale label', type: 'checkbox' },
@@ -329,11 +331,11 @@ const STYLE_FIELDS = [
   { id: 'gauge_label_active',      label: 'Label active',          type: 'checkbox', on: true },
   { id: 'gauge_label_text',        label: 'Label text',           type: 'text',     placeholder: 'Gauge',  condition: cfg => cfg.gauge_label_active !== false },
   { id: 'gauge_label_font_size',   label: 'Font size',         type: 'range',    min: 0, max: 20, step: 0.1,   placeholder: '8',   condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
-  { id: 'gauge_label_font_weight', label: 'Weight',           type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '600', label: 'Semi-Bold' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
+  { id: 'gauge_label_font_weight', label: 'Weight',           type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
   { id: 'gauge_label_offset_x',    label: 'Offset X',             type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
   { id: 'gauge_label_offset_y',    label: 'Offset Y',             type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
-  { id: 'gauge_label_color_type',  label: 'Colour mode',           type: 'select',   options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => cfg.gauge_label_active !== false },
-  { id: 'gauge_label_color',       label: 'Colour (fixed)',            type: 'color',    condition: cfg => cfg.gauge_label_color_type === 'fixed' }
+  { id: 'gauge_label_color_type', framedBy: 'gauge_label',  label: 'Colour mode',           type: 'select',   options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => cfg.gauge_label_active !== false },
+  { id: 'gauge_label_color', framedBy: 'gauge_label',       label: 'Colour (fixed)',            type: 'color',    condition: cfg => cfg.gauge_label_color_type === 'fixed' }
 ];
 
 class ScGaugeEditor extends LitElement {
@@ -387,6 +389,14 @@ class ScGaugeEditor extends LitElement {
          springs shut on the way. */
       details.inner-section.wanted { order: -1; border-color: var(--primary-color,#03a9f4); }
       .framed-note { font-size: 12px; color: var(--secondary-text-color); font-style: italic; }
+      .ramp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .ramp { display: flex; flex-direction: column; gap: 4px; padding: 4px;
+              border: 1px solid var(--divider-color,#444); border-radius: 6px;
+              background: none; color: inherit; cursor: pointer; font: inherit; }
+      .ramp:hover { border-color: var(--primary-color,#03a9f4); }
+      .ramp-bar { height: 10px; border-radius: 5px; }
+      .ramp-name { font-size: 11px; line-height: 1.2; color: var(--secondary-text-color);
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .inner-content { padding: 0 12px 12px 12px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--divider-color,#444); margin-top: 4px; padding-top: 12px; }
       ha-entity-picker, ha-selector { display: block; width: 100%; }
       .entity-row { display: flex; flex-direction: column; gap: 4px; }
@@ -807,7 +817,10 @@ class ScGaugeEditor extends LitElement {
     // dragged is the inner edge and the note has to say which.
     return html`<div class="framed-note">${framed.framedBy === 'gauge_ring'
       ? html`Thickness is on the canvas while this one is selected - drag the
-             ring's inner edge, which is the edge of it that moves.`
+             ring's inner edge, which is the edge of it that moves - and so is
+             how it is coloured, under its chip. The list of stops stays here:
+             a row of colours to be dragged about is not a control that fits
+             on a dial.`
       : framed.framedBy === 'pointer'
       ? html`Shape, length and offset are on the canvas while this one is
              selected - drag either end of the needle, or use the buttons on
@@ -816,9 +829,9 @@ class ScGaugeEditor extends LitElement {
       ? html`This one is on the canvas while it is selected - its distance is
              the ring you drag, and the rest of what it is stands under its
              chip.`
-      : html`Size, weight and position are on the canvas while this one is
-             selected - drag its frame or the corner of it, and use the button
-             on its chip.`}</div>`;
+      : html`This one is on the canvas while it is selected - drag its frame
+             or the corner of it for size and place, and the rest of what it
+             is stands on and under its chip.`}</div>`;
   }
 
   _renderLitField(field, entry, idx, gauges) {
@@ -875,6 +888,29 @@ class ScGaugeEditor extends LitElement {
               this.commitFn('gauges', SC.withPatch(gauges, idx, 'bg_manual_stops', newStops));
             }, entry.gradient_resolution)} </div>
         `;
+        break;
+      }
+      case 'gradient_ramp': {
+        // Swatches rather than a menu of names: a ramp is a picture, and
+        // "Fresh to stuffy" only means something once the purple at the top
+        // has been seen. What each one is *for* is the balloon on it, because
+        // that line is read once and then never again.
+        content = html`
+          <div class="col" style="gap:6px;">
+            <label>Start from a ramp ${SC.tipDot('A set of colour stops that suit each other, written straight into the list below. Every stop stays yours to move, and nothing remembers which ramp you picked.')}</label>
+            <div class="ramp-grid">
+              ${GRADIENT_PRESETS.map(pr => html`
+                <button class="ramp" title=${pr.label + ' \u2013 ' + pr.hint}
+                        @click=${() => {
+                          const n = structuredClone(gauges);
+                          Object.assign(n[idx], gradientPresetPatch(pr.id));
+                          this.commitFn('gauges', n);
+                        }}>
+                  <span class="ramp-bar" style="background:${gradientPresetCss(pr)}"></span>
+                  <span class="ramp-name">${pr.label}</span>
+                </button>`)}
+            </div>
+          </div>`;
         break;
       }
       case 'tick_preset': {

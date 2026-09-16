@@ -15,6 +15,7 @@ import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          needleEnds, needleFromRadius,
          ringInnerEdge, strokeFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor } from "./element-templates.js";
+import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
@@ -618,12 +619,109 @@ const INNER_RATIO = 1;
  * Drawn as an A in the weight it would give, because that is the whole
  * setting: three words in a select say less about it than three letters do.
  */
+/**
+ * The three weights, and why one of them is 500 rather than 600.
+ *
+ * Home Assistant ships Roboto at 100, 300, 400, 500, 700 and 900. Ask for 600
+ * and the browser goes looking upward for the nearest cut it has, which is
+ * 700 - measured on the demo, "Value 88.8" comes out at 191.74 px at both
+ * weights and 189.86 at 500. So semi-bold was bold under another name, and
+ * the middle of the three is now the medium the font actually has.
+ *
+ * A card that already says 600 is left alone: it draws what it always drew.
+ */
 const textWeights = (/** @type {string} */ key, /** @type {string} */ dflt) => ({
-  key, dflt, order: ['400', '600', '700'],
+  key, dflt, order: ['400', '500', '700'],
   of: { '400': { glyph: 'A', label: 'to normal', weight: 400 },
-        '600': { glyph: 'A', label: 'to semi-bold', weight: 600 },
+        '500': { glyph: 'A', label: 'to medium', weight: 500 },
         '700': { glyph: 'A', label: 'to bold', weight: 700 } },
 });
+
+/**
+ * The two glyphs that tell a mark's length from its thickness.
+ *
+ * A tick runs outward from the ring, so its length is the up-and-down arrow
+ * and its width the one across - the same way round as the mark itself.
+ */
+const LONG = '\u2195';
+const THICK = '\u2194';
+
+/**
+ * A mark's colour is stored the way the colour reader takes it - a hex string,
+ * an rgb(), or the [r,g,b] array older cards carry - and the browser's own
+ * colour control speaks nothing but #rrggbb, so a swatch reads through toRgb.
+ */
+const markHex = (/** @type {any} */ value, /** @type {string} */ dflt) => {
+  const rgb = SC.toRgb(value, { resolveVars: true });
+  return rgb ? SC.rgbToHex(rgb[0], rgb[1], rgb[2]) : dflt;
+};
+
+/** A shadow is off, a colour of its own, or taken from what it falls from. */
+const SHADOW_MODE = Object.freeze([
+  { value: 'none', label: 'None', short: 'None' },
+  { value: 'fixed', label: 'Fixed', short: 'Fixed' },
+  { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
+]);
+
+/** Whether there is a shadow for the four rows under it to shape. */
+const hasShadow = (/** @type {any} */ cfg) =>
+  (cfg.pointer_shadow_type || 'none') !== 'none';
+
+/**
+ * How a ring is coloured, and what each answer then asks for.
+ *
+ * The same four the form has always offered. Manual is a list of stops and the
+ * list stays in the form - a row of draggable colours is not a control that
+ * fits under a chip - but the ramp that fills it does fit, as one menu of
+ * ready-made ones.
+ */
+const RING_COLOUR_MODE = Object.freeze([
+  { value: 'manual', label: 'Manual (list)', short: 'List' },
+  { value: 'symmetriccustom', label: 'Symmetric (custom)', short: 'Sym.\u00A0custom' },
+  { value: 'symmetric', label: 'Symmetric (default)', short: 'Symmetric' },
+  { value: 'linear', label: 'Linear traffic light', short: 'Linear' },
+]);
+
+/** Whether the ring is being coloured from a list of stops. */
+const isStopList = (/** @type {any} */ cfg) =>
+  ['manual', undefined, ''].includes(cfg.gradient_preset);
+
+/** Whether the ring is one of the two that are three colours and no list. */
+const isThreeColour = (/** @type {any} */ cfg) =>
+  ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset);
+
+/** The ready-made ramps, as the menu reads them: a name and what it is for. */
+const RAMP_PICKS = Object.freeze([
+  { value: '', label: 'Ramp\u2026', short: 'Ramp\u2026' },
+  ...GRADIENT_PRESETS.map(pr => ({ value: pr.id, label: pr.label + ' \u2013 ' + pr.hint,
+                                   short: pr.label })),
+]);
+
+/** One swatch on the ring, for the presets that are three colours rather than a list. */
+const ringColour = (/** @type {string} */ key, /** @type {string} */ what,
+                    /** @type {string} */ dflt, /** @type {any} */ condition) => ({
+  icon: '\u25A0', what, paint: true, condition,
+  read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
+  patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }),
+});
+
+/** Fixed or adaptive: the same two answers for every mark a gauge draws. */
+const COLOUR_MODE = Object.freeze([
+  { value: 'fixed', label: 'Fixed', short: 'Fixed' },
+  { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
+]);
+
+/** The pair of rows that says how a mark is coloured, for whichever mark. */
+const colourRows = (/** @type {string} */ mode, /** @type {string} */ key,
+                    /** @type {string} */ what, /** @type {string} */ dflt,
+                    /** @type {string} */ fallback) => [
+  { key: mode, icon: '\u{1F3A8}', what: what + ' colour', picks: COLOUR_MODE,
+    read: (/** @type {any} */ cfg) => cfg[mode] || fallback },
+  { icon: '\u25A0', what: 'fixed ' + what + ' colour', paint: true,
+    condition: (/** @type {any} */ cfg) => (cfg[mode] || fallback) !== 'adaptive',
+    read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
+    patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }) },
+];
 
 const GAUGE_PARTS = Object.freeze({
   gauge_label: { label: 'Label', x: 'gauge_label_offset_x', y: 'gauge_label_offset_y',
@@ -636,14 +734,30 @@ const GAUGE_PARTS = Object.freeze({
                  // switching it on here seeds the form's own placeholder -
                  // otherwise the button would look broken.
                  needs: 'gauge_label_text', seed: 'Gauge',
-                 weight: textWeights('gauge_label_font_weight', '600') },
+                 weight: textWeights('gauge_label_font_weight', '500'),
+                 steps: colourRows('gauge_label_color_type', 'gauge_label_color',
+                                   'label', '#ffffff', 'adaptive') },
   value: { label: 'Value', x: 'value_offset_x', y: 'value_offset_y',
            size: 'value_font_size', dx: 0, dy: 15, dsize: 12,
            section: '_section_labels',
            // The value's y is a baseline - the label's is the text's middle - so
            // its chip has to stand half a cap height above the number it offers.
            baseline: true, active: 'show_value',
-           weight: textWeights('value_font_weight', '700') },
+           weight: textWeights('value_font_weight', '700'),
+           // Size, place and weight are the frame and the chip's own button.
+           // What is left is what the number says and in what colour - a
+           // custom unit is text, and text stays in the form.
+           steps: [
+             ...colourRows('value_color_type', 'value_color', 'value',
+                           '#ffffff', 'adaptive'),
+             { key: 'value_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
+               what: 'decimals' },
+             { key: 'value_show_raw_unit', icon: '\u{1F517}', flag: true,
+               what: 'show the unit' },
+             { key: 'value_replace_unit', icon: '\u21C4', flag: true,
+               what: 'replace the unit',
+               condition: (/** @type {any} */ cfg) => !!cfg.value_show_raw_unit },
+           ] },
 });
 
 /**
@@ -666,43 +780,6 @@ const GAUGE_PARTS = Object.freeze({
  * size. Each carries the glyph that says which of them it is, because three
  * pairs of buttons in a row are otherwise three of the same thing.
  */
-/**
- * The two glyphs that tell a mark's length from its thickness.
- *
- * A tick runs outward from the ring, so its length is the up-and-down arrow
- * and its width the one across - the same way round as the mark itself.
- */
-const LONG = '\u2195';
-const THICK = '\u2194';
-
-/**
- * A mark's colour is stored the way the colour reader takes it - a hex string,
- * an rgb(), or the [r,g,b] array older cards carry - and the browser's own
- * colour control speaks nothing but #rrggbb, so a swatch reads through toRgb.
- */
-const markHex = (/** @type {any} */ value, /** @type {string} */ dflt) => {
-  const rgb = SC.toRgb(value, { resolveVars: true });
-  return rgb ? SC.rgbToHex(rgb[0], rgb[1], rgb[2]) : dflt;
-};
-
-/** Fixed or adaptive: the same two answers for every mark a gauge draws. */
-const COLOUR_MODE = Object.freeze([
-  { value: 'fixed', label: 'Fixed', short: 'Fixed' },
-  { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
-]);
-
-/** The pair of rows that says how a mark is coloured, for whichever mark. */
-const colourRows = (/** @type {string} */ mode, /** @type {string} */ key,
-                    /** @type {string} */ what, /** @type {string} */ dflt,
-                    /** @type {string} */ fallback) => [
-  { key: mode, icon: '\u{1F3A8}', what: what + ' colour', picks: COLOUR_MODE,
-    read: (/** @type {any} */ cfg) => cfg[mode] || fallback },
-  { icon: '\u25A0', what: 'fixed ' + what + ' colour', paint: true,
-    condition: (/** @type {any} */ cfg) => (cfg[mode] || fallback) !== 'adaptive',
-    read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
-    patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }) },
-];
-
 const GAUGE_RINGS = Object.freeze({
   // The gauge's own ring, framed by the edge of it that moves. First in the
   // list so every other band is drawn over it rather than under.
@@ -721,6 +798,56 @@ const GAUGE_RINGS = Object.freeze({
         read: (/** @type {any} */ cfg) => cfg.gauge_type || 'full',
         picks: [{ value: 'full', label: 'Full 360\u00B0', short: '360\u00B0' },
                 { value: 'semi', label: 'Semi 270\u00B0', short: '270\u00B0' }] },
+      { key: 'gradient_preset', icon: '\u{1F3A8}', what: 'colour mode', picks: RING_COLOUR_MODE,
+        read: (/** @type {any} */ cfg) => cfg.gradient_preset || 'manual' },
+      // A ramp is not a mode and nothing remembers it was picked: it writes a
+      // list of stops and steps back out of the way, which is why this row
+      // reads its own name rather than a value.
+      { icon: '\u{1F308}', what: 'ready-made ramp', picks: RAMP_PICKS,
+        condition: isStopList, read: () => '',
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => gradientPresetPatch(v) },
+      { key: 'gradient_mode', icon: '\u25A4', what: 'gradient type', condition: isStopList,
+        read: (/** @type {any} */ cfg) => cfg.gradient_mode || 'smooth',
+        picks: [{ value: 'smooth', label: 'Smooth', short: 'Smooth' },
+                { value: 'stepped', label: 'Stepped', short: 'Stepped' }] },
+      ringColour('color1', 'outer colour', '#4caf50', isThreeColour),
+      ringColour('color2', 'middle colour', '#ffeb3b', isThreeColour),
+      ringColour('color3', 'centre colour', '#f44336', isThreeColour),
+      { key: 'threshold1', icon: '\u2460', slide: true, by: 1, min: 0, max: 98, dflt: 40,
+        what: 'centre to middle (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      { key: 'threshold2', icon: '\u2461', slide: true, by: 1, min: 0, max: 100, dflt: 75,
+        what: 'middle to outer (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      { key: 'threshold3', icon: '\u2591', slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
+        what: 'width of the first transition (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      { key: 'threshold4', icon: '\u2592', slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
+        what: 'width of the second transition (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
+      ringColour('color1', 'start colour', '#4caf50',
+                 (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
+      ringColour('color2', 'middle colour', '#ffeb3b',
+                 (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
+      ringColour('color3', 'end colour', '#f44336',
+                 (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
+      { key: 'threshold1', icon: '\u2460', slide: true, by: 1, min: 0, max: 100, dflt: 20,
+        what: 'start spread (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear' },
+      { key: 'threshold2', icon: '\u2461', slide: true, by: 1, min: 0, max: 100, dflt: 60,
+        what: 'mid spread (%)',
+        condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear' },
+      // Last, because it is the one row here that is not about which colour
+      // goes where but about how finely the ring is cut to draw it.
+      { key: 'gradient_resolution', icon: '\u25EB', what: 'gradient resolution',
+        read: (/** @type {any} */ cfg) => cfg.gradient_resolution || 'auto',
+        picks: [{ value: 'auto', label: 'Automatic (size-dependent)', short: 'Auto' },
+                { value: 'coarse', label: 'Coarse (1\u00D7 colour zones)', short: '1\u00D7' },
+                { value: 'medium', label: 'Medium (12\u00D7)', short: '12\u00D7' },
+                { value: 'fine', label: 'Fine (24\u00D7)', short: '24\u00D7' },
+                { value: 'superfine', label: 'Superfine (48\u00D7)', short: '48\u00D7' },
+                { value: 'ultrafine', label: 'Ultrafine (96\u00D7)', short: '96\u00D7' },
+                { value: 'megafine', label: 'Megafine (192\u00D7)', short: '192\u00D7' }] },
     ],
   },
   ticks: {
@@ -798,8 +925,32 @@ const GAUGE_RINGS = Object.freeze({
     radiusOf: (/** @type {any} */ cfg, /** @type {number} */ ring, /** @type {number} */ scale) =>
       needleEnds(SC.safeFloat(cfg.pointer_offset, 2), SC.safeFloat(cfg.pointer_length, 10),
                  ring, scale).tip,
-    steps: [{ key: 'pointer_width', icon: THICK, by: 0.1, min: 0.1, max: 10, dflt: 2,
-              what: 'pointer width' }],
+    // Everything a needle is, apart from where it reaches to: length and
+    // offset are the two ends being dragged, and a second control for either
+    // would be a second answer to a question already asked.
+    steps: [
+      { key: 'pointer_width', icon: THICK, slide: true, by: 0.1, min: 0.1, max: 10,
+        dflt: 2, what: 'pointer width' },
+      ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
+      { key: 'pointer_3d_effect', icon: '\u25D1', flag: true, what: 'plastic 3D' },
+      { key: 'pointer_shadow_type', icon: '\u{1F311}', what: 'shadow', picks: SHADOW_MODE,
+        read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
+      { icon: '\u25A0', what: 'shadow colour', paint: true,
+        condition: (/** @type {any} */ cfg) => cfg.pointer_shadow_type === 'fixed',
+        read: (/** @type {any} */ cfg) => markHex(cfg.pointer_shadow_color, '#000000'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
+          ({ pointer_shadow_color: v }) },
+      // The four that shape a shadow are not there to be read when there is no
+      // shadow to shape - the panel is short enough without them.
+      { key: 'pointer_shadow_blur', icon: '\u2591', slide: true, by: 0.01, min: 0, max: 1,
+        dflt: 0.8, what: 'shadow blur', condition: hasShadow },
+      { key: 'pointer_shadow_distance', icon: '\u2921', slide: true, by: 0.1, min: -5,
+        max: 5, dflt: 0.5, what: 'shadow distance', condition: hasShadow },
+      { key: 'pointer_shadow_angle', icon: '\u21BB', slide: true, by: 5, min: 0, max: 360,
+        dflt: 90, what: 'shadow angle', condition: hasShadow },
+      { key: 'pointer_shadow_opacity', icon: '\u25D3', slide: true, by: 0.05, min: 0,
+        max: 1, dflt: 0.35, what: 'shadow opacity', condition: hasShadow },
+    ],
     // Shape is the other thing a needle is, and with only two of them a button
     // on the chip says it better than a select eight folds down the dialog.
     shapes: { key: 'pointer_type', dflt: 'needle', order: ['needle', 'triangle'],
@@ -815,6 +966,9 @@ const GAUGE_RINGS = Object.freeze({
     fromRadius: (/** @type {number} */ r, /** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) => ({
       pointer_center_radius: offsetFromRadius(0, r, scale, 25),
     }),
+    // Size is the circle being dragged, so colour is all that is left to say.
+    steps: colourRows('pointer_dot_color_type', 'pointer_dot_color', 'dot',
+                      '#ffffff', 'fixed'),
   },
 });
 
@@ -872,8 +1026,23 @@ const RING_CHIP_ANGLE = Object.freeze({ gauge_ring: 120, ticks: -90, sub_ticks: 
 /** How long Apply stays on "Saved" before it is a button again. */
 const APPLY_SAVED_MS = 2000;
 
+/** How far a press may wander and still be a press rather than a drag, in px. */
+const CHIP_DRAG_SLOP = 3;
+
 /** How near the pivot a chip may stand, in viewBox units. */
 const RING_CHIP_MIN = 7;
+
+/**
+ * How far anything that floats over the canvas keeps off the edge of what
+ * can be seen, in pixels.
+ *
+ * A panel pushed to within a hair of the edge is a panel that reads as
+ * clipped even when it is not: the rounded corner and the focus ring of a
+ * select inside it sit outside the box the browser measures, and the
+ * scrollbar of the view crosses the last few pixels. Wide enough that the
+ * gap is visible as a gap.
+ */
+const CANVAS_EDGE = 12;
 
 /**
  * Which way the needle is pointing at this instant, in degrees clockwise from
@@ -1557,7 +1726,7 @@ class ScCanvasEditor extends LitElement {
     this._measureInner();
     this._placeNeedle();
     this._followInner();
-    this._fitSteps();
+    this._settleFloating();
     // The first canvas to arrive brings back the zoom this shape was last
     // looked at. Only the first: afterwards the zoom is whatever the person
     // at the keyboard has made it.
@@ -1714,6 +1883,12 @@ class ScCanvasEditor extends LitElement {
          add menu. */
       .el { position: absolute; isolation: isolate; box-sizing: border-box; cursor: grab; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; border-radius: 2px; background: rgba(3,169,244,0.3); border: 1px solid var(--primary-color); overflow: hidden; }
       .el.surface { background: rgba(255,193,7,0.18); border-style: dashed; border-color: #ffc107; }
+      /* The chips and the panel of numbers are drawn inside the element they
+         belong to, and an element clips its own paint - so a chip stepped
+         aside on a small gauge came out with half a word on it. While the
+         element is the one open for editing, it stops clipping: what is
+         outside it then is only the controls for it. */
+      .el.inner { overflow: visible; }
       /* A side bowed outward is paint beyond the box, and the grip that set
          it stands out there too. Only while it is bent: the box clips its own
          contents the rest of the time, which is what keeps a chip inside the
@@ -1834,7 +2009,9 @@ class ScCanvasEditor extends LitElement {
       /* The offer to switch a part on, standing where that part would be
          drawn. It writes the key the form's own switch writes, so there is one
          setting and not two. Dashed, because nothing is there yet. */
-      .inner-add { position: absolute; transform: translate(-50%, -50%);
+      .inner-add { position: absolute;
+        transform: translate(calc(-50% + var(--sc-chip-dx, 0px)),
+                             calc(-50% + var(--sc-chip-dy, 0px)));
         padding: 1px 6px; font-size: 11.5px; line-height: 1.5; white-space: nowrap;
         border-radius: 4px; cursor: pointer; touch-action: none; z-index: 6;
         border: 1px dashed var(--sc-part); background: rgba(0,0,0,0.65); color: #fff;
@@ -1878,13 +2055,19 @@ class ScCanvasEditor extends LitElement {
       .ring-grip.sel { fill: var(--sc-part-sel); opacity: 1; }
       .ring-grip-hit { fill: transparent; stroke: none; pointer-events: all;
         cursor: move; touch-action: none; }
-      .ring-tag { position: absolute; transform: translate(-50%, -50%);
+      .ring-tag { position: absolute;
+        transform: translate(calc(-50% + var(--sc-chip-dx, 0px)),
+                             calc(-50% + var(--sc-chip-dy, 0px)));
         display: flex; align-items: center; gap: 3px; z-index: 7;
         font-size: 11.5px; line-height: 1; padding: 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
         opacity: 0.85; cursor: grab; touch-action: none;
         box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
-      .ring-tag.sel { opacity: 1;
+      /* The one chip that never gives way is the one the panel hangs from, so
+         it is also the one the panel may not cover: on a canvas too short for
+         the panel there is nowhere for either to go, and that chip is how the
+         panel is put away again. */
+      .ring-tag.sel { opacity: 1; z-index: 9;
         background: var(--sc-part-sel); color: var(--sc-part-sel-ink); }
       .ring-drop { width: 15px; height: 15px; padding: 0; font-size: 14px;
         line-height: 1; border-radius: 3px; cursor: pointer; touch-action: none;
@@ -1941,6 +2124,8 @@ class ScCanvasEditor extends LitElement {
                              calc(12px + var(--sc-steps-dy, 0px)));
         overflow-y: auto; overscroll-behavior: contain;
         z-index: 8;
+        /* Kept for the case no chip can get out of the way: behind the panel
+           is better than across it. */
         display: grid; grid-template-columns: auto auto auto auto;
         align-items: center; justify-items: center;
         width: max-content; gap: 3px; padding: 3px 5px;
@@ -1964,6 +2149,8 @@ class ScCanvasEditor extends LitElement {
       /* A swatch and a select stand across the three cells the two buttons and
          the number would, so a row of either still reads as one line. */
       .ring-wide { grid-column: span 3; justify-self: stretch; }
+      .ring-slide { grid-column: span 2; justify-self: stretch; width: 96px;
+        height: 20px; margin: 0; cursor: pointer; accent-color: var(--sc-part-sel); }
       .ring-swatch { height: 20px; border-radius: 4px; cursor: pointer;
         border: 1px solid var(--sc-part-sel); overflow: hidden; position: relative; }
       /* The colour input itself is the picker and not the swatch: every
@@ -3152,6 +3339,10 @@ class ScCanvasEditor extends LitElement {
         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       }
       const fresh2 = this._innerSel !== part;
+      // A press on the chip that is already in hand is the way back out: the
+      // panel of numbers is put away on release, unless the press turned into
+      // a drag, which is the chip being moved rather than pressed.
+      if (this._innerDrag) this._innerDrag.held = !fresh2;
       this._innerSel = part;
       if (fresh2) this._revealPart(part);
       return;
@@ -3283,6 +3474,15 @@ class ScCanvasEditor extends LitElement {
         l: at(d.from.l + (p.x - d.startX) / d.box.width * 100),
         t: at(d.from.t + (p.y - d.startY) / d.box.height * 100),
       });
+      // A chip writes no config, so this flag is not the undo coalescing it is
+      // everywhere else here - it is what says the gesture was a drag. Letting
+      // go of a chip that has been moved must not be read as the second press
+      // that puts its panel away, or the panel closes every time the chip is
+      // put somewhere else. Past a few pixels, because a press with a shaking
+      // hand is still a press.
+      if (!d.started && Math.hypot(p.x - d.startX, p.y - d.startY) > CHIP_DRAG_SLOP) {
+        d.started = true;
+      }
       this.requestUpdate();
       return;
     }
@@ -3640,7 +3840,9 @@ class ScCanvasEditor extends LitElement {
                   @click=${() => this._setInnerPart(part, false)}>−</button>
           <div class="inner-grip"
                @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'size')}></div>
-        </div>`;
+        </div>
+        ${this._innerSel === part
+          ? this._renderSteppers(r.l + r.w / 2, r.t + r.h) : ''}`;
     })}
     ${Object.entries(target.parts).map(([part, spec]) => {
       // On the spot the part would take, so the press both switches it on and
@@ -3923,44 +4125,214 @@ class ScCanvasEditor extends LitElement {
    * takes the property with it - reading it back means what is measured is
    * always the position that is actually on screen.
    */
+  /**
+   * The rectangle a panel or a chip has to stay inside.
+   *
+   * Not the canvas: the canvas is as big as the zoom makes it and hangs out of
+   * the window it is looked at through, which is what actually clips. So it is
+   * the part of the canvas that can be seen - and that moves when the view is
+   * scrolled, which is why the fitting runs again then.
+   */
+  _seenRect() {
+    const root = this.shadowRoot;
+    const canvas = /** @type {any} */ (root?.querySelector('.canvas'));
+    const view = /** @type {any} */ (root?.querySelector('.canvas-view'));
+    if (!canvas) return null;
+    const c = canvas.getBoundingClientRect();
+    const parts = [c, view?.getBoundingClientRect()]
+      .filter((/** @type {any} */ r) => r && r.width);
+    const left = Math.max(...parts.map((/** @type {any} */ r) => r.left));
+    const top = Math.max(...parts.map((/** @type {any} */ r) => r.top));
+    const right = Math.min(...parts.map((/** @type {any} */ r) => r.right));
+    const bottom = Math.min(...parts.map((/** @type {any} */ r) => r.bottom));
+    if (right <= left || bottom <= top) return c;
+    return { left, top, right, bottom, width: right - left, height: bottom - top };
+  }
+
+  /**
+   * The same rectangle, drawn in a little - the frame nothing floating is let
+   * out of.
+   *
+   * An invisible frame rather than a margin applied at each of the places that
+   * place something: the panel, the chips and the add buttons all have to
+   * agree on where the edge is, and a margin written out three times is three
+   * chances to write a different one. Here it is one rectangle, and staying
+   * inside it is the whole rule.
+   */
+  _safeRect() {
+    const c = this._seenRect();
+    if (!c) return null;
+    const left = c.left + CANVAS_EDGE;
+    const top = c.top + CANVAS_EDGE;
+    const right = c.right - CANVAS_EDGE;
+    const bottom = c.bottom - CANVAS_EDGE;
+    // A view too small for its own margins keeps the room it has: an inside
+    // out rectangle would push everything to one corner and pin it there.
+    if (right <= left || bottom <= top) return c;
+    return { left, top, right, bottom, width: right - left, height: bottom - top };
+  }
+
+  /**
+   * Scrolling the view moves what can be seen of the canvas, and the panel and
+   * the chips are placed against that. Once per frame at most: a scroll fires
+   * far oftener than anything here needs to be worked out again.
+   */
+  _onViewScroll = () => {
+    if (this._fitting) return;
+    this._fitting = requestAnimationFrame(() => {
+      this._fitting = 0;
+      this._settleFloating();
+    });
+  };
+
+  /**
+   * Put the panel and the chips inside the frame, and look again.
+   *
+   * Once is not always enough. Moving the panel can change what it is measured
+   * against - a row that reflows, a scrollbar that appears in the view as the
+   * canvas is zoomed - and the second reading is then a few pixels from the
+   * first, which is exactly the few pixels that show as a clipped edge. So it
+   * repeats while anything is still moving, and gives up after a handful of
+   * frames rather than chasing something that will not settle.
+   *
+   * @param {number} [left] frames still allowed
+   */
+  _settleFloating(left = 4) {
+    const moved = this._fitSteps();
+    this._clearChips();
+    if (!moved || left <= 0) return;
+    if (this._settling) cancelAnimationFrame(this._settling);
+    this._settling = requestAnimationFrame(() => {
+      this._settling = 0;
+      this._settleFloating(left - 1);
+    });
+  }
+
   _fitSteps() {
     const root = this.shadowRoot;
     const box = /** @type {any} */ (root?.querySelector('.ring-steps'));
-    const canvas = /** @type {any} */ (root?.querySelector('.canvas'));
-    if (!box || !canvas) return;
+    const canvas = this._safeRect();
+    if (!box || !canvas) return false;
     const was = {
       x: parseFloat(box.style.getPropertyValue('--sc-steps-dx')) || 0,
       y: parseFloat(box.style.getPropertyValue('--sc-steps-dy')) || 0,
     };
-    const c = canvas.getBoundingClientRect();
-    if (!c.height) return;
+    const c = canvas;
+    if (!c.height) return false;
     // A per cent would be read against the element the panel hangs on, which
     // is the gauge and not the canvas, so how tall it may be is measured here
     // too. Set before the box is, because it is what the box will be.
-    const room = Math.round(c.height) - 8;
+    const room = Math.round(c.height);
     const cap = room > 0 ? room + 'px' : 'none';
     if (box.style.maxHeight !== cap) box.style.maxHeight = cap;
     const b = box.getBoundingClientRect();
-    if (!b.width) return;
+    if (!b.width) return false;
     // Where it would stand with no nudge at all.
     const l = b.left - was.x;
     const t = b.top - was.y;
-    const M = 4;
     // Pushed off the far edge first and the near one second, so a panel too
-    // big for the canvas is pinned at the top left and scrolls rather than
-    // hiding its first row.
-    let dx = Math.min(0, (c.right - M) - (l + b.width));
-    let dy = Math.min(0, (c.bottom - M) - (t + b.height));
-    dx = Math.max(dx, (c.left + M) - l);
-    dy = Math.max(dy, (c.top + M) - t);
-    if (Math.abs(dx - was.x) < 0.5 && Math.abs(dy - was.y) < 0.5) return;
+    // big for the canvas is pinned at the top left of the frame and scrolls
+    // rather than hiding its first row.
+    let dx = Math.min(0, c.right - (l + b.width));
+    let dy = Math.min(0, c.bottom - (t + b.height));
+    dx = Math.max(dx, c.left - l);
+    dy = Math.max(dy, c.top - t);
+    if (Math.abs(dx - was.x) < 0.5 && Math.abs(dy - was.y) < 0.5) return false;
     box.style.setProperty('--sc-steps-dx', dx + 'px');
     box.style.setProperty('--sc-steps-dy', dy + 'px');
+    return true;
+  }
+
+  /**
+   * Step the chips out from under the panel of numbers, and out from under
+   * each other.
+   *
+   * The panel stands over the chips, which settled the rows being reachable
+   * but not the chips: one covered is one that cannot be pressed, and a chip
+   * is the only way to take a different part in hand. So the chips give way -
+   * the nearest way out along one axis, as long as it lands inside the canvas
+   * and on nothing else.
+   *
+   * "On nothing else" is why this is one pass over all of them rather than
+   * each one on its own: a chip pushed clear of the panel lands wherever it
+   * lands, and without knowing where its neighbours went it lands on one. So
+   * every chip already settled - and the panel, and the chip the panel belongs
+   * to, which never moves - is a place the next one may not go.
+   *
+   * The move is a nudge on top of where the chip belongs, not a new place for
+   * it: a chip dragged aside by hand keeps the place it was given, and the
+   * needle's chip keeps being fetched back to the needle.
+   */
+  _clearChips() {
+    const root = this.shadowRoot;
+    const c = this._safeRect();
+    if (!root || !c) return;
+    const box = /** @type {any} */ (root.querySelector('.ring-steps'));
+    const M = 4;
+    const hits = (/** @type {any} */ h, /** @type {any} */ o) =>
+      h.l < o.right + M && h.l + h.w > o.left - M
+      && h.t < o.bottom + M && h.t + h.h > o.top - M;
+    const taken = box ? [box.getBoundingClientRect()] : [];
+    const chips = /** @type {any[]} */ ([...root.querySelectorAll('.ring-tag, .inner-add')]);
+    // The one the panel hangs from goes first, so it gets the shortest way out
+    // and the others arrange themselves around it. It gives way like any
+    // other: the panel is placed from where that chip belongs, not from where
+    // it ends up, so stepping aside costs the panel nothing and is the only
+    // way both can be seen when the panel has been pushed up over it.
+    chips.sort((/** @type {any} */ a, /** @type {any} */ b) =>
+      Number(b.dataset.part === this._innerSel) - Number(a.dataset.part === this._innerSel));
+    for (const chip of chips) {
+      const was = {
+        x: parseFloat(chip.style.getPropertyValue('--sc-chip-dx')) || 0,
+        y: parseFloat(chip.style.getPropertyValue('--sc-chip-dy')) || 0,
+      };
+      const r = chip.getBoundingClientRect();
+      // Where it stands with no nudge, which is the only place worth asking
+      // about: a chip that has been pushed aside is not where it belongs.
+      const h = { l: r.left - was.x, t: r.top - was.y, w: r.width, h: r.height };
+      const at = (/** @type {any} */ w) => ({ l: h.l + w.x, t: h.t + w.y, w: h.w, h: h.h });
+      const free = (/** @type {any} */ w) => !taken.some((/** @type {any} */ o) => hits(at(w), o));
+      const inside = (/** @type {any} */ w) =>
+        h.l + w.x >= c.left && h.l + w.x + h.w <= c.right
+        && h.t + w.y >= c.top && h.t + w.y + h.h <= c.bottom;
+      // The frame is not only something to keep out of the way of - it is the
+      // first thing a chip is brought inside, whether anything else is in its
+      // way or not. A chip hanging half out of the view is clipped by it, and
+      // that is the same fault as lying under the panel.
+      const held = (/** @type {any} */ w) => ({
+        x: Math.max(Math.min(w.x, c.right - (h.l + h.w)), c.left - h.l),
+        y: Math.max(Math.min(w.y, c.bottom - (h.t + h.h)), c.top - h.t),
+      });
+      let best = held({ x: 0, y: 0 });
+      if (!free(best)) {
+        // One axis at a time, past every edge of everything already placed:
+        // a chip that goes round a corner reads as a chip that has wandered.
+        const ways = [];
+        for (const o of taken) {
+          ways.push({ x: o.left - M - (h.l + h.w), y: 0 }, { x: o.right + M - h.l, y: 0 },
+                    { x: 0, y: o.top - M - (h.t + h.h) }, { x: 0, y: o.bottom + M - h.t });
+        }
+        const ok = ways.map(held).filter(inside).filter(free)
+          .sort((/** @type {any} */ p, /** @type {any} */ q) =>
+            (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
+        if (ok.length) best = ok[0];
+      }
+      taken.push(/** @type {any} */ ({ left: h.l + best.x, right: h.l + best.x + h.w,
+                                       top: h.t + best.y, bottom: h.t + best.y + h.h }));
+      if (Math.abs(best.x - was.x) < 0.5 && Math.abs(best.y - was.y) < 0.5) continue;
+      if (best.x || best.y) {
+        chip.style.setProperty('--sc-chip-dx', best.x + 'px');
+        chip.style.setProperty('--sc-chip-dy', best.y + 'px');
+      } else {
+        chip.style.removeProperty('--sc-chip-dx');
+        chip.style.removeProperty('--sc-chip-dy');
+      }
+    }
   }
 
   _renderSteppers(left, top) {
     const target = this._innerTarget;
-    const spec = target?.rings[this._innerSel || ''];
+    const spec = this._selSpec;
     // Not every part has something worth a row - a gauge's hub is one size and
     // nothing else - and no cluster at all says so better than one that does
     // nothing.
@@ -4002,12 +4374,36 @@ class ScCanvasEditor extends LitElement {
             <span>${st.what}</span>
           </label>
         </span>`;
+      // A slider for a value that is a taste rather than a count - a blur, an
+      // opacity, an angle. It takes two of the four cells and hands the last
+      // to the number, because a slider with nothing reading out of it says
+      // only "about here".
+      if (st.slide) return html`
+        <span class="ring-group">${icon(st)}
+          <input type="range" class="ring-slide" title=${`Set the ${st.what}`}
+                 min=${st.min} max=${st.max} step=${st.by} .value=${String(now(st))}
+                 @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
+                 @input=${(/** @type {any} */ e) =>
+                   this._writeInner({ [st.key]: SC.safeFloat(e.target.value, st.dflt) }, false)}>
+          <span class="ring-step-val">${now(st)}</span>
+        </span>`;
       if (st.picks) return html`
         <span class="ring-group">${icon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
                   @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
-                  @change=${(/** @type {any} */ e) =>
-                    this._writeInner({ [st.key]: e.target.value }, false)}>
+                  @change=${(/** @type {any} */ e) => {
+                    // A row that sets one key names it; one that drops a whole
+                    // design on the part - a ramp of colours - hands back the
+                    // patch instead, and answers nothing for the line that is
+                    // only the menu's own name for itself.
+                    const patch = st.patch ? st.patch(cfg, e.target.value)
+                                           : { [st.key]: e.target.value };
+                    if (patch) this._writeInner(patch, false);
+                    // Nothing records which ramp was picked, so the menu goes
+                    // back to saying what it is rather than what was last done
+                    // with it.
+                    if (st.patch) e.target.value = String(now(st));
+                  }}>
             ${st.picks.map((/** @type {any} */ o) => html`
               <option value=${o.value} ?selected=${o.value === now(st)}>${o.short || o.label}</option>`)}
           </select>
@@ -4154,7 +4550,14 @@ class ScCanvasEditor extends LitElement {
 
   _onUp(e) {
     if (e?.pointerType === 'touch') this._touches.delete(e.pointerId);
-    if (this._innerDrag) { this._innerDrag = null; return; }
+    if (this._innerDrag) {
+      const d = this._innerDrag;
+      this._innerDrag = null;
+      if (d.mode === 'chip' && d.held && !d.started && this._innerSel === d.part) {
+        this._innerSel = null;
+      }
+      return;
+    }
     // A pinch ends with the second finger, and the one still down does not
     // then start dragging whatever it happens to be resting on.
     if (this._pinch && this._touches.size < 2) {
@@ -4897,7 +5300,8 @@ class ScCanvasEditor extends LitElement {
                @pointerdown=${this._onCanvasDown}
                @auxclick=${e => { if (e.button === 1) e.preventDefault(); }}
                @wheel=${this._onWheel}>
-          <div class="canvas-view" style="aspect-ratio:${c.w} / ${c.h * this._viewStretch};">
+          <div class="canvas-view" @scroll=${this._onViewScroll}
+               style="aspect-ratio:${c.w} / ${c.h * this._viewStretch};">
           <div class="canvas ${this._pushed('main') ? 'pushed' : ''}" style="aspect-ratio:${c.w} / ${c.h}; width:${this._zoom * 100}%;">
             <div class="grid" style="background-size:${gridPct}% ${gridPct * c.w / c.h}%;"></div>
             ${this._placing ? html`
@@ -4919,7 +5323,7 @@ class ScCanvasEditor extends LitElement {
               const live = this._live ? this._liveContent(el) : null;
               const pinned = isPinned(el);
               return html`
-              <div class="el ${el.surface ? 'surface' : ''} ${this._bentEl(el) ? 'bent' : ''} ${live ? 'live' : ''} ${this._isSel(el.id) ? 'sel' : ''} ${pinned ? 'pinned' : ''} ${this._pushed(el.id) ? 'pushed' : ''}"
+              <div class="el ${el.surface ? 'surface' : ''} ${this._bentEl(el) ? 'bent' : ''} ${this._inner === el.id ? 'inner' : ''} ${live ? 'live' : ''} ${this._isSel(el.id) ? 'sel' : ''} ${pinned ? 'pinned' : ''} ${this._pushed(el.id) ? 'pushed' : ''}"
                    style="left:${pct(el.x, c.w)}; top:${pct(el.y, c.h)}; width:${pct(el.w, c.w)}; height:${pct(el.h, c.h)};"
                    data-item-id=${el.id} title=${this._title(el, pinned)}
                    @pointerdown=${e => this._onDown(e, idx, 'move')}>
