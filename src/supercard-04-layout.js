@@ -2080,35 +2080,37 @@ class ScCanvasEditor extends LitElement {
         box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
       .inner-drop:hover { background: var(--error-color,#db4437); border-color: var(--error-color,#db4437);
         color: #fff; }
-      /* Every offer this element has not taken up yet, in one row across the
-         top of it - out of the drawing, and out of the way of the chips of
-         the parts that are drawn. It wraps rather than running off the side,
-         because a gauge drawing nothing has six of them and an element can be
-         narrow. The row is what moves when it has to make way, so the buttons
-         inside it keep their order and cannot land on one another.
+      /* Every offer this element has not taken up yet, down the sides of it -
+         out of the drawing, and out of the way of the chips of the parts that
+         are drawn.
 
-         It starts beside the pencil rather than over the middle: the middle of
-         the top edge is where a gauge's own arc reaches highest, so a centred
-         row sits on the drawing on exactly the elements that have the most to
-         offer. Filling from the left leaves the top of the arc clear until
-         there are enough offers to wrap, and then the second row grows
-         downwards from a side. */
-      /* Left and a width it may not pass, never a right edge as well: an
-         absolute box between two edges is as wide as the element whatever it
-         holds, and the dodging measures this box, so a stretched one would
-         read as being in the panel's way from either side and could never
-         step out of it. */
-      .inner-adds { position: absolute; left: 36px; top: 6px;
-        max-width: calc(100% - 42px);
+         Each used to stand where its part would appear, which reads well with
+         one offer out and badly with six. A row across the top was no better
+         on a gauge: the middle of the top edge is where the arc reaches
+         highest, so the row lay over the drawing on exactly the elements that
+         had the most to offer. The sides are the empty part of a round thing
+         in a square box, and there is room there for every offer a kind has.
+
+         A column per kind, so which are texts on the face and which are rings
+         around it is said by where they stand rather than by a gap in a list.
+         It wraps inwards if a column ever runs out of height - never off the
+         box - and the right-hand one packs to the right so its second column
+         grows towards the middle rather than away.
+
+         Only left/top or right/top, never both sides at once: an absolute box
+         spanning two edges is as wide as the element whatever it holds, and
+         the dodging measures this box, so a stretched one would read as being
+         in the panel's way from either side and could never step out of it. */
+      .inner-adds { position: absolute; top: 6px;
+        max-height: calc(100% - 42px);
         transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
-        display: flex; flex-wrap: wrap; align-content: flex-start;
-        justify-content: flex-start; column-gap: 12px; row-gap: 3px;
+        display: flex; flex-flow: column wrap; column-gap: 6px; row-gap: 3px;
         z-index: 6; pointer-events: none; }
-      /* One kind of offer per group, so a row of them reads as the parts and
-         then the rings rather than as one list in whatever order the tables
-         happen to be written in. The wider gap between groups is the only
-         thing that says so, which is as much as a row of buttons needs. */
-      .inner-add-group { display: flex; flex-wrap: wrap; gap: 3px; }
+      /* Below the pencil, which owns the top left corner. */
+      .inner-adds.left { left: 6px; top: 36px;
+        align-items: flex-start; align-content: flex-start; }
+      .inner-adds.right { right: 6px;
+        align-items: flex-end; align-content: flex-end; }
       /* The offer to switch a part on. It writes the key the form's own switch
          writes, so there is one setting and not two. Dashed, because nothing
          is there yet. */
@@ -3909,8 +3911,8 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * The offers to switch on what this element is not drawing yet, in one row
-   * along the top of it.
+   * The offers to switch on what this element is not drawing yet, in a column
+   * down each side of it.
    *
    * Each used to stand where its part would appear - on its own ring, or on
    * the spot the text would take - so that the press both switched the thing
@@ -3920,17 +3922,18 @@ class ScCanvasEditor extends LitElement {
    * on the chips of the parts that *were* drawn, and across the drawing the
    * whole editor is there to let you see.
    *
-   * So they are a row instead. Where a part appears is answered by the part
-   * appearing - it arrives in hand, framed, with its numbers open - and the
-   * offers stop competing with the drawing for the same space. A row also
-   * means they cannot land on each other, which the dodging had been asked to
-   * sort out one collision at a time.
+   * So they stand at the sides instead, where a round drawing in a square box
+   * leaves the room. Where a part appears is answered by the part appearing -
+   * it arrives in hand, framed, with its numbers open - and the offers stop
+   * competing with the drawing for the same space. A column also means they
+   * cannot land on each other, which the dodging had been asked to sort out
+   * one collision at a time.
    *
-   * Parts and rings stay in separate groups inside that row, in the order
-   * their tables are written. How they are switched on is nothing a person
-   * reading a row of buttons cares about, but which of them are texts on the
-   * face and which are rings around it is, and a row that mixes the two reads
-   * as an arbitrary list.
+   * Parts down one side and rings down the other, in the order their tables
+   * are written. How they are switched on is nothing a person reading a row
+   * of buttons cares about, but which of them are texts on the face and which
+   * are rings around it is, and one list mixing the two reads as an arbitrary
+   * one. A kind with only parts simply has an empty right-hand side.
    *
    * @param {(e: any) => void} swallow
    */
@@ -3939,25 +3942,29 @@ class ScCanvasEditor extends LitElement {
     if (!target) return '';
     const drawn = new Set(target.drawn);
     const groups = [
-      Object.entries(target.parts)
-        .filter(([part]) => !drawn.has(part))
-        .map(([part, spec]) => ({ spec, on: () => this._setInnerPart(part, true) })),
-      Object.entries(target.rings)
-        .filter(([, spec]) => partCan(spec, target.cfg) && !spec.on(target.cfg))
-        .map(([part, spec]) => ({ spec, on: () => this._setInnerRing(part, true) })),
-    ].filter((group) => group.length);
+      {
+        side: 'left',
+        offers: Object.entries(target.parts)
+          .filter(([part]) => !drawn.has(part))
+          .map(([part, spec]) => ({ spec, on: () => this._setInnerPart(part, true) })),
+      },
+      {
+        side: 'right',
+        offers: Object.entries(target.rings)
+          .filter(([, spec]) => partCan(spec, target.cfg) && !spec.on(target.cfg))
+          .map(([part, spec]) => ({ spec, on: () => this._setInnerRing(part, true) })),
+      },
+    ].filter((group) => group.offers.length);
     if (!groups.length) return '';
     return html`
-      <div class="inner-adds">
-        ${groups.map((group) => html`
-          <div class="inner-add-group">
-            ${group.map(({ spec, on }) => html`
-              <button class="inner-add"
-                      title=${`Show ${spec.label.toLowerCase()} on this ${target.k.noun}`}
-                      @pointerdown=${swallow}
-                      @click=${on}>+ ${spec.label}</button>`)}
-          </div>`)}
-      </div>`;
+      ${groups.map(({ side, offers }) => html`
+        <div class="inner-adds ${side}">
+          ${offers.map(({ spec, on }) => html`
+            <button class="inner-add"
+                    title=${`Show ${spec.label.toLowerCase()} on this ${target.k.noun}`}
+                    @pointerdown=${swallow}
+                    @click=${on}>+ ${spec.label}</button>`)}
+        </div>`)}`;
   }
 
   /**
