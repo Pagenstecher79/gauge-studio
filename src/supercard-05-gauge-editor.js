@@ -220,20 +220,20 @@ const STYLE_FIELDS = [
   { id: 'pointer_length',         label: 'Pointer length',               type: 'range',    min: 0, max: 50, step: 0.1,  placeholder: '10', framedBy: 'pointer'  },
   { id: 'pointer_offset',         label: 'Pointer offset from ring',     type: 'range',    min: -10, max: 10, step: 0.1,  placeholder: '2', framedBy: 'pointer'   },
   { id: 'pointer_center_radius',  label: 'Centre point size',          type: 'range',    min: 0, max: 10, step: 0.1, placeholder: '2', framedBy: 'pointer_center'   },
-  { id: 'pointer_color_type',     label: 'Pointer colour mode',          type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'pointer_color',          label: 'Pointer colour (fixed)',         type: 'color',   condition: cfg => cfg.pointer_color_type !== 'adaptive' },
-  { id: 'pointer_3d_effect',      label: '3D effect (plastic)',      type: 'checkbox' },
-  { id: 'pointer_dot_color_type', label: 'Dot colour mode',           type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'pointer_dot_color',      label: 'Dot colour (fixed)',          type: 'color',   condition: cfg => cfg.pointer_dot_color_type !== 'adaptive' },
-  { id: 'pointer_shadow_type',    label: 'Pointer shadow',            type: 'select',  options: [ { value: 'none', label: 'None' }, { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'pointer_shadow_color',   label: 'Shadow colour',             type: 'color',   condition: cfg => cfg.pointer_shadow_type === 'fixed' },
-  { id: 'pointer_shadow_blur',     label: 'Shadow blur',   type: 'range', min: 0,  max: 1, step: 0.01,  placeholder: '0.8', condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_color_type', framedBy: 'pointer',     label: 'Pointer colour mode',          type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'pointer_color', framedBy: 'pointer',          label: 'Pointer colour (fixed)',         type: 'color',   condition: cfg => cfg.pointer_color_type !== 'adaptive' },
+  { id: 'pointer_3d_effect', framedBy: 'pointer',      label: '3D effect (plastic)',      type: 'checkbox' },
+  { id: 'pointer_dot_color_type', framedBy: 'pointer_center', label: 'Dot colour mode',           type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'pointer_dot_color', framedBy: 'pointer_center',      label: 'Dot colour (fixed)',          type: 'color',   condition: cfg => cfg.pointer_dot_color_type !== 'adaptive' },
+  { id: 'pointer_shadow_type', framedBy: 'pointer',    label: 'Pointer shadow',            type: 'select',  options: [ { value: 'none', label: 'None' }, { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'pointer_shadow_color', framedBy: 'pointer',   label: 'Shadow colour',             type: 'color',   condition: cfg => cfg.pointer_shadow_type === 'fixed' },
+  { id: 'pointer_shadow_blur', framedBy: 'pointer',     label: 'Shadow blur',   type: 'range', min: 0,  max: 1, step: 0.01,  placeholder: '0.8', condition: cfg => cfg.pointer_shadow_type !== 'none' },
   // Not 'offset Y': the offset is only vertical while the angle is 90 degrees,
   // which is merely its default. The renderer still reads the old key for
   // configs written before the angle had a control.
-  { id: 'pointer_shadow_distance', label: 'Shadow distance',       type: 'range', min: -5, max: 5, step: 0.1,  placeholder: '0.5', condition: cfg => cfg.pointer_shadow_type !== 'none' },
-  { id: 'pointer_shadow_angle',    label: 'Shadow angle',          type: 'range', min: 0, max: 360, step: 5,   placeholder: '90',  condition: cfg => cfg.pointer_shadow_type !== 'none' },
-  { id: 'pointer_shadow_opacity',  label: 'Shadow opacity',        type: 'range', min: 0,  max: 1, step: 0.05, placeholder: '0.35', condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_shadow_distance', framedBy: 'pointer', label: 'Shadow distance',       type: 'range', min: -5, max: 5, step: 0.1,  placeholder: '0.5', condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_shadow_angle', framedBy: 'pointer',    label: 'Shadow angle',          type: 'range', min: 0, max: 360, step: 5,   placeholder: '90',  condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  { id: 'pointer_shadow_opacity', framedBy: 'pointer',  label: 'Shadow opacity',        type: 'range', min: 0,  max: 1, step: 0.05, placeholder: '0.35', condition: cfg => cfg.pointer_shadow_type !== 'none' },
   { id: 'animation_duration',     label: 'Animation duration (s)',       type: 'range',    min: 0, max: 10, step: 0.1, placeholder: '0.8', condition: cfg => cfg.animation_easing !== 'spring' },
   { id: 'animation_spring_duration', label: 'Spring animation duration (s)', type: 'range', min: 0.1, max: 10, step: 0.1, placeholder: '1.5', condition: cfg => cfg.animation_easing === 'spring' },
   { id: 'animation_dynamic_speed',label: 'Dynamic pointer acceleration', type: 'checkbox' },
@@ -296,14 +296,14 @@ const STYLE_FIELDS = [
   { id: '_section_labels',        label: '── 🔢 Value & Labels',           type: 'section' },
   { id: 'show_value',             label: 'Show value',              type: 'checkbox' },
   { id: 'value_font_size',        label: 'Value font size',          type: 'range',    min: 0, max: 20, step: 0.1,  placeholder: '12',  condition: cfg => !!cfg.show_value, framedBy: 'value' },
-  { id: 'value_font_weight',      label: 'Value weight',             type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '600', label: 'Semi-Bold' }, { value: '700', label: 'Bold' } ], condition: cfg => !!cfg.show_value, framedBy: 'value' },
+  { id: 'value_font_weight',      label: 'Value weight',             type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => !!cfg.show_value, framedBy: 'value' },
   { id: 'value_offset_x',         label: 'Value offset X',              type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => !!cfg.show_value, framedBy: 'value' },
   { id: 'value_offset_y',         label: 'Value offset Y',              type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => !!cfg.show_value, framedBy: 'value' },
-  { id: 'value_color_type',       label: 'Value colour mode',            type: 'select',  options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_value },
-  { id: 'value_color',            label: 'Value colour (fixed)',           type: 'color',   condition: cfg => !!cfg.show_value && cfg.value_color_type !== 'adaptive' },
-  { id: 'value_decimals',         label: 'Decimals',             type: 'range',    min: 0, max: 6, step: 1, placeholder: '0',   condition: cfg => !!cfg.show_value },
-  { id: 'value_show_raw_unit',    label: 'Show unit',           type: 'checkbox', condition: cfg => !!cfg.show_value },
-  { id: 'value_replace_unit',     label: 'Replace original unit',  type: 'checkbox', condition: cfg => !!cfg.show_value && !!cfg.value_show_raw_unit },
+  { id: 'value_color_type', framedBy: 'value',       label: 'Value colour mode',            type: 'select',  options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_value },
+  { id: 'value_color', framedBy: 'value',            label: 'Value colour (fixed)',           type: 'color',   condition: cfg => !!cfg.show_value && cfg.value_color_type !== 'adaptive' },
+  { id: 'value_decimals', framedBy: 'value',         label: 'Decimals',             type: 'range',    min: 0, max: 6, step: 1, placeholder: '0',   condition: cfg => !!cfg.show_value },
+  { id: 'value_show_raw_unit', framedBy: 'value',    label: 'Show unit',           type: 'checkbox', condition: cfg => !!cfg.show_value },
+  { id: 'value_replace_unit', framedBy: 'value',     label: 'Replace original unit',  type: 'checkbox', condition: cfg => !!cfg.show_value && !!cfg.value_show_raw_unit },
   { id: 'value_custom_unit',      label: 'Custom unit (suffix)',    type: 'text',     placeholder: 'e.g. W', condition: cfg => !!cfg.show_value && !!cfg.value_show_raw_unit && !!cfg.value_replace_unit },
 
   { id: 'show_scale_label',       label: 'Show scale label', type: 'checkbox' },
@@ -329,11 +329,11 @@ const STYLE_FIELDS = [
   { id: 'gauge_label_active',      label: 'Label active',          type: 'checkbox', on: true },
   { id: 'gauge_label_text',        label: 'Label text',           type: 'text',     placeholder: 'Gauge',  condition: cfg => cfg.gauge_label_active !== false },
   { id: 'gauge_label_font_size',   label: 'Font size',         type: 'range',    min: 0, max: 20, step: 0.1,   placeholder: '8',   condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
-  { id: 'gauge_label_font_weight', label: 'Weight',           type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '600', label: 'Semi-Bold' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
+  { id: 'gauge_label_font_weight', label: 'Weight',           type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
   { id: 'gauge_label_offset_x',    label: 'Offset X',             type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
   { id: 'gauge_label_offset_y',    label: 'Offset Y',             type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',  condition: cfg => cfg.gauge_label_active !== false, framedBy: 'gauge_label' },
-  { id: 'gauge_label_color_type',  label: 'Colour mode',           type: 'select',   options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => cfg.gauge_label_active !== false },
-  { id: 'gauge_label_color',       label: 'Colour (fixed)',            type: 'color',    condition: cfg => cfg.gauge_label_color_type === 'fixed' }
+  { id: 'gauge_label_color_type', framedBy: 'gauge_label',  label: 'Colour mode',           type: 'select',   options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => cfg.gauge_label_active !== false },
+  { id: 'gauge_label_color', framedBy: 'gauge_label',       label: 'Colour (fixed)',            type: 'color',    condition: cfg => cfg.gauge_label_color_type === 'fixed' }
 ];
 
 class ScGaugeEditor extends LitElement {
@@ -816,9 +816,9 @@ class ScGaugeEditor extends LitElement {
       ? html`This one is on the canvas while it is selected - its distance is
              the ring you drag, and the rest of what it is stands under its
              chip.`
-      : html`Size, weight and position are on the canvas while this one is
-             selected - drag its frame or the corner of it, and use the button
-             on its chip.`}</div>`;
+      : html`This one is on the canvas while it is selected - drag its frame
+             or the corner of it for size and place, and the rest of what it
+             is stands on and under its chip.`}</div>`;
   }
 
   _renderLitField(field, entry, idx, gauges) {
