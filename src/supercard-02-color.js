@@ -1,7 +1,8 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
 import { PATTERN_ANIMATIONS, defaultColorPattern, patchPattern, patchPatternStops,
-         patternList, solidColorOf, solidColorPatch } from "./color-pattern.js";
+         patternList, patternPreviewCss, solidColorOf,
+         solidColorPatch } from "./color-pattern.js";
 
 const SC = window.SupercardUtils;
 
@@ -284,15 +285,8 @@ class ScColorEditor extends LitElement {
       pat.gradient_stops ?? { colors: pat.colors, stops: pat.stops }, { fill: false });
     const solidColor = solidColorOf(pat);
     // The preview strip is the one in the stop editor, so a pattern hands it
-    // the gradient it actually paints - its angle, or the radial's centre -
-    // rather than a left-to-right stand-in.
-    const previewCss = pat.animation === 'fluid'
-      ? ''
-      : pat.bg_type === 'radial'
-        ? 'radial-gradient(circle at ' + (pat.radial_x ?? 50) + '% '
-          + (pat.radial_y ?? 50) + '%, ' + stopsToCss(stopList) + ')'
-        : 'linear-gradient(' + (pat.gradient_angle ?? 90) + 'deg, '
-          + stopsToCss(stopList) + ')';
+    // what it actually paints.
+    const previewCss = patternPreviewCss(pat);
     const setSolid = value => ctx.setStops(solidColorPatch(pat, value).gradient_stops);
 
     return html`

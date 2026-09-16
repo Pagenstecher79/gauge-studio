@@ -1,4 +1,4 @@
-import { normalizeStops } from "./gradient-stops.js";
+import { normalizeStops, stopsToCss } from "./gradient-stops.js";
 
 /**
  * What a colour pattern is, and how one is found and changed in the slot's
@@ -16,17 +16,27 @@ import { normalizeStops } from "./gradient-stops.js";
  * other moment to make one.
  */
 
-/** The effects a pattern can run, in the order they are offered. */
+/**
+ * The effects a pattern can run, in the order they are offered.
+ *
+ * Two names each: the one the menu says, which has room to explain what the
+ * effect does, and the one a select standing on the drawing itself says, where
+ * the whole cluster is a couple of centimetres across and a parenthesis would
+ * push the element out from under it.
+ */
 export const PATTERN_ANIMATIONS = Object.freeze([
-  Object.freeze({ value: 'none', label: 'None (background only)' }),
-  Object.freeze({ value: 'pulse', label: 'Pulse (opacity)' }),
-  Object.freeze({ value: 'pump', label: 'Pump (scale the background)' }),
-  Object.freeze({ value: 'pump_all', label: 'Pump (scale everything, content included)' }),
-  Object.freeze({ value: 'ripple', label: 'Rings (concentric)' }),
-  Object.freeze({ value: 'waves', label: 'Waves (linear traveling)' }),
-  Object.freeze({ value: 'wobble_radial', label: 'Water drop (radial fade-out)' }),
-  Object.freeze({ value: 'wobble_linear', label: 'Shockwave (linear fade-out)' }),
-  Object.freeze({ value: 'fluid', label: 'Liquid (undulating mesh)' }),
+  Object.freeze({ value: 'none', label: 'None (background only)', short: 'None' }),
+  Object.freeze({ value: 'pulse', label: 'Pulse (opacity)', short: 'Pulse' }),
+  Object.freeze({ value: 'pump', label: 'Pump (scale the background)', short: 'Pump' }),
+  Object.freeze({ value: 'pump_all', label: 'Pump (scale everything, content included)',
+                  short: 'Pump all' }),
+  Object.freeze({ value: 'ripple', label: 'Rings (concentric)', short: 'Rings' }),
+  Object.freeze({ value: 'waves', label: 'Waves (linear traveling)', short: 'Waves' }),
+  Object.freeze({ value: 'wobble_radial', label: 'Water drop (radial fade-out)',
+                  short: 'Water drop' }),
+  Object.freeze({ value: 'wobble_linear', label: 'Shockwave (linear fade-out)',
+                  short: 'Shockwave' }),
+  Object.freeze({ value: 'fluid', label: 'Liquid (undulating mesh)', short: 'Liquid' }),
 ]);
 
 /**
@@ -108,4 +118,42 @@ export function solidColorPatch(pat, color) {
   const stops = normalizeStops(
     pat?.gradient_stops ?? { colors: pat?.colors, stops: pat?.stops }, { fill: false });
   return { gradient_stops: [{ pos: stops[0]?.pos ?? null, color }] };
+}
+
+/**
+ * What a pattern paints, as one CSS background value.
+ *
+ * The gradient it actually paints - its own angle, or the radial's centre -
+ * rather than a left-to-right stand-in, so a preview of it is a preview and
+ * not an impression. A solid pattern is the one colour; the fluid mesh is a
+ * moving thing built in the renderer and has no still picture, so it answers
+ * with nothing and a caller shows whatever it shows for a pattern with no
+ * background.
+ *
+ * @param {any} pat
+ * @returns {string}
+ */
+export function patternPreviewCss(pat) {
+  if (!pat || pat.animation === 'fluid') return '';
+  if ((pat.bg_type || 'solid') === 'solid') return solidColorOf(pat);
+  const stops = stopsToCss(normalizeStops(
+    pat.gradient_stops ?? { colors: pat.colors, stops: pat.stops }, { fill: false }));
+  return pat.bg_type === 'radial'
+    ? `radial-gradient(circle at ${pat.radial_x ?? 50}% ${pat.radial_y ?? 50}%, ${stops})`
+    : `linear-gradient(${pat.gradient_angle ?? 90}deg, ${stops})`;
+}
+
+/**
+ * The corner radius a pattern rounds its box to, as a CSS length, or null
+ * where it follows the box it paints. A radius written before the unit existed
+ * is a pixel one, which is what the renderer has always read it as.
+ *
+ * @param {any} pat
+ * @returns {string | null}
+ */
+export function patternRadiusCss(pat) {
+  const auto = pat?.border_radius_auto === undefined
+    ? pat?.target === 'main' : pat.border_radius_auto;
+  if (auto || pat?.border_radius === undefined || pat?.border_radius === '') return null;
+  return `${pat.border_radius}${pat.border_radius_unit || 'px'}`;
 }

@@ -97,6 +97,13 @@ describe('PATTERN_ANIMATIONS', () => {
     expect(new Set(seen).size).toBe(seen.length);
   });
 
+  it('offers a short name for every effect, for a select on the drawing', () => {
+    for (const a of PATTERN_ANIMATIONS) {
+      expect(a.short).toBeTruthy();
+      expect(a.short.length).toBeLessThanOrEqual(12);
+    }
+  });
+
   it('is the list a fresh pattern starts in', () => {
     expect(PATTERN_ANIMATIONS.map(a => a.value)).toContain(defaultColorPattern('main').animation);
   });
