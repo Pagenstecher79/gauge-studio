@@ -4,7 +4,9 @@ import { offsetsFromDrag, fontFromResize, estimateRect, clamp,
          gaugeOuter, frameBand, gaugeScaleOf, migrateGaugeScale,
          OFFSET_LIMIT, FONT_MAX, FONT_MIN, GAUGE_CENTER,
          needleEnds, needleFromRadius, needleSlide, NEEDLE_CENTRE_SNAP,
-         ringInnerEdge, strokeFromRadius, alignParts} from './gauge-inner-boxes.js';
+         ringInnerEdge, strokeFromRadius, alignParts,
+         frameInnerEdge, scaleFromRadius, frameWidthFromRadius,
+         FRAME_WIDTH_MAX, GAUGE_SCALE_MIN } from './gauge-inner-boxes.js';
 
 describe('offsetsFromDrag', () => {
   it('turns pixels into viewBox units at the measured scale', () => {
@@ -425,5 +427,49 @@ describe('a card written against the older reading', () => {
 
   it('answers the template default for a card that says nothing at all', () => {
     expect(gaugeScaleOf({ scale_from_outer: true })).toBe(0.9);
+  });
+});
+
+describe("the frame ring's two edges", () => {
+  const framed = (w) => ({ frame_ring_active: true, frame_ring_width: w, frame_ring_gap: 1.5 });
+
+  it('puts the outside where the gauge reaches to, whatever the frame is', () => {
+    for (const w of [0, 1.5, 8]) expect(gaugeOuter(1)).toBe(25);
+    expect(frameInnerEdge(framed(1.5), 1)).toBe(23.5);
+    expect(frameInnerEdge(framed(8), 1)).toBe(17);
+  });
+
+  it('has no width to speak of while no frame is drawn', () => {
+    // Both edges are the same circle then, which is what lets the editor
+    // draw one ghost band instead of two handles nobody can tell apart.
+    expect(frameInnerEdge({ frame_ring_width: 4 }, 1)).toBe(gaugeOuter(1));
+  });
+
+  it('measures the inside in the gauge\'s own units, not the screen\'s', () => {
+    // A gauge at half size draws a 4-wide frame 2 units wide, so an edge two
+    // units in from the outside is a width of 4 and not of 2.
+    expect(frameWidthFromRadius(gaugeOuter(0.5) - 2, 0.5)).toEqual({ frame_ring_width: 4 });
+  });
+
+  it('says which reading it means every time it writes a scale', () => {
+    expect(scaleFromRadius(20)).toEqual({ gauge_scale: 0.8, scale_from_outer: true });
+  });
+
+  it('cannot be dragged out of the card or down to nothing', () => {
+    expect(scaleFromRadius(40).gauge_scale).toBe(1);
+    expect(scaleFromRadius(0).gauge_scale).toBe(GAUGE_SCALE_MIN);
+    expect(frameWidthFromRadius(-50, 1).frame_ring_width).toBe(FRAME_WIDTH_MAX);
+    expect(frameWidthFromRadius(30, 1).frame_ring_width).toBe(0);
+  });
+
+  it('widens the frame by exactly what the hand covered', () => {
+    // The two edges are each other's arithmetic: putting the inner edge where
+    // a width would draw it gives that width back.
+    for (const w of [0.4, 1.5, 6]) {
+      for (const s of [1, 0.8, 0.5]) {
+        expect(frameWidthFromRadius(frameInnerEdge(framed(w), s), s))
+          .toEqual({ frame_ring_width: w });
+      }
+    }
   });
 });

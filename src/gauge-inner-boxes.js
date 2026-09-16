@@ -346,6 +346,58 @@ export const STROKE_MAX = 5;
  *
  * @param {number} stroke @param {number} scale @param {number} [band]
  */
+/**
+ * What the frame ring's own two edges are, and the fields that would put an
+ * edge where the hand let go of it.
+ *
+ * The frame ring is the one band on a gauge with a thickness worth grabbing:
+ * every other ring is a circle at a radius, so one handle says all there is
+ * to say about it. This one has an outside, which is the gauge's outermost
+ * reach and therefore its size, and an inside, which is how wide the frame
+ * itself is drawn. Two edges, two numbers, and neither of them is the other.
+ *
+ * A gauge with no frame ring still has the outer edge - it is `scale * 25`
+ * whether anything is drawn on it or not - which is what lets the editor
+ * offer a ring that is not there.
+ */
+export const FRAME_WIDTH_MAX = 8;
+export const GAUGE_SCALE_MIN = 0.2;
+
+/** @param {any} cfg @param {number} scale */
+export function frameInnerEdge(cfg, scale) {
+  const w = cfg?.frame_ring_active === true
+    ? (Number.isFinite(Number(cfg.frame_ring_width)) ? Number(cfg.frame_ring_width) : 1.5) : 0;
+  return gaugeOuter(scale) - w * (scale ?? 1);
+}
+
+/**
+ * The outer edge dragged to `radius`, as a scale.
+ *
+ * `scale_from_outer` rides along because a drag is an edit, and an edit is
+ * the moment an old card stops being read the old way: the number written
+ * here is the new reading, and saying so in the same patch is what keeps the
+ * two from being mixed.
+ *
+ * @param {number} radius
+ */
+export function scaleFromRadius(radius) {
+  return { gauge_scale: Math.round(clamp(radius / GAUGE_CENTER, GAUGE_SCALE_MIN, 1) * 100) / 100,
+           scale_from_outer: true };
+}
+
+/**
+ * The inner edge dragged to `radius`, as a frame width.
+ *
+ * Divided by the scale, because the width is drawn multiplied by it: on a
+ * gauge at 0.5 the hand travels half as far as the number it is setting.
+ *
+ * @param {number} radius @param {number} scale
+ */
+export function frameWidthFromRadius(radius, scale) {
+  const s = scale || 1;
+  return { frame_ring_width: clamp(tenth((gaugeOuter(s) - radius) / s), 0, FRAME_WIDTH_MAX) };
+}
+
 export function ringInnerEdge(stroke, scale, band = 0) {
   return gaugeOuter(scale) - (band || 0) - (stroke || 0);
 }
