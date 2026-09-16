@@ -211,25 +211,34 @@ next to, and whatever is drawn over it, one of the two can be reached. Two
 grips for one value is not two controls for one value; two *different* controls
 would be.
 
-The grip stands on the corner the radius has already drawn, not on the corner
-of the box, so it is always on the thing it sets.
+**Each grip lives on one edge and slides along it**, the way a DTP app or
+Inkscape does it: the bottom-left grip runs along the bottom edge, the
+top-right one down the right-hand side, and the distance it has travelled from
+its corner *is* the radius. Nothing is pulled diagonally and nothing is
+averaged - a grip that leaves its edge would be saying something the value
+cannot express, so it never does. The invariant is in the tests, and
+`gripHome` is the exact inverse of `radiusFromGrip`, in both units.
 
-The arithmetic is worth stating because it is not obvious:
+The rest of the arithmetic is worth stating because it is not obvious:
 
-- A radius is a distance along *both* edges from the corner, so what a drag
-  says is the **mean** of how far it has come along each. A straight diagonal
-  pull then reads as exactly the radius it draws, and a pull along one edge
-  alone still moves it, by half.
 - **Pixels map to the screen one for one at any zoom.** The browser draws
   `border-radius: 8px` as eight screen pixels in a box the zoom has made twice
   as wide, so there is no zoom factor to divide by - and putting one in would
-  be wrong.
+  be wrong. The px stop is half the *short* side, because that is where a
+  radius stops growing.
 - A percentage on `border-radius` is of the box's **own width across and its
-  height down**, so the mean is taken in those terms. Which also means a pixel
-  radius on a box that is not square comes to rest between the pointer's two
-  axes rather than under it: a radius in pixels is a circle, and cannot be a
-  tenth of both a wide side and a narrow one. Say so in the tests, or someone
-  will later "fix" it.
+  height down** - per axis, which is exactly the axis each grip runs along, so
+  the percentage a grip reads is the percentage CSS will draw. The stop is 50%.
+- `.el` is `overflow: hidden`, so a grip drawn astride the border would be
+  sliced in half. Each is drawn *tangent* to its edge instead - the bottom one
+  sits above the line, the right-hand one to the left of it - with a
+  `::after` inset of a few pixels to make it worth aiming at.
+- **A grip on the border needs room outside the border.** Entering inner edit
+  fills the window, which for a gauge is only ever a way of making its parts
+  bigger; for a kind whose controls stand on its own edge it would put them
+  under the rim of the window, where a press that misses by a pixel takes hold
+  of the view and pans it. `RIM_FILL` is the air that buys, and the kind asks
+  for it simply by having corners.
 
 ## 13. The bench is not the work
 

@@ -559,6 +559,18 @@ const FIT_MARGIN = 0.85;
 const INNER_FILL = 1;
 
 /**
+ * The same, for a kind whose controls stand on the element's own edge.
+ *
+ * A gauge's parts are all inside it, so filling the window is only ever a way
+ * of making them bigger. A surface's corner grips are *on* the border, and a
+ * bar's will be too - filled to the edge, they sit under the rim of the window
+ * itself, where a press that misses by a pixel takes hold of the view and
+ * scrolls it instead. The room outside the element is what makes them
+ * grabbable, and it is the whole reason for the number.
+ */
+const RIM_FILL = 0.9;
+
+/**
  * The shape the window is drawn at while a gauge's own parts are being
  * edited: a square, whatever shape the canvas is.
  *
@@ -1540,7 +1552,7 @@ class ScCanvasEditor extends LitElement {
          label that happens to be pressable; a handle is the thing being
          dragged, and the tail is dragged in towards the pivot where the hub's
          own chip stands. */
-      .grip-layer { z-index: 7; }
+      .grip-layer { z-index: 8; }
       /* Half transparent, both of them: the band lies across the very marks it
          is there to place, and at full strength the selected one hid the ticks
          and sub-ticks under it. Which ring is in hand is said by its width and
@@ -1567,7 +1579,7 @@ class ScCanvasEditor extends LitElement {
       .ring-grip-hit { fill: transparent; stroke: none; pointer-events: all;
         cursor: move; touch-action: none; }
       .ring-tag { position: absolute; transform: translate(-50%, -50%);
-        display: flex; align-items: center; gap: 3px; z-index: 6;
+        display: flex; align-items: center; gap: 3px; z-index: 7;
         font-size: 11.5px; line-height: 1; padding: 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
         opacity: 0.85; cursor: grab; touch-action: none;
@@ -1614,8 +1626,13 @@ class ScCanvasEditor extends LitElement {
          width: max-content, or an absolutely placed box is shrunk to the room
          left of it in its containing block - half the gauge - and the box
          would stand wider than the column inside it. */
+      /* Under the chips, not over them. The numbers belong to the one part in
+         hand and are three lines deep; a chip is small, permanent, and the
+         only way to take a different part in hand. A panel that is here for a
+         moment must not be what makes a lasting control unreachable - and
+         where they do meet, either chip can now be dragged aside. */
       .ring-steps { position: absolute; transform: translate(-50%, 12px);
-        z-index: 7;
+        z-index: 6;
         display: grid; grid-template-columns: auto auto auto auto;
         align-items: center; justify-items: center;
         width: max-content; gap: 3px; padding: 3px 5px;
@@ -1651,14 +1668,22 @@ class ScCanvasEditor extends LitElement {
       .ring-pick { height: 20px; padding: 0 2px; font-size: 11px; line-height: 1;
         border-radius: 4px; cursor: pointer; max-width: 108px;
         border: 1px solid var(--sc-part-sel); background: rgba(0,0,0,0.5); color: #fff; }
-      /* On the corner it has already drawn, not on the corner of the box: the
-         grip is always on the thing it sets. Its own layer, above the chips,
-         because a corner is where a chip is least likely to be but the two can
-         still meet on a small element. */
-      .corner-grip { position: absolute; transform: translate(-50%, -50%);
-        width: 11px; height: 11px; border-radius: 50%; z-index: 8;
-        background: var(--sc-part-sel); cursor: nwse-resize; touch-action: none;
+      /* On the edge it runs along, at the point the radius reaches. Above
+         everything else on the box, because a corner is where a chip is least
+         likely to be but the two can still meet on a small element.
+
+         Tangent to the border rather than centred on it: the element's box
+         clips what hangs out of it, so a grip astride the line would be drawn
+         as a half disc. The rim touches the line instead, which reads the same
+         and is all there. */
+      .corner-grip { position: absolute; width: 11px; height: 11px;
+        border-radius: 50%; z-index: 9; background: var(--sc-part-sel);
+        touch-action: none;
         box-shadow: 0 0 0 1.5px rgba(0,0,0,0.7), 0 0 0 2.5px rgba(255,255,255,0.85); }
+      .corner-grip[data-corner="bl"] { transform: translate(-50%, -100%);
+        cursor: ew-resize; }
+      .corner-grip[data-corner="tr"] { transform: translate(-100%, -50%);
+        cursor: ns-resize; }
       .corner-grip::after { content: ''; position: absolute; inset: -7px; }
       /* Under everything the editor draws on the box, and taking no presses:
          it is the drawing, not a control. */
@@ -2693,7 +2718,10 @@ class ScCanvasEditor extends LitElement {
     if (opening) {
       this._zoomBefore = this._zoom;
       // Fill the window, and never out: the way in is only ever a way closer.
-      this._zoomToSelection({ atLeast: this._zoom, margin: INNER_FILL });
+      // Not quite to the edge where the controls are on the edge - see
+      // RIM_FILL.
+      this._zoomToSelection({ atLeast: this._zoom,
+                              margin: target.k.corners ? RIM_FILL : INNER_FILL });
     }
   }
 
@@ -3457,11 +3485,12 @@ class ScCanvasEditor extends LitElement {
   /**
    * The grips that round the element's corners.
    *
-   * Two of them, at the bottom left and the top right, both writing the one
-   * radius: which is used is only ever a question of which is free. They stand
-   * on the corner the radius has already drawn, not on the corner of the box,
-   * so the grip is always on the thing it sets - see `canvas-corner.js` for
-   * what a drag of one says.
+   * The way a drawing program does it: each grip lives on one edge of the
+   * frame and slides along it, and how far it has come from the corner is the
+   * radius. Two of them, on edges of their own - the bottom and the right-hand
+   * side - so there is one to reach whatever the element sits next to, and one
+   * with room whether the element is a long strip or a narrow column. See
+   * `canvas-corner.js` for what a drag of one says.
    */
   _renderCorners() {
     const target = this._innerTarget;
@@ -3472,8 +3501,9 @@ class ScCanvasEditor extends LitElement {
     return html`${Object.entries(GRIP_CORNERS).map(([corner, c]) => {
       const home = gripHome(now, box, corner, spec.unit);
       return html`
-        <div class="corner-grip" style="left:${home.l}%; top:${home.t}%;"
-             title=${`Drag to round the corners - ${now}${spec.unit} now`}
+        <div class="corner-grip" data-corner=${corner}
+             style="left:${home.l}%; top:${home.t}%;"
+             title=${`Slide ${c.what} to round the corners - ${now}${spec.unit} now`}
              @pointerdown=${(/** @type {any} */ e) =>
                this._innerDown(e, null, 'corner', corner)}></div>`;
     })}`;
