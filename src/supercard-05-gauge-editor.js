@@ -53,30 +53,48 @@ const hasOwnBox = (cfg, slot) => !SC.gaugeIsResponsive(cfg, !!slot?.canvas);
 const RING_PARTS = new Set(['gauge_ring', 'ticks', 'sub_ticks', 'tick_labels',
                             'pointer', 'pointer_center']);
 
+/**
+ * A scale to start from: how many marks, and whether they are numbered.
+ *
+ * `patch` is what the preset means and is always written. `sizes` is only its
+ * taste in how long and how thick the marks are, and that is written where the
+ * gauge says nothing and nowhere else - someone who has drawn their ticks the
+ * length they want is picking a different number of them here, not asking for
+ * that work to be thrown away. Where a length *is* the preset - "Labels only"
+ * is ticks of no length at all - it sits in `patch` where it belongs.
+ */
 const TICK_PRESETS = Object.freeze({
-  fine: { label: 'Fine', patch: {
-    tick_count: 21, tick_length: 2.5, tick_width: 0.8,
-    sub_tick_count: 4, sub_tick_length: 1.2, sub_tick_width: 0.5,
-    show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false,
-    tick_label_font_size: 5 } },
-  coarse: { label: 'Coarse', patch: {
-    tick_count: 11, tick_length: 3.5, tick_width: 1.2,
-    sub_tick_count: 0,
-    show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false,
-    tick_label_font_size: 6 } },
-  classic: { label: 'Classic dial', patch: {
-    tick_count: 11, tick_length: 4, tick_width: 1.4,
-    sub_tick_count: 4, sub_tick_length: 2, sub_tick_width: 0.7,
-    show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false,
-    tick_label_font_size: 6 } },
-  labels: { label: 'Labels only', patch: {
-    tick_count: 11, tick_length: 0, tick_width: 0,
-    sub_tick_count: 0,
-    show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false,
-    tick_label_font_size: 6 } },
-  none: { label: 'No scale', patch: {
-    tick_count: 0, sub_tick_count: 0, show_tick_labels: false } },
+  fine: { label: 'Fine',
+    patch: { tick_count: 21, sub_tick_count: 4,
+      show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false },
+    sizes: { tick_length: 2.5, tick_width: 0.8,
+      sub_tick_length: 1.2, sub_tick_width: 0.5, tick_label_font_size: 5 } },
+  coarse: { label: 'Coarse',
+    patch: { tick_count: 11, sub_tick_count: 0,
+      show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false },
+    sizes: { tick_length: 3.5, tick_width: 1.2, tick_label_font_size: 6 } },
+  classic: { label: 'Classic dial',
+    patch: { tick_count: 11, sub_tick_count: 4,
+      show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false },
+    sizes: { tick_length: 4, tick_width: 1.4,
+      sub_tick_length: 2, sub_tick_width: 0.7, tick_label_font_size: 6 } },
+  labels: { label: 'Labels only',
+    patch: { tick_count: 11, tick_length: 0, tick_width: 0, sub_tick_count: 0,
+      show_tick_labels: true, tick_label_step: 0, tick_label_stagger: false },
+    sizes: { tick_label_font_size: 6 } },
+  none: { label: 'No scale',
+    patch: { tick_count: 0, sub_tick_count: 0, show_tick_labels: false } },
 });
+
+/** What a preset writes onto the gauge it is dropped on. */
+const presetPatch = (/** @type {any} */ preset, /** @type {any} */ cfg) => {
+  const out = { ...preset.patch };
+  for (const [k, v] of Object.entries(preset.sizes || {})) {
+    const had = cfg?.[k];
+    if (had === undefined || had === null || had === '') out[k] = v;
+  }
+  return out;
+};
 
 const STYLE_FIELDS = [
   { id: '_section_shape',      label: '── 📐 Shape & Position',    type: 'section' },
@@ -237,35 +255,35 @@ const STYLE_FIELDS = [
   { id: 'tick_length',              label: 'Tick length',                  type: 'range',    min: 0, max: 6, step: 0.1,   placeholder: '3', framedBy: 'ticks'   },
   { id: 'tick_width',               label: 'Tick width',                 type: 'range',    min: 0, max: 5, step: 0.1,   placeholder: '1', framedBy: 'ticks'   },
   { id: 'tick_offset',              label: 'Tick offset from ring',        type: 'range',    min: -10, max: 10, step: 0.1,   placeholder: '0', framedBy: 'ticks'   },
-  { id: 'tick_color_type',          label: 'Tick colour mode',             type: 'select',   options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'tick_color',               label: 'Tick colour (fixed)',            type: 'color',   condition: cfg => cfg.tick_color_type !== 'adaptive' },
+  { id: 'tick_color_type', framedBy: 'ticks',          label: 'Tick colour mode',             type: 'select',   options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'tick_color', framedBy: 'ticks',               label: 'Tick colour (fixed)',            type: 'color',   condition: cfg => cfg.tick_color_type !== 'adaptive' },
 
   { id: '_section_sub_ticks',       label: '── SubTicks',                 type: 'subsection' },
   { id: 'sub_tick_count',           label: 'Sub-tick count (between)',type: 'range',    min: 0, max: 10, step: 1,   placeholder: '0', framedBy: 'sub_ticks'   },
   { id: 'sub_tick_length',          label: 'Sub-tick length',              type: 'range',    min: 0, max: 3, step: 0.1,   placeholder: '1.5', framedBy: 'sub_ticks' },
   { id: 'sub_tick_width',           label: 'Sub-tick width',             type: 'range',    min: 0, max: 3, step: 0.1,   placeholder: '0.5', framedBy: 'sub_ticks' },
   { id: 'sub_tick_offset',          label: 'Sub-tick offset from ring',    type: 'range',    min: -10, max: 10, step: 0.1,   placeholder: '0', framedBy: 'sub_ticks'   },
-  { id: 'sub_tick_color_type',      label: 'Sub-tick colour mode',         type: 'select',   options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'sub_tick_color',           label: 'Sub-tick colour (fixed)',        type: 'color',    condition: cfg => cfg.sub_tick_color_type !== 'adaptive' },
+  { id: 'sub_tick_color_type', framedBy: 'sub_ticks',      label: 'Sub-tick colour mode',         type: 'select',   options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
+  { id: 'sub_tick_color', framedBy: 'sub_ticks',           label: 'Sub-tick colour (fixed)',        type: 'color',    condition: cfg => cfg.sub_tick_color_type !== 'adaptive' },
 
   { id: '_section_ticks_label',     label: '── Tick Label',               type: 'subsection'},
   { id: 'show_tick_labels',         label: 'Show tick labels',        type: 'checkbox' },
-  { id: 'tick_label_step',        label: 'Label interval',             type: 'range',    min: 0, max: 10, step: 1, placeholder: 'Auto', condition: cfg => !!cfg.show_tick_labels,
+  { id: 'tick_label_step', framedBy: 'tick_labels',        label: 'Label interval',             type: 'range',    min: 0, max: 10, step: 1, placeholder: 'Auto', condition: cfg => !!cfg.show_tick_labels,
     hint: 'Left at nought the card labels as many ticks as stand clear of each other, and works that out again whenever the tick count, the type or the size of the card changes. A number of your own overrides it.' },
-  { id: 'tick_label_stagger',     label: 'Keep every label, on two rows', type: 'checkbox', condition: cfg => !!cfg.show_tick_labels && !parseInt(cfg.tick_label_step || 0),
+  { id: 'tick_label_stagger', framedBy: 'tick_labels',     label: 'Keep every label, on two rows', type: 'checkbox', condition: cfg => !!cfg.show_tick_labels && !parseInt(cfg.tick_label_step || 0),
     hint: 'Rather than labelling fewer ticks, send the crowded ones out by a row. Each label stays over its own tick.' },
   { id: 'tick_label_font_size',     label: 'Label font size',          type: 'range',    min: 0, max: 20, step: 0.5, placeholder: '7',  condition: cfg => !!cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_label_offset',        label: 'Label distance from ring',      type: 'range',    min: -15, max: 15, step: 0.1,  placeholder: '-8', condition: cfg => !!cfg.show_tick_labels, framedBy: 'tick_labels' },
-  { id: 'tick_label_decimals',      label: 'Label decimals',        type: 'range',    min: 0, max: 6, step: 1,   placeholder: '0',  condition: cfg => !!cfg.show_tick_labels },
-  { id: 'tick_label_color_type',    label: 'Label colour mode',            type: 'select',   options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_tick_labels },
-  { id: 'tick_label_color',         label: 'Label colour (fixed)',           type: 'color',    condition: cfg => !!cfg.show_tick_labels && cfg.tick_label_color_type !== 'adaptive' },
+  { id: 'tick_label_decimals', framedBy: 'tick_labels',      label: 'Label decimals',        type: 'range',    min: 0, max: 6, step: 1,   placeholder: '0',  condition: cfg => !!cfg.show_tick_labels },
+  { id: 'tick_label_color_type', framedBy: 'tick_labels',    label: 'Label colour mode',            type: 'select',   options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_tick_labels },
+  { id: 'tick_label_color', framedBy: 'tick_labels',         label: 'Label colour (fixed)',           type: 'color',    condition: cfg => !!cfg.show_tick_labels && cfg.tick_label_color_type !== 'adaptive' },
 
   // The four below decide nothing about how a scale reads and are set once in a
   // card's life if ever, so they sit behind a fold rather than between the
   // settings someone reaches for every time.
   { id: '_section_ticks_fine',      label: '── Fine tuning',              type: 'subsection' },
-  { id: 'tick_label_extra_length',  label: 'Label tick extra length',      type: 'range',    min: 0, max: 4, step: 0.1,   placeholder: '0',  condition: cfg => !!cfg.show_tick_labels },
-  { id: 'tick_label_inherit_color', label: 'Inherit colour from tick',        type: 'checkbox', condition: cfg => !!cfg.show_tick_labels },
+  { id: 'tick_label_extra_length', framedBy: 'tick_labels',  label: 'Label tick extra length',      type: 'range',    min: 0, max: 4, step: 0.1,   placeholder: '0',  condition: cfg => !!cfg.show_tick_labels },
+  { id: 'tick_label_inherit_color', framedBy: 'tick_labels', label: 'Inherit colour from tick',        type: 'checkbox', condition: cfg => !!cfg.show_tick_labels },
   { id: 'tick_label_crossfade_dur', label: 'Crossfade duration (s)',     type: 'range',    min: 0, max: 3, step: 0.1, placeholder: '0.4', condition: cfg => !!cfg.show_tick_labels },
   { id: 'multiplier_divide_ticks',  label: 'Divide tick labels by multiplier', type: 'checkbox', condition: cfg => !!cfg.show_tick_labels },
 
@@ -700,7 +718,7 @@ class ScGaugeEditor extends LitElement {
         rootSections.push(currentSection);
         currentSubsection = null; 
       } else if (f.type === 'subsection') {
-        currentSubsection = { title: f.label.replace('── ', ''), items: [] };
+        currentSubsection = { id: f.id, title: f.label.replace('── ', ''), items: [] };
         currentSection.subsections.push(currentSubsection);
       } else {
         if (currentSubsection) {
@@ -720,10 +738,15 @@ class ScGaugeEditor extends LitElement {
       } else {
         const detailKey = `g_${idx}_${sec.title}`;
         if (this._expanded[detailKey] === undefined) this._expanded[detailKey] = false;
-        
+        // A part can ask for a subsection rather than a section - the ticks,
+        // the subticks and the labels are three folds inside one - and a fold
+        // inside a shut fold is no use, so the section opens with it.
+        const inside = sec.subsections.some(ss => ss.id && ss.id === this.priority);
+        const wanted = this.priority === sec.id || inside;
+
         return html`
-          <details class="inner-section ${this.priority === sec.id ? 'wanted' : ''}" data-section=${sec.id}
-                   ?open=${this._expanded[detailKey] || this.priority === sec.id}
+          <details class="inner-section ${wanted ? 'wanted' : ''}" data-section=${sec.id}
+                   ?open=${this._expanded[detailKey] || wanted}
                    @toggle=${e => this._expanded[detailKey] = e.target.open}>
             <summary style="display:flex; justify-content:space-between; align-items:center;">
               <span style="flex: 1;">${sec.title}</span>
@@ -743,8 +766,9 @@ class ScGaugeEditor extends LitElement {
               ${sec.subsections.map(subsec => {
                 const subDetailKey = `g_${idx}_${sec.title}_${subsec.title}`;
                 if (this._expanded[subDetailKey] === undefined) this._expanded[subDetailKey] = false;
+                const subWanted = !!subsec.id && subsec.id === this.priority;
                 return html`
-                  <details class="inner-section" style="margin-top: 8px; border-color: var(--divider-color, #444); background: rgba(0,0,0,0.15);" ?open=${this._expanded[subDetailKey]} @toggle=${e => this._expanded[subDetailKey] = e.target.open}>
+                  <details class="inner-section ${subWanted ? 'wanted' : ''}" data-section=${subsec.id || ''} style="margin-top: 8px; background: rgba(0,0,0,0.15);" ?open=${this._expanded[subDetailKey] || subWanted} @toggle=${e => this._expanded[subDetailKey] = e.target.open}>
                     <summary style="font-size: 13px; font-weight: 500;">
                       ↳ ${subsec.title}
                       <span style="font-size:10px;">▼</span>
@@ -789,8 +813,9 @@ class ScGaugeEditor extends LitElement {
              selected - drag either end of the needle, or use the buttons on
              and under its chip.`
       : RING_PARTS.has(framed.framedBy)
-      ? html`Distance and count are on the canvas while this one is selected -
-             drag its ring, or use the buttons under its chip.`
+      ? html`This one is on the canvas while it is selected - its distance is
+             the ring you drag, and the rest of what it is stands under its
+             chip.`
       : html`Size, weight and position are on the canvas while this one is
              selected - drag its frame or the corner of it, and use the button
              on its chip.`}</div>`;
@@ -861,7 +886,7 @@ class ScGaugeEditor extends LitElement {
               e.target.value = '';
               if (!preset) return;
               const n = structuredClone(gauges);
-              Object.assign(n[idx], preset.patch);
+              Object.assign(n[idx], presetPatch(preset, n[idx]));
               this.commitFn('gauges', n);
             }}>
               <option value="" selected>Choose a scale...</option>
