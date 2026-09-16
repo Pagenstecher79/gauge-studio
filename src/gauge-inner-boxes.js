@@ -104,18 +104,96 @@ export function estimateRect(part, scale) {
 }
 
 /**
+ * How far out the gauge reaches, in viewBox units.
+ *
+ * This is what `gauge_scale` means: the radius of the outermost thing the
+ * gauge draws, so a gauge at 1 fills its box and a gauge at 0.5 takes up half
+ * of it. Everything the gauge is made of is subtracted from here inwards.
+ *
+ * It used to mean the radius of the value ring alone, with the gap and the
+ * frame ring added on *top* - so a gauge grew out of its own measure, and a
+ * frame 5 units wide reached to 27.6 in a box that ends at 25. There was a
+ * unit of air to stop a thick ring touching the edge, which is the thing this
+ * reading makes impossible rather than merely unlikely.
+ *
+ * @param {number} scale the gauge's `gauge_scale`
+ */
+export function gaugeOuter(scale) {
+  return GAUGE_CENTER * (scale ?? 1);
+}
+
+/**
+ * What the frame ring takes off the outside, at this scale.
+ *
+ * Its own width and the air it leaves between itself and the value ring. A
+ * frame that is switched off takes nothing, which is why a gauge grows when
+ * it is switched off and shrinks when it is switched on - the box it has to
+ * live in did not change.
+ *
+ * @param {{frame_ring_active?: boolean, frame_ring_width?: number|string,
+ *          frame_ring_gap?: number|string}} cfg @param {number} scale
+ */
+export function frameBand(cfg, scale) {
+  if (!cfg || cfg.frame_ring_active !== true) return 0;
+  const w = Number.isFinite(Number(cfg.frame_ring_width)) ? Number(cfg.frame_ring_width) : 1.5;
+  const g = Number.isFinite(Number(cfg.frame_ring_gap)) ? Number(cfg.frame_ring_gap) : 1.5;
+  return (w + g) * (scale ?? 1);
+}
+
+/**
  * The ring the gauge is drawn on, in viewBox units.
  *
  * Half the stroke, because the ring is stroked about this radius rather than
- * inside it, and one unit of air so a thick ring does not touch the edge of
- * the box. The whole thing scales, so a gauge at 0.5 draws a ring half as far
- * from the centre.
+ * inside it, and whatever the frame ring has taken off the outside.
  *
  * @param {number} stroke the gauge's `stroke_width`
  * @param {number} scale the gauge's `gauge_scale`
+ * @param {number} [band] what `frameBand` answered for this gauge
  */
-export function ringRadius(stroke, scale) {
-  return (GAUGE_CENTER - (stroke || 0) / 2 - 1) * (scale || 1);
+export function ringRadius(stroke, scale, band = 0) {
+  return gaugeOuter(scale) - (band || 0) - (stroke || 0) / 2;
+}
+
+/**
+ * The scale a card written against the old reading has to be given to keep
+ * the picture it has, or `null` where it is already written against this one.
+ *
+ * What is reproduced exactly is the outermost radius, so a gauge keeps the
+ * room it took. Its value ring can still move by a fraction of a per cent,
+ * because the frame ring is scaled by this new number and was scaled by the
+ * old one - and a gauge that was reaching outside its box is clamped to the
+ * edge, which is the whole point of the change and the one case where the
+ * picture is meant to move.
+ *
+ * @param {any} cfg
+ */
+export function migrateGaugeScale(cfg) {
+  if (!cfg || cfg.scale_from_outer === true) return null;
+  const scale = Number.isFinite(Number(cfg.gauge_scale)) ? Number(cfg.gauge_scale) : 0.9;
+  const stroke = Number.isFinite(Number(cfg.stroke_width)) ? Number(cfg.stroke_width) : 3;
+  // The reading this replaces, written out: the value ring, then the gap and
+  // the frame stacked on the outside of it.
+  const wasRing = (GAUGE_CENTER - stroke / 2 - 1) * scale;
+  // What the card drew is the value ring, so that is what the translation
+  // keeps. Solving `ringRadius` for the new number rather than just dividing
+  // the old outer reach by 25 is not pedantry: the frame band is scaled too,
+  // so a larger scale widens the band, which would push the ring back in.
+  const band = frameBand(cfg, 1);
+  const reach = GAUGE_CENTER - band;
+  if (!(reach > 0)) return 1;
+  return Math.min(1, Math.max(0, (wasRing + stroke / 2) / reach));
+}
+
+/**
+ * The scale to draw this gauge at, whichever reading its card was written
+ * against. One read path, so the renderer and the editor cannot disagree.
+ *
+ * @param {any} cfg
+ */
+export function gaugeScaleOf(cfg) {
+  const migrated = migrateGaugeScale(cfg);
+  if (migrated !== null) return migrated;
+  return Number.isFinite(Number(cfg?.gauge_scale)) ? Number(cfg.gauge_scale) : 0.9;
 }
 
 /**
@@ -261,24 +339,76 @@ export const STROKE_MAX = 5;
 /**
  * The ring's inner edge, which is the edge of it that moves.
  *
- * A gauge's ring is centred on `ringRadius`, and that radius already carries
- * half the stroke: the outer edge therefore stands still at `(25 - 1) * scale`
- * however thick the ring is drawn, and all the thickness grows inward. So the
- * inner edge is the one thing a thickness can be dragged by.
+ * Where the ring's outer edge stands is not the ring's business: it is the
+ * gauge's reach less whatever the frame ring has taken off the outside, and
+ * it stays there however thick the ring is drawn. All the thickness grows
+ * inward, so the inner edge is the one thing a thickness can be dragged by.
  *
- * @param {number} stroke @param {number} scale
+ * @param {number} stroke @param {number} scale @param {number} [band]
  */
-export function ringInnerEdge(stroke, scale) {
-  return (GAUGE_CENTER - 1 - (stroke || 0)) * (scale || 1);
+/**
+ * What the frame ring's own two edges are, and the fields that would put an
+ * edge where the hand let go of it.
+ *
+ * The frame ring is the one band on a gauge with a thickness worth grabbing:
+ * every other ring is a circle at a radius, so one handle says all there is
+ * to say about it. This one has an outside, which is the gauge's outermost
+ * reach and therefore its size, and an inside, which is how wide the frame
+ * itself is drawn. Two edges, two numbers, and neither of them is the other.
+ *
+ * A gauge with no frame ring still has the outer edge - it is `scale * 25`
+ * whether anything is drawn on it or not - which is what lets the editor
+ * offer a ring that is not there.
+ */
+export const FRAME_WIDTH_MAX = 8;
+export const GAUGE_SCALE_MIN = 0.2;
+
+/** @param {any} cfg @param {number} scale */
+export function frameInnerEdge(cfg, scale) {
+  const w = cfg?.frame_ring_active === true
+    ? (Number.isFinite(Number(cfg.frame_ring_width)) ? Number(cfg.frame_ring_width) : 1.5) : 0;
+  return gaugeOuter(scale) - w * (scale ?? 1);
+}
+
+/**
+ * The outer edge dragged to `radius`, as a scale.
+ *
+ * `scale_from_outer` rides along because a drag is an edit, and an edit is
+ * the moment an old card stops being read the old way: the number written
+ * here is the new reading, and saying so in the same patch is what keeps the
+ * two from being mixed.
+ *
+ * @param {number} radius
+ */
+export function scaleFromRadius(radius) {
+  return { gauge_scale: Math.round(clamp(radius / GAUGE_CENTER, GAUGE_SCALE_MIN, 1) * 100) / 100,
+           scale_from_outer: true };
+}
+
+/**
+ * The inner edge dragged to `radius`, as a frame width.
+ *
+ * Divided by the scale, because the width is drawn multiplied by it: on a
+ * gauge at 0.5 the hand travels half as far as the number it is setting.
+ *
+ * @param {number} radius @param {number} scale
+ */
+export function frameWidthFromRadius(radius, scale) {
+  const s = scale || 1;
+  return { frame_ring_width: clamp(tenth((gaugeOuter(s) - radius) / s), 0, FRAME_WIDTH_MAX) };
+}
+
+export function ringInnerEdge(stroke, scale, band = 0) {
+  return gaugeOuter(scale) - (band || 0) - (stroke || 0);
 }
 
 /**
  * The thickness that would put that edge here - `ringInnerEdge` backwards.
  *
- * @param {number} radius @param {number} scale
+ * @param {number} radius @param {number} scale @param {number} [band]
  */
-export function strokeFromRadius(radius, scale) {
-  return clamp(tenth(GAUGE_CENTER - 1 - radius / (scale || 1)), 0, STROKE_MAX);
+export function strokeFromRadius(radius, scale, band = 0) {
+  return clamp(tenth(gaugeOuter(scale) - (band || 0) - radius), 0, STROKE_MAX);
 }
 
 /**

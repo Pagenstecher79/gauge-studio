@@ -51,7 +51,7 @@ const hasOwnBox = (cfg, slot) => !SC.gaugeIsResponsive(cfg, !!slot?.canvas);
  * The two are framed on the canvas in different ways, so the line that says so
  * has to say which.
  */
-const RING_PARTS = new Set(['gauge_ring', 'ticks', 'sub_ticks', 'tick_labels',
+const RING_PARTS = new Set(['frame_ring', 'gauge_ring', 'ticks', 'sub_ticks', 'tick_labels',
                             'pointer', 'pointer_center']);
 
 /**
@@ -112,7 +112,7 @@ const STYLE_FIELDS = [
   { id: 'gauge_start_angle',   label: 'Start position (° clockwise from the top)', type: 'range', min: 0, max: 359, step: 1, placeholder: '0',
                                fromStored: dialFromStartAngle, toStored: startAngleFromDial,
                                condition: cfg => (cfg.gauge_type ?? 'full') === 'full' },
-  { id: 'gauge_scale',         label: 'Scale',            type: 'range',    min: 0, max: 1, step: 0.01,  placeholder: '1'  },
+  { id: 'gauge_scale',         label: 'Scale',            type: 'range',    min: 0.2, max: 1, step: 0.01,  placeholder: '1', framedBy: 'frame_ring'  },
 
   // The anchor and the two offsets below place a gauge inside a box it does not
   // fill. A canvas element's box is that place - you drag it - so the renderer
@@ -129,13 +129,13 @@ const STYLE_FIELDS = [
   { id: 'gauge_offset_y',      label: 'Offset Y (px)',         type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0', condition: hasOwnBox },
 
   { id: '_section_frame',           label: '── ⭕ Frame Ring',               type: 'section'  },
-  { id: 'frame_ring_active',        label: 'Frame active',                 type: 'checkbox' },
-  { id: 'frame_ring_closed',        label: 'Closed circle',          type: 'checkbox', condition: cfg => !!cfg.frame_ring_active },
-  { id: 'frame_ring_width',         label: 'Width',                       type: 'range',    min: 0, max: 3, step: 0.1,  placeholder: '1.5', condition: cfg => !!cfg.frame_ring_active },
-  { id: 'frame_ring_gap',           label: 'Gap to gradient ring',   type: 'range',    min: 0, max: 3, step: 0.1,  placeholder: '1.5', condition: cfg => !!cfg.frame_ring_active },
-  { id: 'frame_ring_color_type',    label: 'Colour mode',                   type: 'select',   options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ], condition: cfg => !!cfg.frame_ring_active },
-  { id: 'frame_ring_color',         label: 'Colour (fixed)',                  type: 'color',    condition: cfg => !!cfg.frame_ring_active && cfg.frame_ring_color_type !== 'adaptive' },
-  { id: 'frame_ring_opacity',       label: 'Opacity',                    type: 'range',    min: 0, max: 1, step: 0.01,  placeholder: '1.0', condition: cfg => !!cfg.frame_ring_active },
+  { id: 'frame_ring_active',        label: 'Frame active',                 type: 'checkbox', framedBy: 'frame_ring' },
+  { id: 'frame_ring_closed',        label: 'Closed circle',          type: 'checkbox', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
+  { id: 'frame_ring_width',         label: 'Width',                       type: 'range',    min: 0, max: 8, step: 0.1,  placeholder: '1.5', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
+  { id: 'frame_ring_gap',           label: 'Gap to gradient ring',   type: 'range',    min: 0, max: 6, step: 0.1,  placeholder: '1.5', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
+  { id: 'frame_ring_color_type',    framedBy: 'frame_ring', label: 'Colour mode',                   type: 'select',   options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ], condition: cfg => !!cfg.frame_ring_active },
+  { id: 'frame_ring_color',         framedBy: 'frame_ring', label: 'Colour (fixed)',                  type: 'color',    condition: cfg => !!cfg.frame_ring_active && cfg.frame_ring_color_type !== 'adaptive' },
+  { id: 'frame_ring_opacity',       label: 'Opacity',                    type: 'range',    min: 0, max: 1, step: 0.01,  placeholder: '1.0', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
 
   { id: '_section_bg',           label: '── 🖼️ Background',             type: 'section' },
   { id: 'bg_mode',               label: 'Background mode',          type: 'select', options: [ { value: 'none', label: 'None' }, { value: 'adaptive', label: 'Adaptive (theme)' }, { value: 'solid', label: 'Solid colour' }, { value: 'linear', label: 'Linear gradient' }, { value: 'radial', label: 'Radial gradient' } ] },
@@ -822,6 +822,15 @@ class ScGaugeEditor extends LitElement {
              how it is coloured, under its chip. The list of stops stays here:
              a row of colours to be dragged about is not a control that fits
              on a dial.`
+      : framed.framedBy === 'frame_ring'
+      // Two edges that are two different settings, which is worth spelling
+      // out: nothing else on a gauge is dragged by the outside of it, and a
+      // gauge with no frame drawn still has that outer edge to be sized by.
+      ? html`The frame ring is on the canvas while it is selected, and it has
+             two edges: drag the outside to set how far the gauge reaches, and
+             the inside to set how wide the frame is drawn. A gauge with no
+             frame still shows the outer edge, faintly, because that is what
+             its size is. The rest of what the frame is stands under its chip.`
       : framed.framedBy === 'pointer'
       ? html`Shape, length and offset are on the canvas while this one is
              selected - drag either end of the needle, or use the buttons on

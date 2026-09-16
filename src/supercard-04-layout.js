@@ -13,7 +13,8 @@ import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
 import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
          needleEnds, needleFromRadius, needleSlide,
-         ringInnerEdge, strokeFromRadius, alignParts } from "./gauge-inner-boxes.js";
+         ringInnerEdge, strokeFromRadius, alignParts, frameBand, gaugeScaleOf, gaugeOuter,
+         frameInnerEdge, scaleFromRadius, frameWidthFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
@@ -714,11 +715,14 @@ const COLOUR_MODE = Object.freeze([
 /** The pair of rows that says how a mark is coloured, for whichever mark. */
 const colourRows = (/** @type {string} */ mode, /** @type {string} */ key,
                     /** @type {string} */ what, /** @type {string} */ dflt,
-                    /** @type {string} */ fallback) => [
+                    /** @type {string} */ fallback,
+                    /** @type {((cfg: any) => boolean)=} */ when) => [
   { key: mode, icon: '\u{1F3A8}', what: what + ' colour', picks: COLOUR_MODE,
+    condition: when,
     read: (/** @type {any} */ cfg) => cfg[mode] || fallback },
   { icon: '\u25A0', what: 'fixed ' + what + ' colour', paint: true,
-    condition: (/** @type {any} */ cfg) => (cfg[mode] || fallback) !== 'adaptive',
+    condition: (/** @type {any} */ cfg) => (cfg[mode] || fallback) !== 'adaptive'
+                                        && (!when || when(cfg)),
     read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
     patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }) },
 ];
@@ -859,9 +863,9 @@ const GAUGE_RINGS = Object.freeze({
     label: 'Ring', section: '_section_color',
     on: () => true,
     radiusOf: (/** @type {any} */ cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
-      ringInnerEdge(SC.safeFloat(cfg.stroke_width, 3), scale),
+      ringInnerEdge(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale)),
     fromRadius: (/** @type {number} */ r, /** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
-      ({ stroke_width: strokeFromRadius(r, scale) }),
+      ({ stroke_width: strokeFromRadius(r, scale, frameBand(_cfg, scale)) }),
     // How far the ring goes round is the ring's own business, and the ring is
     // what is in hand while this is showing. Two values, so it reads as the
     // switch it is rather than as a list with two things in it.
@@ -920,6 +924,54 @@ const GAUGE_RINGS = Object.freeze({
                 { value: 'superfine', label: 'Superfine (48\u00D7)', short: '48\u00D7' },
                 { value: 'ultrafine', label: 'Ultrafine (96\u00D7)', short: '96\u00D7' },
                 { value: 'megafine', label: 'Megafine (192\u00D7)', short: '192\u00D7' }] },
+    ],
+  },
+  // The one band on a gauge that has a thickness worth grabbing, and the only
+  // one with two edges that mean different things. The outside is how far the
+  // gauge reaches at all - `gauge_scale` - so dragging it in shrinks the whole
+  // dial; the inside is how wide the frame is drawn, and pulling it inwards
+  // makes the frame fat, which pushes everything else in with it.
+  //
+  // Always live, even with no frame drawn: the outer edge exists either way -
+  // it is `scale * 25` whether anything is painted on it or not - so a gauge
+  // with the frame switched off still offers it, as a virtual ring, and is
+  // sized by the same handle. That is why this one has no `turnOff`: the
+  // minus would take away the only way to set a gauge's size. The frame
+  // itself is switched under the chip instead, where it reads as what it is.
+  frame_ring: {
+    label: 'Frame', section: '_section_frame',
+    hint: 'drag the outside to size the gauge, the inside to widen the frame',
+    on: () => true,
+    ghost: (/** @type {any} */ cfg) => cfg.frame_ring_active !== true,
+    radiusOf: (/** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
+      gaugeOuter(scale),
+    edges: {
+      outer: { what: "the gauge's size",
+        radiusOf: (/** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
+          gaugeOuter(scale),
+        fromRadius: (/** @type {number} */ r) => scaleFromRadius(r) },
+      // Nothing to take hold of while no frame is drawn: the two edges are the
+      // same circle then, and a second band on top of the first is a handle
+      // nobody can tell from the one under it.
+      inner: { what: "the frame's width",
+        condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true,
+        radiusOf: (/** @type {any} */ cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
+          frameInnerEdge(cfg, scale),
+        fromRadius: (/** @type {number} */ r, /** @type {any} */ _cfg, /** @type {number} */ _ring,
+                     /** @type {number} */ scale) => frameWidthFromRadius(r, scale) },
+    },
+    steps: [
+      { key: 'frame_ring_active', icon: '\u2B55', what: 'frame drawn', flag: true },
+      { key: 'frame_ring_closed', icon: '\u25EF', what: 'closed circle', flag: true,
+        condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true },
+      { key: 'frame_ring_gap', icon: '\u2195', by: 0.1, min: 0, max: 6, dflt: 1.5,
+        what: 'gap to the ring inside it',
+        condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true },
+      { key: 'frame_ring_opacity', icon: '\u25D1', by: 0.05, min: 0, max: 1, dflt: 1,
+        what: 'opacity',
+        condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true },
+      ...colourRows('frame_ring_color_type', 'frame_ring_color', 'frame', '#505050', 'fixed',
+                    (/** @type {any} */ cfg) => cfg.frame_ring_active === true),
     ],
   },
   ticks: {
@@ -1068,9 +1120,29 @@ const ringPartAt = (/** @type {any} */ spec, /** @type {any} */ cfg,
                 : ringPartRadius(ring, SC.safeFloat(cfg[spec.offset], spec.doffset), scale);
 
 const ringPartPatch = (/** @type {any} */ spec, /** @type {number} */ r, /** @type {any} */ cfg,
-                       /** @type {number} */ ring, /** @type {number} */ scale) =>
-  spec.fromRadius ? spec.fromRadius(r, cfg, ring, scale)
-                  : { [spec.offset]: offsetFromRadius(ring, r, scale, spec.limit) };
+                       /** @type {number} */ ring, /** @type {number} */ scale,
+                       /** @type {string|null} */ edge = null) => {
+  const e = edge && spec.edges?.[edge];
+  if (e) return e.fromRadius(r, cfg, ring, scale);
+  return spec.fromRadius ? spec.fromRadius(r, cfg, ring, scale)
+                         : { [spec.offset]: offsetFromRadius(ring, r, scale, spec.limit) };
+};
+
+/**
+ * The circles a ring puts on the drawing: one, or one per edge for a band
+ * that has a thickness of its own.
+ *
+ * @param {any} spec @param {any} cfg @param {number} ring @param {number} scale
+ */
+const ringBands = (spec, cfg, ring, scale) => {
+  if (!spec.edges) {
+    return [{ edge: null, r: Math.abs(ringPartAt(spec, cfg, ring, scale)),
+              what: spec.label.toLowerCase() }];
+  }
+  return Object.entries(spec.edges)
+    .filter(([, e]) => !e.condition || e.condition(cfg))
+    .map(([edge, e]) => ({ edge, r: Math.abs(e.radiusOf(cfg, ring, scale)), what: e.what }));
+};
 
 /**
  * Where each ring's offer stands on its ring, in degrees clockwise from three
@@ -1102,8 +1174,8 @@ const NEEDLE_ENDS = Object.freeze({
   tail: { what: 'tail' },
 });
 
-const RING_CHIP_ANGLE = Object.freeze({ gauge_ring: 120, ticks: -90, sub_ticks: -50,
-                                       tick_labels: 10, pointer_center: 200 });
+const RING_CHIP_ANGLE = Object.freeze({ frame_ring: 160, gauge_ring: 120, ticks: -90,
+                                       sub_ticks: -50, tick_labels: 10, pointer_center: 200 });
 
 /** How long Apply stays on "Saved" before it is a button again. */
 const APPLY_SAVED_MS = 2000;
@@ -2190,6 +2262,10 @@ class ScCanvasEditor extends LitElement {
         stroke-dasharray: 1.2 1.2; opacity: 0.5;
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
       .ring-band.sel { stroke: var(--sc-part-sel); }
+      /* The edge of a ring nobody has drawn. It still sets the gauge's size,
+         so it has to be reachable - but a longer dash and less of it says it
+         is a measure rather than something painted on the card. */
+      .ring-band.ghost { stroke-dasharray: 0.6 2.4; opacity: 0.35; }
       .ring-hit { fill: none; stroke: transparent; stroke-width: 2.4;
         pointer-events: stroke; cursor: ns-resize; touch-action: none; }
       /* The needle itself, which selects the pointer and slides it in and out
@@ -3636,7 +3712,7 @@ class ScCanvasEditor extends LitElement {
         size: SC.safeFloat(cfg[spec.size], spec.dsize),
       },
       pxPerUnit: this._innerRects?.parts?.[part]?.pxPerUnit || 1,
-      scale: SC.safeFloat(cfg.gauge_scale, 0.9) || 1,
+      scale: gaugeScaleOf(cfg) || 1,
       started: false,
     };
     this._ptr = { x: e.clientX, y: e.clientY };
@@ -3681,8 +3757,8 @@ class ScCanvasEditor extends LitElement {
     if (!line || !cfg || !svgBox) return null;
     const gauge = root.querySelector(`.el[data-item-id="${this._inner}"] sc-gauge`);
     const a = needleAngle(gauge?.shadowRoot?.querySelector('[data-sc-needle]')) * Math.PI / 180;
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
-    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale);
+    const scale = gaugeScaleOf(cfg) || 1;
+    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale));
     const cx = GAUGE_VIEW / 2;
     const cy = cx;
     const ends = needleEnds(SC.safeFloat(cfg.pointer_offset, 2),
@@ -3771,7 +3847,7 @@ class ScCanvasEditor extends LitElement {
       if (!spec) return;
       const dist = Math.hypot(p.x - d.cx, p.y - d.cy) / d.pxPerUnit;
       const cfg = this._innerTarget?.cfg || {};
-      this._writeInner(ringPartPatch(spec, dist, cfg, d.ring, d.scale), d.started);
+      this._writeInner(ringPartPatch(spec, dist, cfg, d.ring, d.scale, d.end), d.started);
       d.started = true;
       return;
     }
@@ -3928,13 +4004,13 @@ class ScCanvasEditor extends LitElement {
     const r = svg?.getBoundingClientRect();
     if (!r?.width) return null;
     const cfg = this._innerTarget?.cfg || {};
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
+    const scale = gaugeScaleOf(cfg) || 1;
     const pxPerUnit = r.width / GAUGE_VIEW;
     return {
       cx: r.left + r.width / 2,
       cy: r.top + r.height / 2,
       pxPerUnit, scale,
-      ring: ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale),
+      ring: ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale)),
     };
   }
 
@@ -4006,7 +4082,7 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     const rects = this._innerRects;
     if (!target || !rects?.px) return;
-    const scale = SC.safeFloat(target.cfg.gauge_scale, 0.9) || 1;
+    const scale = gaugeScaleOf(target.cfg) || 1;
     const items = this._innerHeld.map((part) => {
       const spec = target.parts[part];
       const r = rects.parts?.[part];
@@ -4183,8 +4259,8 @@ class ScCanvasEditor extends LitElement {
     const bands = live.filter(([part, spec]) =>
       !spec.needle && !spec.spot && this._innerSel === part);
     const needles = live.filter(([, spec]) => spec.needle);
-    const scale = SC.safeFloat(cfg.gauge_scale, 0.9) || 1;
-    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale);
+    const scale = gaugeScaleOf(cfg) || 1;
+    const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale));
     const at = (/** @type {any} */ spec) => Math.abs(ringPartAt(spec, cfg, ring, scale));
     const C = GAUGE_VIEW / 2;
     // Every part of a gauge is drawn about its centre, the needle and its hub
@@ -4204,17 +4280,21 @@ class ScCanvasEditor extends LitElement {
       ${!bands.length ? '' : html`
       <svg class="ring-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
            style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;">
-        ${bands.map(([part, spec]) => {
+        ${bands.map(([part, spec]) => svg`${ringBands(spec, cfg, ring, scale).map((b) => {
           const c = cen;
-          const r = at(spec);
-          if (r < 0.5) return '';
+          if (b.r < 0.5) return '';
+          // A ring nobody has drawn is still shown, because its edge is what
+          // sets the gauge's size - but shown as the outline it is, so it does
+          // not read as a frame that is switched on.
+          const ghost = spec.ghost?.(cfg) ? 'ghost' : '';
           return svg`
-            <circle class="ring-band sel" cx=${c.x} cy=${c.y} r=${r}></circle>
-            <circle class="ring-hit" cx=${c.x} cy=${c.y} r=${r}
-                    @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'ring')}>
-              <title>${'Drag the ' + spec.label.toLowerCase() + ' in or out'}</title>
+            <circle class="ring-band sel ${ghost}" cx=${c.x} cy=${c.y} r=${b.r}></circle>
+            <circle class="ring-hit" cx=${c.x} cy=${c.y} r=${b.r}
+                    @pointerdown=${(/** @type {any} */ e) =>
+                      this._innerDown(e, part, 'ring', b.edge)}>
+              <title>${'Drag ' + b.what + ' in or out'}</title>
             </circle>`;
-        })}
+        })}`)}
       </svg>`}
       ${!needles.length ? '' : html`
       <svg class="ring-layer grip-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
@@ -4292,8 +4372,8 @@ class ScCanvasEditor extends LitElement {
     return html`
       <span class="ring-tag ${sel ? 'sel' : ''}" data-part=${part}
             style="left:${at.l}%; top:${at.t}%;"
-            title=${`${spec.label} - drag to move this out of the way, `
-                    + 'double-click to put it back'}
+            title=${`${spec.label}${spec.hint ? ' - ' + spec.hint : ''} - drag the chip `
+                    + 'to move it out of the way, double-click to put it back'}
             @dblclick=${() => this._putChipBack(part)}
             @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'chip')}>
         ${spec.label}

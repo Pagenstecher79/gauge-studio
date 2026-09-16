@@ -2,7 +2,7 @@ import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist
 import { normalizeStops } from "./gradient-stops.js";
 import { autoStep, staggerRows, ROW_GAP, rowBox, boxReach } from "./tick-labels.js";
 import { gaugeScale, NO_TIER_STATE, tickMultiplier, multiplierParts } from "./gauge-scale.js";
-import { ringRadius, ringPartRadius } from "./gauge-inner-boxes.js";
+import { ringRadius, ringPartRadius, gaugeOuter, frameBand, gaugeScaleOf } from "./gauge-inner-boxes.js";
 
 const SC = window.SupercardUtils;
 
@@ -402,9 +402,24 @@ class ScGauge extends LitElement {
     const customStart = parseFloat(this._get('gauge_start_angle', '-90'));
     const startAngle  = isSemi ? 135 : customStart;
     const totalAngle  = isSemi ? 270 : 360;
-    const scale  = safeFloat(this._get('gauge_scale', 0.9), 0.9);
-    const stroke = safeFloat(this._get('stroke_width', 3), 3);
-    const radius = ringRadius(stroke, scale);
+    // `gauge_scale` is how far out the gauge reaches, and everything it is
+    // made of is subtracted from there inwards - so a frame ring cannot push
+    // the drawing past the edge of the box, it can only eat into the dial.
+    // Read through `_get`, never off `this.config`: a gauge that inherits
+    // gets its numbers from the card above it, and reading the raw config
+    // here silently draws such a gauge at the template's size instead.
+    const geom = {
+      gauge_scale: this._get('gauge_scale', 0.9),
+      stroke_width: this._get('stroke_width', 3),
+      frame_ring_active: this._get('frame_ring_active', false) === true,
+      frame_ring_width: this._get('frame_ring_width', 1.5),
+      frame_ring_gap: this._get('frame_ring_gap', 1.5),
+      scale_from_outer: this._get('scale_from_outer', false) === true,
+    };
+    const scale  = gaugeScaleOf(geom);
+    const stroke = safeFloat(geom.stroke_width, 3);
+    const band   = frameBand(geom, scale);
+    const radius = ringRadius(stroke, scale, band);
     const range  = data.max - data.min;
     const pct    = Math.max(0, Math.min(1, (data.val - data.min) / (range || 1)));
     
@@ -670,7 +685,7 @@ class ScGauge extends LitElement {
       const fGap     = safeFloat(this._get('frame_ring_gap',    1.5),1.5) * scale;
       const fOpacity = safeFloat(this._get('frame_ring_opacity',1.0),1.0);
       const fCol     = resolveColor(this._get('frame_ring_color_type','fixed'), this._get('frame_ring_color',[80,80,80]));
-      const fRadius  = radius + stroke/2 + fGap + fStroke/2;
+      const fRadius  = gaugeOuter(scale) - fStroke/2;
       const fClosed  = this._get('frame_ring_closed',false) === true;
       const pulseFrameStroke = pulseFrameClass ? `stroke: ${animCol};` : `stroke: ${fCol};`;
       

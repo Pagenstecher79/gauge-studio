@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { offsetsFromDrag, fontFromResize, estimateRect, clamp,
          ringRadius, ringPartRadius, offsetFromRadius,
+         gaugeOuter, frameBand, gaugeScaleOf, migrateGaugeScale,
          OFFSET_LIMIT, FONT_MAX, FONT_MIN, GAUGE_CENTER,
          needleEnds, needleFromRadius, needleSlide, NEEDLE_CENTRE_SNAP,
-         ringInnerEdge, strokeFromRadius, alignParts} from './gauge-inner-boxes.js';
+         ringInnerEdge, strokeFromRadius, alignParts,
+         frameInnerEdge, scaleFromRadius, frameWidthFromRadius,
+         FRAME_WIDTH_MAX, GAUGE_SCALE_MIN } from './gauge-inner-boxes.js';
 
 describe('offsetsFromDrag', () => {
   it('turns pixels into viewBox units at the measured scale', () => {
@@ -82,16 +85,24 @@ describe('the ring', () => {
     // The renderer's own expression, kept here so the two cannot drift: a
     // frame that is not on the ring is a frame that lies about where a part is.
     const stroke = 4, scale = 0.9;
-    expect(ringRadius(stroke, scale)).toBeCloseTo((25 - stroke / 2 - 1) * scale);
+    expect(ringRadius(stroke, scale)).toBeCloseTo(25 * scale - stroke / 2);
+  });
+
+  it('gives the frame ring its room out of the gauge, not beside it', () => {
+    // The whole point: a wider frame eats into the dial rather than reaching
+    // past the edge of the box.
+    expect(ringRadius(3, 1, 0)).toBeCloseTo(23.5);
+    expect(ringRadius(3, 1, 6)).toBeCloseTo(17.5);
+    expect(25 * 1).toBeGreaterThanOrEqual(ringRadius(3, 1, 6) + 3 / 2 + 6);
   });
 
   it('shrinks with the gauge', () => {
-    expect(ringRadius(4, 0.5)).toBeCloseTo(ringRadius(4, 1) / 2);
+    expect(gaugeOuter(0.5)).toBeCloseTo(gaugeOuter(1) / 2);
   });
 
   it('holds its ground when a gauge says nothing about itself', () => {
-    expect(ringRadius(0, 1)).toBeCloseTo(24);
-    expect(ringRadius(undefined, undefined)).toBeCloseTo(24);
+    expect(ringRadius(0, 1)).toBeCloseTo(25);
+    expect(ringRadius(undefined, undefined)).toBeCloseTo(25);
   });
 
   it('puts a part inward for a negative offset and outward for a positive one', () => {
@@ -184,18 +195,18 @@ describe('the needle', () => {
   });
 
   it('lands the tail on the pivot when the length is not a tenth', () => {
-    // A stroke of 0.5 puts the ring on 23.75, which is not a tenth. The rest
+    // A stroke of 0.5 puts the ring on 24.75, which is not a tenth. The rest
     // is meant literally, so this is the one drag written finer.
     const ring = ringRadius(0.5, 1);
     const p = needleFromRadius('tail', 0.2, 0, 10, ring, 1);
-    expect(p.pointer_length).toBe(23.75);
+    expect(p.pointer_length).toBe(24.75);
     expect(needleEnds(0, p.pointer_length, ring, 1).tail).toBe(0);
   });
 
   it('keeps the tenth for every length that is not the rest', () => {
     const ring = ringRadius(0.5, 1);
     const p = needleFromRadius('tail', 2, 0, 10, ring, 1);
-    expect(p.pointer_length).toBe(21.8);
+    expect(p.pointer_length).toBe(22.8);
   });
 
   it('measures the rest in what is drawn, not in what is written', () => {
@@ -217,19 +228,20 @@ describe('the needle', () => {
 
 describe('the ring thickness', () => {
   it('grows inward from an outer edge that stands still', () => {
-    expect(ringInnerEdge(3, 1)).toBe(21);
-    expect(ringInnerEdge(5, 1)).toBe(19);
-    expect(ringRadius(3, 1) + 3 / 2).toBe(24);
-    expect(ringRadius(5, 1) + 5 / 2).toBe(24);
+    expect(ringInnerEdge(3, 1)).toBe(22);
+    expect(ringInnerEdge(5, 1)).toBe(20);
+    expect(ringRadius(3, 1) + 3 / 2).toBe(25);
+    expect(ringRadius(5, 1) + 5 / 2).toBe(25);
   });
 
   it('scales with the gauge', () => {
-    expect(ringInnerEdge(3, 0.9)).toBeCloseTo(18.9, 6);
+    expect(ringInnerEdge(3, 0.9)).toBeCloseTo(25 * 0.9 - 3, 6);
   });
 
   it('reads an edge back as the thickness that drew it', () => {
-    expect(strokeFromRadius(21, 1)).toBe(3);
-    expect(strokeFromRadius(18.9, 0.9)).toBe(3);
+    expect(strokeFromRadius(22, 1)).toBe(3);
+    expect(strokeFromRadius(25 * 0.9 - 3, 0.9)).toBe(3);
+    expect(strokeFromRadius(ringInnerEdge(3, 1, 6), 1, 6)).toBe(3);
   });
 
   it('never writes a thickness its own slider would refuse', () => {
@@ -342,5 +354,122 @@ describe('alignParts', () => {
       item('label', { l: 1000, t: 0, w: 10, h: 10 }, { x: 0, y: 0 }),
     ], 'left');
     expect(out.label_offset_x).toBe(-25);
+  });
+});
+
+
+describe('what gauge_scale means', () => {
+  it('is the gauge\'s reach, so a frame ring cannot push past the box', () => {
+    const cfg = { gauge_scale: 1, stroke_width: 3, scale_from_outer: true,
+                  frame_ring_active: true, frame_ring_width: 8, frame_ring_gap: 1.5 };
+    const s = gaugeScaleOf(cfg);
+    const band = frameBand(cfg, s);
+    expect(ringRadius(3, s, band) + 3 / 2 + band).toBeCloseTo(gaugeOuter(s));
+    expect(gaugeOuter(s)).toBeLessThanOrEqual(25);
+  });
+
+  it('shrinks the dial when the frame is widened', () => {
+    const thin = { gauge_scale: 1, stroke_width: 3, scale_from_outer: true,
+                   frame_ring_active: true, frame_ring_width: 1.5, frame_ring_gap: 1.5 };
+    const fat = { ...thin, frame_ring_width: 6 };
+    const r = (c) => ringRadius(3, gaugeScaleOf(c), frameBand(c, gaugeScaleOf(c)));
+    expect(r(fat)).toBeLessThan(r(thin));
+  });
+
+  it('takes nothing off for a frame ring that is switched off', () => {
+    expect(frameBand({ frame_ring_width: 8, frame_ring_gap: 4 }, 1)).toBe(0);
+    expect(frameBand(null, 1)).toBe(0);
+  });
+});
+
+describe('a card written against the older reading', () => {
+  const old = (stroke, scale) => (25 - stroke / 2 - 1) * scale;
+
+  it('keeps the room it took, to the unit', () => {
+    for (const cfg of [{ gauge_scale: 0.9, stroke_width: 3 },
+                       { gauge_scale: 0.5, stroke_width: 5 },
+                       { gauge_scale: 1, stroke_width: 0 }]) {
+      const wasOuter = (25 - cfg.stroke_width / 2 - 1) * cfg.gauge_scale + cfg.stroke_width / 2;
+      expect(gaugeOuter(gaugeScaleOf(cfg))).toBeCloseTo(wasOuter, 6);
+    }
+  });
+
+  it('draws a framed gauge\'s value ring exactly where it was', () => {
+    // The frame band is scaled too, so a migration that only divided the old
+    // outer reach by 25 widened the band and pulled the ring inwards.
+    for (const cfg of [{ gauge_scale: 0.8, stroke_width: 3, frame_ring_active: true,
+                         frame_ring_width: 1.5, frame_ring_gap: 1.5 },
+                       { gauge_scale: 0.6, stroke_width: 4, frame_ring_active: true,
+                         frame_ring_width: 4, frame_ring_gap: 2 }]) {
+      const s = gaugeScaleOf(cfg);
+      expect(ringRadius(cfg.stroke_width, s, frameBand(cfg, s)))
+        .toBeCloseTo(old(cfg.stroke_width, cfg.gauge_scale), 6);
+    }
+  });
+
+  it('keeps the dial where it was when no frame ring is on', () => {
+    const cfg = { gauge_scale: 0.9, stroke_width: 3 };
+    expect(ringRadius(3, gaugeScaleOf(cfg))).toBeCloseTo(old(3, 0.9), 6);
+  });
+
+  it('is clamped to the edge where it used to reach outside', () => {
+    const cfg = { gauge_scale: 0.9, stroke_width: 3, frame_ring_active: true,
+                  frame_ring_width: 5, frame_ring_gap: 1.5 };
+    expect(gaugeScaleOf(cfg)).toBe(1);
+    const band = frameBand(cfg, 1);
+    expect(ringRadius(3, 1, band) + 1.5 + band).toBeCloseTo(25);
+  });
+
+  it('is left alone once the card says which reading it means', () => {
+    expect(migrateGaugeScale({ gauge_scale: 0.7, scale_from_outer: true })).toBe(null);
+    expect(gaugeScaleOf({ gauge_scale: 0.7, scale_from_outer: true })).toBe(0.7);
+  });
+
+  it('answers the template default for a card that says nothing at all', () => {
+    expect(gaugeScaleOf({ scale_from_outer: true })).toBe(0.9);
+  });
+});
+
+describe("the frame ring's two edges", () => {
+  const framed = (w) => ({ frame_ring_active: true, frame_ring_width: w, frame_ring_gap: 1.5 });
+
+  it('puts the outside where the gauge reaches to, whatever the frame is', () => {
+    for (const w of [0, 1.5, 8]) expect(gaugeOuter(1)).toBe(25);
+    expect(frameInnerEdge(framed(1.5), 1)).toBe(23.5);
+    expect(frameInnerEdge(framed(8), 1)).toBe(17);
+  });
+
+  it('has no width to speak of while no frame is drawn', () => {
+    // Both edges are the same circle then, which is what lets the editor
+    // draw one ghost band instead of two handles nobody can tell apart.
+    expect(frameInnerEdge({ frame_ring_width: 4 }, 1)).toBe(gaugeOuter(1));
+  });
+
+  it('measures the inside in the gauge\'s own units, not the screen\'s', () => {
+    // A gauge at half size draws a 4-wide frame 2 units wide, so an edge two
+    // units in from the outside is a width of 4 and not of 2.
+    expect(frameWidthFromRadius(gaugeOuter(0.5) - 2, 0.5)).toEqual({ frame_ring_width: 4 });
+  });
+
+  it('says which reading it means every time it writes a scale', () => {
+    expect(scaleFromRadius(20)).toEqual({ gauge_scale: 0.8, scale_from_outer: true });
+  });
+
+  it('cannot be dragged out of the card or down to nothing', () => {
+    expect(scaleFromRadius(40).gauge_scale).toBe(1);
+    expect(scaleFromRadius(0).gauge_scale).toBe(GAUGE_SCALE_MIN);
+    expect(frameWidthFromRadius(-50, 1).frame_ring_width).toBe(FRAME_WIDTH_MAX);
+    expect(frameWidthFromRadius(30, 1).frame_ring_width).toBe(0);
+  });
+
+  it('widens the frame by exactly what the hand covered', () => {
+    // The two edges are each other's arithmetic: putting the inner edge where
+    // a width would draw it gives that width back.
+    for (const w of [0.4, 1.5, 6]) {
+      for (const s of [1, 0.8, 0.5]) {
+        expect(frameWidthFromRadius(frameInnerEdge(framed(w), s), s))
+          .toEqual({ frame_ring_width: w });
+      }
+    }
   });
 });
