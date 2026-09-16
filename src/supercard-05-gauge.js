@@ -1,6 +1,7 @@
 import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops } from "./gradient-stops.js";
 import { autoStep, staggerRows, ROW_GAP, labelBox, boxReach } from "./tick-labels.js";
+import { gaugeScale, NO_TIER_STATE } from "./gauge-scale.js";
 import { ringRadius, ringPartRadius } from "./gauge-inner-boxes.js";
 
 const SC = window.SupercardUtils;
@@ -118,7 +119,7 @@ class ScGauge extends LitElement {
     super();
     this.SIZE = 50;
     this.CENTER = 25;
-    this._tierState = null;
+    this._tierState = NO_TIER_STATE;
     this._thresholdActive = false;
     this._bgColorThresholdActive = false;
     this._isInitialized = false;
@@ -147,52 +148,28 @@ class ScGauge extends LitElement {
     }
   }
 
+  /**
+   * The scale this render is drawn against.
+   *
+   * The arithmetic is `gaugeScale`, which is pure; what lives here is the one
+   * thing it cannot hold - where the two hystereses were on the render before
+   * this one.
+   */
   _calculateGaugeData(rawVal) {
-    const autoScale  = this._get('value_autoscale',   false) === true;
-    const autoRange  = this._get('value_autorange',   false) === true;
-    const dynamicMax = this._get('dynamic_max_scale', false) === true;
-    const hysPct     = parseFloat(this._get('autoscale_hysteresis', 10));
     const rawMin = this._get('min', ''), rawMax = this._get('max', '');
-    let userMin = (rawMin === '' || rawMin === null) ? 0   : parseFloat(rawMin);
-    let userMax = (rawMax === '' || rawMax === null) ? 100 : parseFloat(rawMax);
-    if (isNaN(userMin)) userMin = 0; if (isNaN(userMax)) userMax = 100;
-    let gaugeMin = userMin, gaugeMax = userMax, gaugeVal = rawVal;
-    let displayUnit = '', currentTierBase = 1, finalTier = 0;
-
-    if (autoRange) {
-      const absVal = isFinite(rawVal) ? Math.abs(rawVal) : 0;
-      const absMax = Math.abs(userMax) || 1;
-      const tiers = []; let t = 10;
-      while (t < absMax) { tiers.push(t); t *= 10; } tiers.push(absMax);
-      let idealIdx = tiers.findIndex(tier => absVal <= tier);
-      if (idealIdx === -1) idealIdx = tiers.length - 1;
-      if (this._tierState !== null) {
-        if (idealIdx > this._tierState) { if (absVal <= tiers[this._tierState]*(1+hysPct/100)) idealIdx = this._tierState; }
-        else if (idealIdx < this._tierState) { if (absVal > tiers[idealIdx]*(1-hysPct/100)) idealIdx = this._tierState; }
-      }
-      finalTier = Math.min(idealIdx, tiers.length - 1);
-      gaugeMin = userMin < 0 ? -tiers[finalTier] : 0; gaugeMax = tiers[finalTier]; gaugeVal = rawVal;
-    }
-    if (dynamicMax && !autoRange) {
-      const absVal = isFinite(rawVal) ? Math.abs(rawVal) : 0;
-      const trackedMax = Math.max(absVal, Math.abs(userMax));
-      gaugeMin = userMin < 0 ? -trackedMax : 0; gaugeMax = trackedMax; gaugeVal = rawVal;
-    }
-    if (autoScale) {
-      const absVal = isFinite(rawVal) ? Math.abs(rawVal) : 0;
-      let tier = 0; if (absVal >= 1000) tier = Math.floor(Math.log10(absVal) / 3);
-      if (this._tierState !== null && !autoRange) {
-        if (tier > this._tierState) { if (absVal < Math.pow(1000, this._tierState+1)*(1+hysPct/100)) tier = this._tierState; }
-        else if (tier < this._tierState) { if (absVal > Math.pow(1000, tier)*(1-hysPct/100)) tier = this._tierState; }
-      }
-      const prefixes = ['', 'k', 'M', 'G', 'T', 'P'];
-      finalTier = Math.min(tier, prefixes.length - 1);
-      currentTierBase = Math.pow(1000, finalTier);
-      gaugeMax /= currentTierBase; gaugeMin /= currentTierBase;
-      gaugeVal = rawVal / currentTierBase; displayUnit = prefixes[finalTier];
-    }
-    this._tierState = finalTier;
-    return { min: gaugeMin, max: gaugeMax, val: gaugeVal, unitPrefix: displayUnit, tierBase: currentTierBase, resultTier: finalTier };
+    const blank = (/** @type {any} */ v) => v === '' || v === null || v === undefined;
+    const data = gaugeScale({
+      value: rawVal,
+      min: blank(rawMin) ? 0 : parseFloat(rawMin),
+      max: blank(rawMax) ? 100 : parseFloat(rawMax),
+      autoRange:  this._get('value_autorange',   false) === true,
+      autoScale:  this._get('value_autoscale',   false) === true,
+      dynamicMax: this._get('dynamic_max_scale', false) === true,
+      hysteresis: parseFloat(this._get('autoscale_hysteresis', 10)),
+      state: this._tierState,
+    });
+    this._tierState = data.state;
+    return data;
   }
 
   _getParsedManualStops(stopsArray, min, max, unit = 'percent', gStart = min, gEnd = max) {
