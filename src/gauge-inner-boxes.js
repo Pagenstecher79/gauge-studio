@@ -138,6 +138,25 @@ export const POINTER_LENGTH_MAX = 50;
 export const POINTER_OFFSET_LIMIT = 10;
 
 /**
+ * How near the pivot the needle's tail may be let go and still be put exactly
+ * on it, in the gauge's own units.
+ *
+ * A needle that begins at the centre and one that begins a hair off it are
+ * different drawings, and only one of them is what anybody meant. The centre
+ * is the one radius on that line worth landing on exactly, and it is the one
+ * a hand cannot hit: it is behind the hub, where the tail is hidden by the
+ * very thing it is being lined up with.
+ *
+ * A few pixels at any ordinary size, and no more. The rest is there to catch
+ * a hand that is already on the pivot, not to pull one towards it: at a
+ * reach wide enough to feel like help it takes the last of the travel away,
+ * and the tail stops answering the hand over the stretch where it matters
+ * most. It also has to be pulled straight through - a tail dragged past the
+ * pivot and out the far side is a dial people draw on purpose.
+ */
+export const NEEDLE_CENTRE_SNAP = 0.4;
+
+/**
  * Where the needle's two ends stand, as radii from the pivot.
  *
  * The tip is the ring less the pointer's offset; the tail is a length back
@@ -163,6 +182,10 @@ export function needleEnds(offset, length, ring, scale) {
  * and the tip carries an offset while the tail stays, which is why the tip
  * writes both fields.
  *
+ * The tail rests on the pivot, within `NEEDLE_CENTRE_SNAP` of it. The tip has
+ * no such point: it is being lined up with a ring that is drawn, and where it
+ * should sit is something you can see.
+ *
  * @param {'tip' | 'tail'} end
  * @param {number} at the radius the end has been dragged to
  * @param {number} offset @param {number} length @param {number} ring @param {number} scale
@@ -171,7 +194,10 @@ export function needleFromRadius(end, at, offset, length, ring, scale) {
   const s = scale || 1;
   const ends = needleEnds(offset, length, ring, s);
   if (end === 'tail') {
-    return { pointer_length: clamp(tenth((ends.tip - at) / s), 0, POINTER_LENGTH_MAX) };
+    // The pivot is the one place on this line worth landing on exactly, and
+    // the tail is hidden behind the hub just as it gets there.
+    const to = Math.abs(at) <= NEEDLE_CENTRE_SNAP ? 0 : at;
+    return { pointer_length: clamp(tenth((ends.tip - to) / s), 0, POINTER_LENGTH_MAX) };
   }
   const off = clamp(tenth((ring - at) / s), -POINTER_OFFSET_LIMIT, POINTER_OFFSET_LIMIT);
   return {

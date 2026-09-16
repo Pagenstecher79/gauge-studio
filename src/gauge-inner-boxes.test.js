@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { offsetsFromDrag, fontFromResize, estimateRect, clamp,
          ringRadius, ringPartRadius, offsetFromRadius,
          OFFSET_LIMIT, FONT_MAX, FONT_MIN, GAUGE_CENTER,
-         needleEnds, needleFromRadius, needleSlide,
+         needleEnds, needleFromRadius, needleSlide, NEEDLE_CENTRE_SNAP,
          ringInnerEdge, strokeFromRadius } from './gauge-inner-boxes.js';
 
 describe('offsetsFromDrag', () => {
@@ -168,6 +168,35 @@ describe('the needle', () => {
 
   it('rounds to the tenth the sliders step in', () => {
     expect(needleFromRadius('tail', 3.33, 2, 10, 20, 0.9).pointer_length).toBe(16.5);
+  });
+
+  it('rests the tail on the pivot from either side of it', () => {
+    // The tip is at 18, so a tail exactly on the pivot is a length of 18.
+    for (const at of [NEEDLE_CENTRE_SNAP, 0, -NEEDLE_CENTRE_SNAP]) {
+      expect(needleFromRadius('tail', at, 2, 10, 20, 1)).toEqual({ pointer_length: 18 });
+    }
+  });
+
+  it('lets the tail through the pivot rather than sticking on it', () => {
+    const past = NEEDLE_CENTRE_SNAP + 0.5;
+    expect(needleFromRadius('tail', -past, 2, 10, 20, 1).pointer_length).toBe(18 + past);
+    expect(needleFromRadius('tail', past, 2, 10, 20, 1).pointer_length).toBe(18 - past);
+  });
+
+  it('measures the rest in what is drawn, not in what is written', () => {
+    // Half the scale draws the same needle half the size, so the same reach
+    // around the pivot is twice as many of the pointer's own units.
+    const p = needleFromRadius('tail', NEEDLE_CENTRE_SNAP, 2, 10, 20, 0.5);
+    expect(needleEnds(2, p.pointer_length, 20, 0.5).tail).toBe(0);
+  });
+
+  it('gives the tip no rest of its own - it has a ring to line up against', () => {
+    // The tip cannot reach the pivot anyway, its offset being the smaller
+    // field, so what is asserted here is that it lands where it was let go.
+    for (const at of [14, 14 + NEEDLE_CENTRE_SNAP, 14 - NEEDLE_CENTRE_SNAP]) {
+      const p = needleFromRadius('tip', at, 2, 10, 20, 1);
+      expect(needleEnds(p.pointer_offset, p.pointer_length, 20, 1).tip).toBe(at);
+    }
   });
 });
 

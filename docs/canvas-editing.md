@@ -58,6 +58,26 @@ one grip with a slop: under `CHIP_DRAG_SLOP` pixels nothing is written, and a
 press with a shaking hand stays a press. A handle needs no such guard - nobody
 reaches for a 2.4-unit circle by accident.
 
+The tail rests on the pivot, within `NEEDLE_CENTRE_SNAP` of it. A rest is
+worth adding where two drawings differ and only one of them is what anybody
+meant - a needle that starts at the centre against one that starts a hair off
+it - and where the hand cannot hit the value on its own: the tail is behind
+the hub exactly as it reaches the centre, hidden by the thing it is being
+lined up with. Keep such a rest **narrow** - a few pixels at an ordinary
+size. It is there to catch a hand already on the value, not to pull one
+towards it: a reach wide enough to feel like help takes the last of the
+travel away, and the handle stops answering the hand over the stretch where
+it matters most. It must also pull straight through; a tail dragged out the
+far side is a dial people draw on purpose and must not stick on the way. The
+tip gets none: it is lined up against a ring that is drawn, and where it
+should sit is something you can see.
+
+A rest lands on the value, not on the pixel, and a field that steps in tenths
+can only be so exact - at `gauge_scale: 0.95` the nearest tenth of a length
+leaves the tail three hundredths of a unit off the pivot. That is the
+slider's granularity showing through, not the rest failing, and it is the
+same limit the number in the form has.
+
 ## 3. Only one edge of a band can move
 
 A ring drawn with a stroke centred on radius `r` has its outer edge at
