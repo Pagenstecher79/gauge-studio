@@ -154,7 +154,18 @@ Not everything fits on a chip. What worked:
   shape, a weight. It steps round; the tooltip says what the *next* press will
   do, so the preposition belongs in the value's own label
   (`'to normal'`, `'a triangle'`) or the sentence reads wrong.
-- **Not a text field, not a colour picker.** Those stay in the form.
+- **A switch, a short list, a swatch.** A checkbox for something that is on or
+  off, a `<select>` of two or three words, and a swatch that opens the
+  browser's own colour control each take the three cells the buttons and the
+  number would, so every row still reads as one line of the grid. A swatch is
+  worth it because a colour is one of the things a mark *is*; a picker that
+  needs a dialog of its own is not.
+- **Not a text field, not a free colour value.** A name, an entity, an
+  `rgba()` someone types out - those stay in the form.
+- **All of it, or the part will be looked for in both places.** Once a chip
+  carries a part's settings it carries the whole of them, minus only what the
+  frame already does by being dragged. A chip with three of a part's eight
+  settings is a chip that has to be left again for the other five.
 
 Two layout notes that cost an iteration each:
 
@@ -177,6 +188,24 @@ Then the numbers moved under the selected chip, three lines deep, and landed on
 a neighbouring chip. **Whatever hangs off a label is part of that label's
 footprint.** Re-check the spacing whenever anything is added to it, and measure
 it - the gap is a number, not an impression.
+
+Spacing alone stopped being enough once a panel could be eight rows deep, and
+two rules finish the job:
+
+- **The panel stands over the other chips, not under them.** Under was the
+  first answer, on the reasoning that a chip is the only way to take a
+  different part in hand and must not be covered by something temporary. At
+  three rows they rarely met; at eight, a chip lying across the panel took rows
+  away with nothing to say that it had. The chips are still there underneath
+  and come back the moment the part is let go.
+- **The panel is measured and nudged back inside the canvas.** How tall it is
+  is a layout result, so nothing that places it can know it in advance: it is
+  measured once drawn, pushed off the far edge first and the near one second,
+  and capped in height against the canvas - not with a per cent, which would be
+  read against the element it hangs on rather than the canvas. The nudge
+  already applied is read back off the element rather than remembered, because
+  lit rewrites the whole style attribute whenever the chip moves and takes the
+  property with it.
 
 ## 11. The second kind is where the design is tested, the third is the proof
 

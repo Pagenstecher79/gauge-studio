@@ -704,19 +704,32 @@ class ScProgressbar extends LitElement {
         step = 100 / (tCount - 1); 
       }
       
+      // Where a tick sits across the bar. `full` pins both edges instead of
+      // one, which is what makes it span - it is an alignment, not a length.
       const getAlignCSS = (align, isHor) => { 
         if (isHor) { 
           if (align === 'start') return `top: 0; transform: translate(-50%, 0);`; 
           if (align === 'end') return `bottom: 0; transform: translate(-50%, 0);`; 
-          if (align === 'full') return `top: 0; transform: translate(-50%, 0);`; 
+          if (align === 'full') return `top: 0; bottom: 0; transform: translate(-50%, 0);`; 
           return `top: 50%; transform: translate(-50%, -50%);`; 
         } else { 
           if (align === 'start') return `left: 0; transform: translate(0, 50%);`; 
           if (align === 'end') return `right: 0; transform: translate(0, 50%);`; 
-          if (align === 'full') return `left: 0; transform: translate(0, 50%);`; 
+          if (align === 'full') return `left: 0; right: 0; transform: translate(0, 50%);`; 
           return `left: 50%; transform: translate(-50%, 50%);`; 
         } 
       };
+
+      // The length across the bar, or nothing at all where both edges are
+      // already pinned. A spanning tick that also carried a height would be
+      // saying two things about the same axis, and the old answer to that was
+      // to overwrite the length with 100% - which threw away a tick design the
+      // moment someone tried the alignment next to the one they wanted, and
+      // did not give it back when they changed their mind. The length is
+      // simply not asked for while the tick spans, and is there again the
+      // moment it does not.
+      const crossSize = (align, len, isHor) =>
+        align === 'full' ? '' : (isHor ? `height: ${len};` : `width: ${len};`);
       
       // NEW: Dual-adaptive colors for main ticks
       const isTickAdaptive = this._get('tick_color_adaptive', false);
@@ -751,8 +764,7 @@ class ScProgressbar extends LitElement {
           const isLast = Math.abs((i * step) - 100) < 0.1; 
           const hasLabel = (this._get('show_tick_labels', false) && i % lStep === 0);
           
-          let baseLen = rawTLen; 
-          if (tAlign === 'full') baseLen = '100%'; 
+          const baseLen = rawTLen; 
           let currentLen = baseLen; 
           
           if (hasLabel && labExtra !== '0px' && labExtra !== '0cqmin' && tAlign !== 'full') { 
@@ -761,8 +773,8 @@ class ScProgressbar extends LitElement {
           
           if (!(hideLast && isLast)) { 
             let styleBase = `position:absolute; pointer-events:none;`; 
-            if (isHoriz) styleBase += `left: ${p * 100}%; width: ${tWidth}; height: ${currentLen}; ${getAlignCSS(tAlign, isHoriz)}`; 
-            else styleBase += `bottom: ${p * 100}%; height: ${tWidth}; width: ${currentLen}; ${getAlignCSS(tAlign, isHoriz)}`; 
+            if (isHoriz) styleBase += `left: ${p * 100}%; width: ${tWidth}; ${crossSize(tAlign, currentLen, true)} ${getAlignCSS(tAlign, isHoriz)}`; 
+            else styleBase += `bottom: ${p * 100}%; height: ${tWidth}; ${crossSize(tAlign, currentLen, false)} ${getAlignCSS(tAlign, isHoriz)}`; 
             
             tickElementsEmptyArr.push(html`<div style="${styleBase} background:${tColorEmpty};"></div>`);
             tickElementsFilledArr.push(html`<div style="${styleBase} background:${tColorFilled};"></div>`);
@@ -782,16 +794,16 @@ class ScProgressbar extends LitElement {
             let activeSubLen = rawSubLen; 
             let activeSubMirror = subPos === 'main' ? tMirror : subMirror;
 
-            if (activeSubAlign === 'full') activeSubLen = '100%'; 
-            else if (activeSubLen.includes('%') && subPos === 'main' && baseLen.includes('%')) { 
+            if (activeSubAlign !== 'full'
+                && activeSubLen.includes('%') && subPos === 'main' && baseLen.includes('%')) { 
               activeSubLen = `calc(${baseLen} * (${parseFloat(rawSubLen) / 100}))`; 
             }
             for (let j = 1; j <= subCount; j++) {
               const subP = p + (j / (subCount + 1)) * (step / 100); 
               if (subP > 1.001) continue; 
               let subStyleBase = `position:absolute; pointer-events:none;`; 
-              if (isHoriz) subStyleBase += `left: ${subP * 100}%; width: ${subWidth}; height: ${activeSubLen}; ${getAlignCSS(activeSubAlign, isHoriz)}`; 
-              else subStyleBase += `bottom: ${subP * 100}%; height: ${subWidth}; width: ${activeSubLen}; ${getAlignCSS(activeSubAlign, isHoriz)}`; 
+              if (isHoriz) subStyleBase += `left: ${subP * 100}%; width: ${subWidth}; ${crossSize(activeSubAlign, activeSubLen, true)} ${getAlignCSS(activeSubAlign, isHoriz)}`; 
+              else subStyleBase += `bottom: ${subP * 100}%; height: ${subWidth}; ${crossSize(activeSubAlign, activeSubLen, false)} ${getAlignCSS(activeSubAlign, isHoriz)}`; 
               
               subtickElementsEmptyArr.push(html`<div style="${subStyleBase} background:${subColorEmpty};"></div>`);
               subtickElementsFilledArr.push(html`<div style="${subStyleBase} background:${subColorFilled};"></div>`);
@@ -819,8 +831,8 @@ class ScProgressbar extends LitElement {
           let cLen = (ct.length !== undefined && ct.length !== '' && String(ct.length).toLowerCase() !== 'main') ? parseDim(ct.length, rawTLen, u) : rawTLen; 
           if (cAlign === 'full') cLen = '100%';
           let ctStyleBase = `position:absolute; pointer-events:none;`; 
-          if (isHoriz) ctStyleBase += `left: ${p * 100}%; width: ${cWidth}; height: ${cLen}; ${getAlignCSS(cAlign, isHoriz)}`; 
-          else ctStyleBase += `bottom: ${p * 100}%; height: ${cWidth}; width: ${cLen}; ${getAlignCSS(cAlign, isHoriz)}`; 
+          if (isHoriz) ctStyleBase += `left: ${p * 100}%; width: ${cWidth}; ${crossSize(cAlign, cLen, true)} ${getAlignCSS(cAlign, isHoriz)}`; 
+          else ctStyleBase += `bottom: ${p * 100}%; height: ${cWidth}; ${crossSize(cAlign, cLen, false)} ${getAlignCSS(cAlign, isHoriz)}`; 
           
           tickElementsEmptyArr.push(html`<div style="${ctStyleBase} background:${cColor};"></div>`);
           tickElementsFilledArr.push(html`<div style="${ctStyleBase} background:${cColor};"></div>`);
@@ -1124,13 +1136,13 @@ const STYLE_FIELDS = [
   { type: 'note', framedWhen: 'ticks', label: 'The ticks are on the canvas while this bar is open - their number and where they sit are under the chip.' },
   { id: 'show_ticks',          label: 'Show ticks',        type: 'checkbox', condition: cfg => isLin(cfg), framedBy: 'ticks' },
   { id: 'tick_count',          label: 'Number of ticks (when interval is empty)', type: 'range',  min: 0, max: 51, step: 1, placeholder: '10',  condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
-  { id: 'tick_interval',       label: 'Tick interval (value step)', type: 'number', placeholder: 'e.g. 10', condition: cfg => isLin(cfg) && cfg.show_ticks },
-  { id: 'tick_hide_last',      label: 'Hide last tick line', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks },
+  { id: 'tick_interval',       label: 'Tick interval (value step)', type: 'number', placeholder: 'e.g. 10', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
+  { id: 'tick_hide_last',      label: 'Hide last tick line', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
   { id: 'tick_align',          label: 'Start point / alignment', type: 'select', options: [{value:'center', label:'Centered'}, {value:'start', label:'At edge (top/left)'}, {value:'end', label:'Opposite (bottom/right)'}, {value:'full', label:'Full width (100%)'}], condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
-  { id: 'tick_mirror_side',    label: 'Also mirror on other side', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && (cfg.tick_align === 'start' || cfg.tick_align === 'end') },
-  { id: 'tick_length',         label: 'Main tick length (%, px)', type: 'text', placeholder: '100%', condition: cfg => isLin(cfg) && cfg.show_ticks },
-  { id: 'tick_width',          label: 'Tick width (px or %)', type: 'text', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks },
-  { id: 'tick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks },
+  { id: 'tick_mirror_side',    label: 'Also mirror on other side', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && (cfg.tick_align === 'start' || cfg.tick_align === 'end'), framedBy: 'ticks' },
+  { id: 'tick_length',         label: 'Main tick length (%, px)', type: 'text', placeholder: '100%', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
+  { id: 'tick_width',          label: 'Tick width (px or %)', type: 'text', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
+  { id: 'tick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
   { id: 'tick_color',          label: 'Manual colour',        type: 'color',  placeholder: 'rgba(255,255,255,0.3)', condition: cfg => isLin(cfg) && cfg.show_ticks && !cfg.tick_color_adaptive },
 
   { id: '_section_segments',   label: '── 🧩 Segments (circle)',   type: 'section', condition: cfg => isCirc(cfg) },
@@ -1143,10 +1155,10 @@ const STYLE_FIELDS = [
   { id: 'show_subticks',       label: 'Show subticks',     type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'sub_ticks' },
   { id: 'subtick_count',       label: 'Count per interval',  type: 'number', placeholder: '4', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
   { id: 'subtick_pos',         label: 'Start point / alignment', type: 'select', options: [{value:'main', label:'Same as main ticks'}, {value:'center', label:'Centered'}, {value:'start', label:'At edge (top/left)'}, {value:'end', label:'Opposite (bottom/right)'}, {value:'full', label:'Full width (100%)'}], placeholder: 'main', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
-  { id: 'subtick_mirror_side', label: 'Also mirror on other side', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && (cfg.subtick_pos === 'start' || cfg.subtick_pos === 'end') },
-  { id: 'subtick_length',      label: 'Subtick length (% or px)',type: 'text', placeholder: '50%', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && cfg.subtick_pos !== 'full' },
-  { id: 'subtick_width',       label: 'Width (px or %)',    type: 'text', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks },
-  { id: 'subtick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', placeholder: 'false', default: false, condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks },
+  { id: 'subtick_mirror_side', label: 'Also mirror on other side', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && (cfg.subtick_pos === 'start' || cfg.subtick_pos === 'end'), framedBy: 'sub_ticks' },
+  { id: 'subtick_length',      label: 'Subtick length (% or px)',type: 'text', placeholder: '50%', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && cfg.subtick_pos !== 'full', framedBy: 'sub_ticks' },
+  { id: 'subtick_width',       label: 'Width (px or %)',    type: 'text', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
+  { id: 'subtick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', placeholder: 'false', default: false, condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
   { id: 'subtick_color',       label: 'Manual colour',        type: 'color', placeholder: 'rgba(255,255,255,0.2)', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && !cfg.subtick_color_adaptive },
 
   { id: '_section_custom_ticks', label: '── 📌 Custom Ticks', type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
@@ -1155,20 +1167,20 @@ const STYLE_FIELDS = [
   { id: '_section_tick_labels',label: '── 🔤 Tick Labels',        type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
   { type: 'note', framedWhen: 'tick_labels', label: 'The tick labels are on the canvas while this bar is open - how many are numbered and to how many places are under the chip.' },
   { id: 'show_tick_labels',    label: 'Show tick labels (numbers)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'tick_labels' },
-  { id: 'tick_labeled_extralength', label: 'Extra length at labels', type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
+  { id: 'tick_labeled_extralength', label: 'Extra length at labels', type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_label_step',     label: 'Only every Xth label (1=all)', type: 'number', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_decimals',label: 'Decimals',        type: 'number', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
-  { id: 'tick_labels_size',    label: 'Font size (CSS text)', type: 'text', placeholder: '10', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
-  { id: 'tick_labels_hide_unit', label: 'Hide unit', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
-  { id: 'tick_labels_hide_first', label: 'Hide first label (min)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
-  { id: 'tick_labels_hide_last', label: 'Hide last label (max)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
+  { id: 'tick_labels_size',    label: 'Font size (CSS text)', type: 'text', placeholder: '10', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
+  { id: 'tick_labels_hide_unit', label: 'Hide unit', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
+  { id: 'tick_labels_hide_first', label: 'Hide first label (min)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
+  { id: 'tick_labels_hide_last', label: 'Hide last label (max)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_rotation',  label: 'Text rotation', type: 'select', options: [
     { value: '0', label: '0° (horizontal)' },
     { value: '90', label: '90°' },
     { value: '-90', label: '-90°' },
     { value: '180', label: '180° (upside down)' }
   ], condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
-  { id: 'tick_labels_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
+  { id: 'tick_labels_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_color',   label: 'Custom colour',          type: 'color', placeholder: 'var(--secondary-text-color)', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels && !cfg.tick_labels_color_adaptive },
   { id: 'tick_labels_pos',     label: 'Positioning',        type: 'select', options: [{value:'start', label:'Before / above'}, {value:'end', label:'After / below'}, {value:'center', label:'Centered'}], condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
   { id: 'tick_labels_shift',   label: 'Offset from centre', type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },

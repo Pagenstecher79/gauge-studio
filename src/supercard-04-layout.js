@@ -675,6 +675,34 @@ const GAUGE_PARTS = Object.freeze({
 const LONG = '\u2195';
 const THICK = '\u2194';
 
+/**
+ * A mark's colour is stored the way the colour reader takes it - a hex string,
+ * an rgb(), or the [r,g,b] array older cards carry - and the browser's own
+ * colour control speaks nothing but #rrggbb, so a swatch reads through toRgb.
+ */
+const markHex = (/** @type {any} */ value, /** @type {string} */ dflt) => {
+  const rgb = SC.toRgb(value, { resolveVars: true });
+  return rgb ? SC.rgbToHex(rgb[0], rgb[1], rgb[2]) : dflt;
+};
+
+/** Fixed or adaptive: the same two answers for every mark a gauge draws. */
+const COLOUR_MODE = Object.freeze([
+  { value: 'fixed', label: 'Fixed', short: 'Fixed' },
+  { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
+]);
+
+/** The pair of rows that says how a mark is coloured, for whichever mark. */
+const colourRows = (/** @type {string} */ mode, /** @type {string} */ key,
+                    /** @type {string} */ what, /** @type {string} */ dflt,
+                    /** @type {string} */ fallback) => [
+  { key: mode, icon: '\u{1F3A8}', what: what + ' colour', picks: COLOUR_MODE,
+    read: (/** @type {any} */ cfg) => cfg[mode] || fallback },
+  { icon: '\u25A0', what: 'fixed ' + what + ' colour', paint: true,
+    condition: (/** @type {any} */ cfg) => (cfg[mode] || fallback) !== 'adaptive',
+    read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
+    patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }) },
+];
+
 const GAUGE_RINGS = Object.freeze({
   // The gauge's own ring, framed by the edge of it that moves. First in the
   // list so every other band is drawn over it rather than under.
@@ -704,11 +732,12 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'tick_count', icon: '#', by: 1, min: 2, max: 50, dflt: 11, what: 'ticks' },
       { key: 'tick_length', icon: LONG, by: 0.1, min: 0, max: 6, dflt: 3, what: 'tick length' },
       { key: 'tick_width', icon: THICK, by: 0.1, min: 0, max: 5, dflt: 1, what: 'tick width' },
+      ...colourRows('tick_color_type', 'tick_color', 'tick', '#808080', 'fixed'),
     ],
   },
   sub_ticks: {
     label: 'Subticks', offset: 'sub_tick_offset', doffset: 0, limit: 10,
-    section: '_section_ticks',
+    section: '_section_sub_ticks',
     on: (/** @type {any} */ cfg) => SC.safeFloat(cfg.sub_tick_count, 0) > 0
                                  && SC.safeFloat(cfg.tick_count, 0) > 1,
     turnOn: { sub_tick_count: 4 }, turnOff: { sub_tick_count: 0 },
@@ -720,11 +749,12 @@ const GAUGE_RINGS = Object.freeze({
         what: 'sub-tick length' },
       { key: 'sub_tick_width', icon: THICK, by: 0.1, min: 0, max: 3, dflt: 0.5,
         what: 'sub-tick width' },
+      ...colourRows('sub_tick_color_type', 'sub_tick_color', 'sub-tick', '#646464', 'fixed'),
     ],
   },
   tick_labels: {
     label: 'Tick labels', offset: 'tick_label_offset', doffset: -8, limit: 15,
-    section: '_section_ticks',
+    section: '_section_ticks_label',
     on: (/** @type {any} */ cfg) => !!cfg.show_tick_labels
                                  && SC.safeFloat(cfg.tick_count, 0) > 0,
     turnOn: { show_tick_labels: true }, turnOff: { show_tick_labels: false },
@@ -732,8 +762,29 @@ const GAUGE_RINGS = Object.freeze({
     // box the gauge is clipped to - labels switched on and left at it are
     // labels nobody sees. The form's placeholder has always said -8.
     seed: { tick_count: 11, tick_label_offset: -8 },
-    steps: [{ key: 'tick_label_font_size', icon: 'A', by: 0.5, min: 1, max: 20, dflt: 7,
-              what: 'label type' }],
+    // The whole of what a row of numbers is: how many of the ticks are
+    // labelled, to how many places, how big, how far the tick they sit on is
+    // drawn out, and in what colour. The distance from the ring is the frame's
+    // own, so it is not repeated here.
+    steps: [
+      { key: 'tick_label_step', icon: '\u2261', by: 1, min: 0, max: 10, dflt: 0,
+        what: 'label interval' },
+      // Only while the interval is left to the card: sending crowded labels
+      // out by a row is the other answer to the same crowding, and a number of
+      // one's own has already answered it.
+      { key: 'tick_label_stagger', icon: '\u2934', what: 'two rows', flag: true,
+        condition: (/** @type {any} */ cfg) => !SC.safeFloat(cfg.tick_label_step, 0) },
+      { key: 'tick_label_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
+        what: 'decimals' },
+      { key: 'tick_label_font_size', icon: 'A', by: 0.5, min: 1, max: 20, dflt: 7,
+        what: 'label type' },
+      { key: 'tick_label_extra_length', icon: LONG, by: 0.1, min: 0, max: 4, dflt: 0,
+        what: 'extra length on a labelled tick' },
+      { key: 'tick_label_inherit_color', icon: '\u{1F517}', flag: true,
+        what: 'labelled tick takes the label colour' },
+      ...colourRows('tick_label_color_type', 'tick_label_color', 'label',
+                    '#ffffff', 'adaptive'),
+    ],
   },
   // The needle is not a ring at all - it is a line, and it is grabbed by
   // either end. A circle the base rides on cannot be pulled through the pivot,
@@ -936,46 +987,90 @@ const BAR_PARTS = Object.freeze({
     can: lineOnly,
     on: (/** @type {any} */ cfg) => !!cfg.show_ticks,
     turnOn: { show_ticks: true }, turnOff: { show_ticks: false },
+    // Only where the card says nothing: the numbers under the chip step what
+    // is there, and what is there was the renderer's fallback rather than
+    // anyone's answer. Writing one down the first time a part is switched on
+    // is not overwriting a design - there was none.
+    seed: { tick_count: 11, tick_length: '100%', tick_width: '1' },
     steps: [
       { key: 'tick_count', icon: '#', by: 1, min: 0, max: 51, dflt: 10, what: 'ticks' },
-      { key: 'tick_align', icon: '\u2195', what: 'tick alignment',
+      { key: 'tick_interval', icon: '\u2261', by: 1, min: 0, max: 1000, dflt: 0,
+        what: 'tick interval, in the value\u2019s own units - 0 leaves it to the count' },
+      { key: 'tick_length', icon: LONG, by: 5, min: 0, max: 400, dflt: '100%', unit: true,
+        what: 'tick length',
+        // A tick that is pinned to both edges has no length to set.
+        condition: (/** @type {any} */ cfg) => cfg.tick_align !== 'full' },
+      { key: 'tick_width', icon: THICK, by: 0.5, min: 0, max: 50, dflt: '1', unit: true,
+        what: 'tick width' },
+      { key: 'tick_align', icon: '\u25EB', what: 'tick alignment',
         read: (/** @type {any} */ cfg) => cfg.tick_align || 'center',
         picks: [{ value: 'center', label: 'Centred', short: 'Centre' },
                 { value: 'start', label: 'At the top or left edge', short: 'Edge' },
                 { value: 'end', label: 'At the opposite edge', short: 'Far' },
-                { value: 'full', label: 'The full width', short: 'Full' }] },
+                { value: 'full', label: 'Right across the bar', short: 'Across' }] },
+      { key: 'tick_mirror_side', icon: '\u{1FA9E}', flag: true, what: 'mirrored',
+        condition: (/** @type {any} */ cfg) =>
+          cfg.tick_align === 'start' || cfg.tick_align === 'end' },
+      { key: 'tick_hide_last', icon: '\u2702', flag: true, what: 'no last tick' },
+      { key: 'tick_color_adaptive', icon: '\u{1F3A8}', flag: true, what: 'adaptive colour' },
     ],
   },
   sub_ticks: {
     label: 'Subticks', section: '_section_subticks', spot: { l: 50, t: 88 },
     can: lineOnly,
     on: (/** @type {any} */ cfg) => !!cfg.show_ticks && !!cfg.show_subticks,
-    turnOn: { show_subticks: true }, turnOff: { show_subticks: false },
-    // Subticks are drawn between ticks, so a bar with none gets ticks too.
-    seed: { show_ticks: true },
+    // Subticks are drawn between ticks, and the renderer gates them on the
+    // ticks being shown - so switching them on brings the ticks with them
+    // rather than switching on something nobody can see.
+    turnOn: { show_subticks: true, show_ticks: true },
+    turnOff: { show_subticks: false },
+    seed: { tick_count: 11, subtick_length: '50%', subtick_width: '1' },
     steps: [
       { key: 'subtick_count', icon: '#', by: 1, min: 1, max: 20, dflt: 4,
         what: 'sub-ticks per interval' },
-      { key: 'subtick_pos', icon: '\u2195', what: 'sub-tick alignment',
+      { key: 'subtick_length', icon: LONG, by: 5, min: 0, max: 400, dflt: '50%', unit: true,
+        what: 'sub-tick length',
+        condition: (/** @type {any} */ cfg) => cfg.subtick_pos !== 'full' },
+      { key: 'subtick_width', icon: THICK, by: 0.5, min: 0, max: 50, dflt: '1', unit: true,
+        what: 'sub-tick width' },
+      { key: 'subtick_pos', icon: '\u25EB', what: 'sub-tick alignment',
         read: (/** @type {any} */ cfg) => cfg.subtick_pos || 'main',
         picks: [{ value: 'main', label: 'As the main ticks', short: 'As ticks' },
                 { value: 'center', label: 'Centred', short: 'Centre' },
                 { value: 'start', label: 'At the top or left edge', short: 'Edge' },
                 { value: 'end', label: 'At the opposite edge', short: 'Far' },
-                { value: 'full', label: 'The full width', short: 'Full' }] },
+                { value: 'full', label: 'Right across the bar', short: 'Across' }] },
+      { key: 'subtick_mirror_side', icon: '\u{1FA9E}', flag: true, what: 'mirrored',
+        condition: (/** @type {any} */ cfg) =>
+          cfg.subtick_pos === 'start' || cfg.subtick_pos === 'end' },
+      { key: 'subtick_color_adaptive', icon: '\u{1F3A8}', flag: true,
+        what: 'adaptive colour' },
     ],
   },
   tick_labels: {
     label: 'Tick labels', section: '_section_tick_labels', spot: { l: 75, t: 72 },
     can: lineOnly,
     on: (/** @type {any} */ cfg) => !!cfg.show_ticks && !!cfg.show_tick_labels,
-    turnOn: { show_tick_labels: true }, turnOff: { show_tick_labels: false },
-    seed: { show_ticks: true },
+    turnOn: { show_tick_labels: true, show_ticks: true },
+    turnOff: { show_tick_labels: false },
+    seed: { tick_count: 11, tick_labels_size: '10' },
     steps: [
-      { key: 'tick_label_step', icon: '#', by: 1, min: 1, max: 10, dflt: 1,
-        what: 'labelled ticks' },
+      { key: 'tick_label_step', icon: '#', by: 1, min: 1, max: 20, dflt: 1,
+        what: 'every Xth tick numbered' },
       { key: 'tick_labels_decimals', icon: '.0', by: 1, min: 0, max: 3, dflt: 0,
         what: 'decimal places' },
+      { key: 'tick_labels_size', icon: 'A', by: 1, min: 1, max: 80, dflt: '10', unit: true,
+        what: 'label type' },
+      { key: 'tick_labeled_extralength', icon: LONG, by: 1, min: 0, max: 200, dflt: '0',
+        unit: true, what: 'extra length on a numbered tick',
+        // The extra length is added to the tick, and a tick pinned to both
+        // edges has nothing to add it to.
+        condition: (/** @type {any} */ cfg) => cfg.tick_align !== 'full' },
+      { key: 'tick_labels_hide_unit', icon: '\u{1F517}', flag: true, what: 'no unit' },
+      { key: 'tick_labels_hide_first', icon: '\u21E4', flag: true, what: 'no first' },
+      { key: 'tick_labels_hide_last', icon: '\u21E5', flag: true, what: 'no last' },
+      { key: 'tick_labels_color_adaptive', icon: '\u{1F3A8}', flag: true,
+        what: 'adaptive colour' },
     ],
   },
 });
@@ -993,6 +1088,22 @@ const partCan = (spec, cfg) => !spec.can || spec.can(cfg);
 
 /** Whether the part is actually being drawn right now. */
 const partOn = (spec, cfg) => partCan(spec, cfg) && spec.on(cfg);
+
+/**
+ * A length a bar writes as text - `100%`, `1`, `4px`, `12cqw`.
+ *
+ * The bar's lengths are text fields because the unit is part of the answer: a
+ * tick length in per cent is of the bar's thickness and follows it, where one
+ * in pixels does not. A stepper that wrote a bare number would silently change
+ * which of those was meant, so it steps the number and hands the unit back
+ * untouched.
+ */
+function splitUnit(value, dflt) {
+  const raw = value === undefined || value === null || value === '' ? dflt : String(value);
+  const m = /^\s*(-?\d*\.?\d+)\s*([a-z%]*)\s*$/i.exec(raw);
+  return m ? { n: parseFloat(m[1]), unit: m[2] || '' }
+           : { n: parseFloat(String(dflt)) || 0, unit: '' };
+}
 
 /** One shared empty map, for a kind that has no parts of that sort. */
 const NO_PARTS = Object.freeze({});
@@ -1446,6 +1557,7 @@ class ScCanvasEditor extends LitElement {
     this._measureInner();
     this._placeNeedle();
     this._followInner();
+    this._fitSteps();
     // The first canvas to arrive brings back the zoom this shape was last
     // looked at. Only the first: afterwards the zoom is whatever the person
     // at the keyboard has made it.
@@ -1814,13 +1926,21 @@ class ScCanvasEditor extends LitElement {
          width: max-content, or an absolutely placed box is shrunk to the room
          left of it in its containing block - half the gauge - and the box
          would stand wider than the column inside it. */
-      /* Under the chips, not over them. The numbers belong to the one part in
-         hand and are three lines deep; a chip is small, permanent, and the
-         only way to take a different part in hand. A panel that is here for a
-         moment must not be what makes a lasting control unreachable - and
-         where they do meet, either chip can now be dragged aside. */
-      .ring-steps { position: absolute; transform: translate(-50%, 12px);
-        z-index: 6;
+      /* Over the chips while it is showing. The panel belongs to the one part
+         in hand and is as deep as that part has things to say; a chip that
+         lay across it would take rows away with nothing to say that it had.
+         The chips are still there underneath and come back the moment the
+         part is let go, and the panel's own chip sits above it anyway,
+         because the panel hangs off the bottom of it. */
+      /* The nudge is what keeps the panel inside the canvas: the editor
+         measures the box once it is drawn and says how far it has to come
+         back, because how tall eight rows are is a layout result and not
+         something the chip's position can know. */
+      .ring-steps { position: absolute;
+        transform: translate(calc(-50% + var(--sc-steps-dx, 0px)),
+                             calc(12px + var(--sc-steps-dy, 0px)));
+        overflow-y: auto; overscroll-behavior: contain;
+        z-index: 8;
         display: grid; grid-template-columns: auto auto auto auto;
         align-items: center; justify-items: center;
         width: max-content; gap: 3px; padding: 3px 5px;
@@ -1853,6 +1973,10 @@ class ScCanvasEditor extends LitElement {
       .ring-swatch input[type="color"] { position: absolute; inset: -50%;
         width: 200%; height: 200%; padding: 0; border: none; background: none;
         cursor: pointer; opacity: 0; }
+      .ring-flag { display: flex; align-items: center; gap: 4px; height: 20px;
+        font-size: 11px; line-height: 1; color: #fff; cursor: pointer;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .ring-flag input { margin: 0; width: 13px; height: 13px; flex: none; cursor: pointer; }
       .ring-pick { height: 20px; padding: 0 2px; font-size: 11px; line-height: 1;
         border-radius: 4px; cursor: pointer; max-width: 108px;
         border: 1px solid var(--sc-part-sel); background: rgba(0,0,0,0.5); color: #fff; }
@@ -3267,10 +3391,11 @@ class ScCanvasEditor extends LitElement {
   _stepRing(st, dir) {
     const target = this._innerTarget;
     if (!target || !st) return;
-    const was = SC.safeFloat(target.cfg[st.key], st.dflt);
+    const held = st.unit ? splitUnit(target.cfg[st.key], st.dflt) : null;
+    const was = held ? held.n : SC.safeFloat(target.cfg[st.key], st.dflt);
     const next = Math.min(st.max, Math.max(st.min, Math.round((was + dir * st.by) * 10) / 10));
     if (next === was) return;
-    this._writeInner({ [st.key]: next }, false);
+    this._writeInner({ [st.key]: held ? next + held.unit : next }, false);
   }
 
   /**
@@ -3784,6 +3909,55 @@ class ScCanvasEditor extends LitElement {
    * has, and a list that is a select because nine effects are not something to
    * cycle through one press at a time.
    */
+  /**
+   * Bring the panel of numbers back inside the canvas.
+   *
+   * The chip says where the panel hangs, and the panel is as tall as the part
+   * in hand has things to say - eight rows under a chip near the bottom edge
+   * stand half of them outside the canvas, which clips. How far outside is
+   * only known once it is drawn, so it is measured here and handed back as a
+   * nudge the transform adds to where the chip put it.
+   *
+   * The nudge already applied is read off the element rather than remembered,
+   * because lit rewrites the whole style attribute whenever the chip moves and
+   * takes the property with it - reading it back means what is measured is
+   * always the position that is actually on screen.
+   */
+  _fitSteps() {
+    const root = this.shadowRoot;
+    const box = /** @type {any} */ (root?.querySelector('.ring-steps'));
+    const canvas = /** @type {any} */ (root?.querySelector('.canvas'));
+    if (!box || !canvas) return;
+    const was = {
+      x: parseFloat(box.style.getPropertyValue('--sc-steps-dx')) || 0,
+      y: parseFloat(box.style.getPropertyValue('--sc-steps-dy')) || 0,
+    };
+    const c = canvas.getBoundingClientRect();
+    if (!c.height) return;
+    // A per cent would be read against the element the panel hangs on, which
+    // is the gauge and not the canvas, so how tall it may be is measured here
+    // too. Set before the box is, because it is what the box will be.
+    const room = Math.round(c.height) - 8;
+    const cap = room > 0 ? room + 'px' : 'none';
+    if (box.style.maxHeight !== cap) box.style.maxHeight = cap;
+    const b = box.getBoundingClientRect();
+    if (!b.width) return;
+    // Where it would stand with no nudge at all.
+    const l = b.left - was.x;
+    const t = b.top - was.y;
+    const M = 4;
+    // Pushed off the far edge first and the near one second, so a panel too
+    // big for the canvas is pinned at the top left and scrolls rather than
+    // hiding its first row.
+    let dx = Math.min(0, (c.right - M) - (l + b.width));
+    let dy = Math.min(0, (c.bottom - M) - (t + b.height));
+    dx = Math.max(dx, (c.left + M) - l);
+    dy = Math.max(dy, (c.top + M) - t);
+    if (Math.abs(dx - was.x) < 0.5 && Math.abs(dy - was.y) < 0.5) return;
+    box.style.setProperty('--sc-steps-dx', dx + 'px');
+    box.style.setProperty('--sc-steps-dy', dy + 'px');
+  }
+
   _renderSteppers(left, top) {
     const target = this._innerTarget;
     const spec = target?.rings[this._innerSel || ''];
@@ -3794,7 +3968,9 @@ class ScCanvasEditor extends LitElement {
     const cfg = target.cfg;
     const swallow = (/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); };
     const now = (/** @type {any} */ st) =>
-      (st.read ? st.read(cfg) : SC.safeFloat(cfg[st.key], st.dflt));
+      (st.read ? st.read(cfg)
+       : st.unit ? splitUnit(cfg[st.key], st.dflt).n
+       : SC.safeFloat(cfg[st.key], st.dflt));
     const icon = (/** @type {any} */ st) => html`
       <span class="ring-step-icon" title=${`${spec.label}: ${st.what}`}>${st.icon}</span>`;
 
@@ -3813,6 +3989,19 @@ class ScCanvasEditor extends LitElement {
                      this._writeInner(st.patch(cfg, e.target.value), false)}>
           </label>
         </span>`;
+      // A switch is neither a number nor a choice from a list: it is on or it
+      // is off, and the shortest honest control for that is the box itself
+      // with its name beside it.
+      if (st.flag) return html`
+        <span class="ring-group">${icon(st)}
+          <label class="ring-wide ring-flag" title=${`Turn ${st.what} on or off`}
+                 @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}>
+            <input type="checkbox" .checked=${!!cfg[st.key]}
+                   @change=${(/** @type {any} */ e) =>
+                     this._writeInner({ [st.key]: e.target.checked }, false)}>
+            <span>${st.what}</span>
+          </label>
+        </span>`;
       if (st.picks) return html`
         <span class="ring-group">${icon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
@@ -3829,9 +4018,10 @@ class ScCanvasEditor extends LitElement {
                 title=${`${dir > 0 ? 'More' : 'Less'} ${st.what}`}
                 @pointerdown=${swallow}
                 @click=${() => this._stepRing(st, dir)}>${glyph}</button>`;
+      const shown = st.unit ? val + splitUnit(cfg[st.key], st.dflt).unit : val;
       return html`
         <span class="ring-group">${icon(st)}
-          ${btn(-1, '−')}<span class="ring-step-val">${val}</span>${btn(1, '+')}
+          ${btn(-1, '−')}<span class="ring-step-val">${shown}</span>${btn(1, '+')}
         </span>`;
     };
     return html`
