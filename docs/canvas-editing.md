@@ -171,7 +171,84 @@ a neighbouring chip. **Whatever hangs off a label is part of that label's
 footprint.** Re-check the spacing whenever anything is added to it, and measure
 it - the gap is a number, not an impression.
 
-## 11. How to know it works
+## 11. The second kind is where the design is tested
+
+Everything above was written for one kind of element. Adding a second - a
+surface, whose parts are a colour and a corner rather than a ring and a needle
+- is what says whether any of it was a design or just an arrangement.
+
+What survived unchanged: the frames, the chips, the numbers under a chip, the
+zoom that belongs to the mode, letting go by pressing bare canvas. What turned
+out to be about a gauge and not about a canvas was only three things - where
+the config lives, which parts there are, and which editor holds their settings.
+Those three are a registry entry (`INNER_KINDS`), and nothing else needed to
+know a gauge from a surface.
+
+**So write the second kind before believing the first one is general.** The
+cost of finding out later is every call site that named the first kind out
+loud.
+
+Two smaller lessons came with it:
+
+- **Not every part is on a ring.** A part that is told where to stand - a
+  `spot` in per cent of the box - is the same offer, drawn from a different
+  number, and pressing it is only ever taking it in hand. The needle was
+  already that and had a special case of its own; naming the general thing
+  retired the special case.
+- **A measurement is per kind, the sameness check is not.** A gauge
+  letterboxes a viewBox inside its box, has text rects to follow and a needle
+  that is still moving; a box is its own frame and holds still. Both answer
+  the same record, and the part that decides whether to write it - which is
+  the part that turns a measurement into a render loop if it is wrong - is
+  written once.
+
+## 12. Two grips, one value
+
+A corner radius is set by a grip in a corner, and there are two of them, at the
+bottom left and the top right, both writing the same number. **Which grip is
+used is only ever a question of which is free** - whatever the element sits
+next to, and whatever is drawn over it, one of the two can be reached. Two
+grips for one value is not two controls for one value; two *different* controls
+would be.
+
+The grip stands on the corner the radius has already drawn, not on the corner
+of the box, so it is always on the thing it sets.
+
+The arithmetic is worth stating because it is not obvious:
+
+- A radius is a distance along *both* edges from the corner, so what a drag
+  says is the **mean** of how far it has come along each. A straight diagonal
+  pull then reads as exactly the radius it draws, and a pull along one edge
+  alone still moves it, by half.
+- **Pixels map to the screen one for one at any zoom.** The browser draws
+  `border-radius: 8px` as eight screen pixels in a box the zoom has made twice
+  as wide, so there is no zoom factor to divide by - and putting one in would
+  be wrong.
+- A percentage on `border-radius` is of the box's **own width across and its
+  height down**, so the mean is taken in those terms. Which also means a pixel
+  radius on a box that is not square comes to rest between the pointer's two
+  axes rather than under it: a radius in pixels is a circle, and cannot be a
+  tenth of both a wide side and a narrow one. Say so in the tests, or someone
+  will later "fix" it.
+
+## 13. The bench is not the work
+
+A chip stands where its part is, which is right up to the moment the part it
+names is underneath it. So a chip can be dragged anywhere on the element, and
+it carries its own numbers with it.
+
+**Where it was put is not config.** It is the bench the work is done on, not
+the work, and writing it would put one person's arrangement of the editor into
+everybody's dashboard. It lives beside the zoom - a module-level map, keyed by
+the element and the part, gone with the tab - and a double-click puts the chip
+back where its part says.
+
+The same move took out an accident: a chip used to pass its press on to its
+ring, so dragging one resized the thing it named. That is §2 again - a lever on
+a part rather than the part - and the ring's own band was already the better
+handle.
+
+## 14. How to know it works
 
 Not from the diff. Build it, drive the real component, and read the numbers
 back:
