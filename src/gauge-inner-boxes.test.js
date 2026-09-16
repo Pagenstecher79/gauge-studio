@@ -3,7 +3,7 @@ import { offsetsFromDrag, fontFromResize, estimateRect, clamp,
          ringRadius, ringPartRadius, offsetFromRadius,
          OFFSET_LIMIT, FONT_MAX, FONT_MIN, GAUGE_CENTER,
          needleEnds, needleFromRadius, needleSlide, NEEDLE_CENTRE_SNAP,
-         ringInnerEdge, strokeFromRadius } from './gauge-inner-boxes.js';
+         ringInnerEdge, strokeFromRadius, alignParts} from './gauge-inner-boxes.js';
 
 describe('offsetsFromDrag', () => {
   it('turns pixels into viewBox units at the measured scale', () => {
@@ -271,5 +271,76 @@ describe('needleSlide', () => {
   it('never writes an offset its own slider would refuse', () => {
     expect(needleSlide(999, 0, 2, 1).pointer_offset).toBe(-10);
     expect(needleSlide(-999, 0, 2, 1).pointer_offset).toBe(10);
+  });
+});
+
+describe('alignParts', () => {
+  const item = (name, box, from, per = 10) => ({
+    keys: { x: `${name}_offset_x`, y: `${name}_offset_y` }, box, from, per,
+  });
+
+  it('moves every box to the leftmost one’s left edge', () => {
+    const out = alignParts([
+      item('value', { l: 100, t: 0, w: 40, h: 10 }, { x: 0, y: 0 }),
+      item('label', { l: 130, t: 0, w: 20, h: 10 }, { x: 3, y: 0 }),
+    ], 'left');
+    // 30px back at 10px per unit is three units off the label's own offset.
+    expect(out).toEqual({ label_offset_x: 0 });
+  });
+
+  it('lines the right-hand edges up, which is not the same as the offsets', () => {
+    const out = alignParts([
+      item('value', { l: 100, t: 0, w: 40, h: 10 }, { x: 0, y: 0 }),
+      item('label', { l: 100, t: 0, w: 20, h: 10 }, { x: 0, y: 0 }),
+    ], 'right');
+    expect(out).toEqual({ label_offset_x: 2 });
+  });
+
+  it('leaves the outermost part where it is', () => {
+    const out = alignParts([
+      item('value', { l: 100, t: 0, w: 40, h: 10 }, { x: 0, y: 0 }),
+      item('label', { l: 160, t: 0, w: 20, h: 10 }, { x: 6, y: 0 }),
+    ], 'left');
+    expect(out).not.toHaveProperty('value_offset_x');
+  });
+
+  it('works down the other axis, baseline or no baseline', () => {
+    // The value's offset is a baseline and the label's is a middle; the
+    // travel is the same question for both.
+    const out = alignParts([
+      item('value', { l: 0, t: 50, w: 10, h: 10 }, { x: 0, y: 20 }),
+      item('label', { l: 0, t: 90, w: 10, h: 10 }, { x: 0, y: 10 }),
+    ], 'top');
+    expect(out).toEqual({ label_offset_y: 6 });
+  });
+
+  it('reads the gauge’s own scale through `per`', () => {
+    const out = alignParts([
+      item('value', { l: 100, t: 0, w: 10, h: 10 }, { x: 0, y: 0 }, 5),
+      item('label', { l: 120, t: 0, w: 10, h: 10 }, { x: 4, y: 0 }, 5),
+    ], 'left');
+    expect(out).toEqual({ label_offset_x: 0 });
+  });
+
+  it('writes nothing when everything already lines up', () => {
+    expect(alignParts([
+      item('value', { l: 100, t: 0, w: 10, h: 10 }, { x: 0, y: 0 }),
+      item('label', { l: 100, t: 0, w: 10, h: 10 }, { x: 2, y: 0 }),
+    ], 'left')).toBe(null);
+  });
+
+  it('needs two parts, and an edge it knows', () => {
+    const one = [item('value', { l: 0, t: 0, w: 10, h: 10 }, { x: 0, y: 0 })];
+    expect(alignParts(one, 'left')).toBe(null);
+    expect(alignParts([...one, item('label', { l: 40, t: 0, w: 10, h: 10 }, { x: 0, y: 0 })],
+                      /** @type {any} */ ('hcenter'))).toBe(null);
+  });
+
+  it('never places a part past the offset limit', () => {
+    const out = alignParts([
+      item('value', { l: 0, t: 0, w: 10, h: 10 }, { x: 0, y: 0 }),
+      item('label', { l: 1000, t: 0, w: 10, h: 10 }, { x: 0, y: 0 }),
+    ], 'left');
+    expect(out.label_offset_x).toBe(-25);
   });
 });

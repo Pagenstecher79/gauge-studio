@@ -13,8 +13,8 @@ import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
 import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
          needleEnds, needleFromRadius, needleSlide,
-         ringInnerEdge, strokeFromRadius } from "./gauge-inner-boxes.js";
-import { templatesFor, templateEntry, previewFor } from "./element-templates.js";
+         ringInnerEdge, strokeFromRadius, alignParts } from "./gauge-inner-boxes.js";
+import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
@@ -810,10 +810,16 @@ const GAUGE_PARTS = Object.freeze({
                 // scale is above the top of the 50-unit box - switched on and
                 // left at it, it is a label nobody sees, and the form's
                 // slider cannot even reach back to it. So a card that has
-                // never said where it goes is given somewhere it can be seen.
+                // never said where it goes is given somewhere it can be seen:
+                // midway between the centre the pointer turns about and the
+                // gauge's own name, which is the gap the face leaves empty.
+                // Taken from the name's own offset rather than written out,
+                // so moving the name moves this with it instead of leaving a
+                // second number behind to drift.
                 needs: (/** @type {any} */ cfg) => SC.safeFloat(cfg.tick_count, 0) > 1,
                 seed: { tick_count: 11 },
-                place: { multiplier_offset_x: 0, multiplier_offset_y: -8.4,
+                place: { multiplier_offset_x: 0,
+                         multiplier_offset_y: GAUGE_FACE.gauge_label_offset_y / 2,
                          multiplier_font_size: 2.4 },
                 steps: [
                   ...colourRows('multiplier_color_type', 'multiplier_color', 'multiplier',
@@ -1633,6 +1639,10 @@ class ScCanvasEditor extends LitElement {
       _inner: { type: String, state: true },
       _innerRects: { type: Object, state: true },
       _innerSel: { type: String, state: true },
+      // The parts held *besides* the one in hand. A plain array rather than a
+      // Set, because lit's change detection is identity on both and an array
+      // is what the render walks.
+      _innerAlso: { type: Array, state: true },
       _names: { type: Boolean, state: true },
       _layers: { type: Boolean, state: true },
       _undoStack: { type: Array, state: true },
@@ -1680,6 +1690,7 @@ class ScCanvasEditor extends LitElement {
     // because they are measured from what was drawn and then drawn from.
     this._inner = null;
     this._innerSel = null;
+    this._innerAlso = [];
     this._innerFrame = 0;
     this._innerRects = null;
     this._innerDrag = null;
@@ -3447,6 +3458,55 @@ class ScCanvasEditor extends LitElement {
    */
   _letGoOfPart() {
     if (this._innerSel) this._innerSel = null;
+    if (this._innerAlso.length) this._innerAlso = [];
+  }
+
+  /**
+   * Every part being held, the one in hand first.
+   *
+   * Only the texts: `_innerAlso` is filled by a modifier press on a frame,
+   * and a ring has no frame to press. Filtered against what is actually
+   * drawn, so a part switched off while it was held stops being held.
+   */
+  get _innerHeld() {
+    const target = this._innerTarget;
+    if (!target) return [];
+    const drawn = new Set(target.drawn);
+    return [this._innerSel, ...this._innerAlso]
+      .filter((p, i, all) => p && target.parts[p] && drawn.has(p) && all.indexOf(p) === i);
+  }
+
+  /** Whether this part is one of the ones being held. */
+  _isHeld(part) {
+    return this._innerSel === part || this._innerAlso.includes(part);
+  }
+
+  /**
+   * Add a part to what is held, or take it back out.
+   *
+   * The one in hand stays the one in hand while others are added to it: it is
+   * what the fold at the top of the form is showing, and pulling that out
+   * from under the reader to no purpose is worse than the extra rule.
+   */
+  _toggleHeld(part) {
+    const target = this._innerTarget;
+    if (!target?.parts[part]) return;
+    if (!this._innerSel) {
+      this._innerSel = part;
+      this._revealPart(part);
+      return;
+    }
+    if (this._innerSel === part) {
+      // Letting go of the one in hand promotes the next held part, so the
+      // group does not silently lose its head.
+      const [next, ...rest] = this._innerAlso;
+      this._innerSel = next || null;
+      this._innerAlso = next ? rest : [];
+      return;
+    }
+    this._innerAlso = this._innerAlso.includes(part)
+      ? this._innerAlso.filter(p => p !== part)
+      : [...this._innerAlso, part];
   }
 
   /**
@@ -3461,6 +3521,14 @@ class ScCanvasEditor extends LitElement {
     if (!target) return;
     e.stopPropagation();
     e.preventDefault();
+    // Shift, Ctrl or Cmd adds this part to what is held rather than replacing
+    // it - the same modifier that picks a second element on the canvas - and
+    // starts nothing: a press meant to pick a second part is not a drag.
+    if ((mode === 'move' || mode === 'chip') && target.parts[part]
+        && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      this._toggleHeld(part);
+      return;
+    }
     // A chip is grabbed as itself. It used to pass the press on to its ring,
     // so dragging one resized the thing it named - a lever on a part rather
     // than the part, which the ring's own band already is and does better.
@@ -3483,6 +3551,7 @@ class ScCanvasEditor extends LitElement {
       // a drag, which is the chip being moved rather than pressed.
       if (this._innerDrag) this._innerDrag.held = !fresh2;
       this._innerSel = part;
+      this._innerAlso = [];
       if (fresh2) this._revealPart(part);
       return;
     }
@@ -3497,8 +3566,14 @@ class ScCanvasEditor extends LitElement {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
     }
+    // Read before the selection moves: what is held is the answer to the press
+    // that is arriving, and `_innerHeld` puts whatever is in hand at its head.
+    const held = this._innerHeld;
     const fresh = this._innerSel !== part;
     this._innerSel = part;
+    // A ring is not one of the things that can be held together with a text,
+    // so taking hold of one is letting go of them.
+    if (target.rings[part]) this._innerAlso = [];
     // After the assignment, never before: what the reveal has to scroll to is
     // the section the new selection has just pulled to the top of the editor.
     if (fresh) this._revealPart(part);
@@ -3536,8 +3611,24 @@ class ScCanvasEditor extends LitElement {
     }
     const spec = target.parts[part];
     const cfg = target.cfg;
+    // Pressing something already held drags the whole group; pressing
+    // anything else is a fresh single selection, and the rest is let go of.
+    const group = mode === 'move' && held.length > 1 && held.includes(part)
+      ? held.map((p) => {
+          const ps = target.parts[p];
+          return { part: p, spec: ps,
+                   from: { x: SC.safeFloat(cfg[ps.x], ps.dx),
+                           y: SC.safeFloat(cfg[ps.y], ps.dy) },
+                   pxPerUnit: this._innerRects?.parts?.[p]?.pxPerUnit || 1 };
+        })
+      : null;
+    // Pressing a part that was held alongside makes it the one in hand and
+    // leaves the rest held - without this the group would keep a second copy
+    // of its own head, and letting go of that head would promote it again.
+    if (group) this._innerAlso = held.filter(p => p !== part);
+    else this._innerAlso = [];
     this._innerDrag = {
-      part, mode,
+      part, mode, group,
       startX: e.clientX, startY: e.clientY,
       from: {
         x: SC.safeFloat(cfg[spec.x], spec.dx),
@@ -3689,8 +3780,19 @@ class ScCanvasEditor extends LitElement {
     const patch = d.mode === 'size'
       ? { [spec.size]: fontFromResize(d.from.size, p.y - d.startY, d.pxPerUnit, d.scale) }
       : (() => {
-          const at = offsetsFromDrag(d.from, p.x - d.startX, p.y - d.startY, d.pxPerUnit, d.scale);
-          return { [spec.x]: at.x, [spec.y]: at.y };
+          // Every held part travels the same distance on the screen, which is
+          // not the same number of units each: a part is measured in its own
+          // layer, and a layer is free to be scaled differently from the one
+          // beside it. So the pixels are shared and the arithmetic is not.
+          const movers = d.group || [{ part: d.part, spec, from: d.from, pxPerUnit: d.pxPerUnit }];
+          const out = {};
+          for (const m of movers) {
+            const at = offsetsFromDrag(m.from, p.x - d.startX, p.y - d.startY,
+                                       m.pxPerUnit, d.scale);
+            out[m.spec.x] = at.x;
+            out[m.spec.y] = at.y;
+          }
+          return out;
         })();
     this._writeInner(patch, d.started);
     d.started = true;
@@ -3879,10 +3981,47 @@ class ScCanvasEditor extends LitElement {
    */
   _innerAlign(axis) {
     const target = this._innerTarget;
-    const part = this._innerSel;
-    const spec = target?.parts[part];
-    if (!target || !part || !spec) return;
-    this._writeInner({ [axis === 'x' ? spec.x : spec.y]: 0 }, false);
+    const held = this._innerHeld;
+    if (!target || !held.length) return;
+    const patch = {};
+    for (const part of held) {
+      const spec = target.parts[part];
+      if (spec) patch[axis === 'x' ? spec.x : spec.y] = 0;
+    }
+    if (Object.keys(patch).length) this._writeInner(patch, false);
+  }
+
+  /**
+   * Line the held parts up on one of their own edges.
+   *
+   * The arithmetic is `alignParts`, off the measured boxes - a part's offset
+   * places its anchor, and two parts' anchors are not the same point on their
+   * boxes, so the offsets alone cannot say where an edge is. The boxes are
+   * measured in per cent of the element, and a travel in per cent is a travel
+   * in pixels once the element's own size is known.
+   *
+   * @param {'left'|'right'|'top'|'bottom'} edge
+   */
+  _innerAlignEdge(edge) {
+    const target = this._innerTarget;
+    const rects = this._innerRects;
+    if (!target || !rects?.px) return;
+    const scale = SC.safeFloat(target.cfg.gauge_scale, 0.9) || 1;
+    const items = this._innerHeld.map((part) => {
+      const spec = target.parts[part];
+      const r = rects.parts?.[part];
+      if (!spec || !r) return null;
+      return {
+        keys: { x: spec.x, y: spec.y },
+        box: { l: r.l / 100 * rects.px.width, t: r.t / 100 * rects.px.height,
+               w: r.w / 100 * rects.px.width, h: r.h / 100 * rects.px.height },
+        from: { x: SC.safeFloat(target.cfg[spec.x], spec.dx),
+                y: SC.safeFloat(target.cfg[spec.y], spec.dy) },
+        per: (r.pxPerUnit || 1) * scale,
+      };
+    }).filter(Boolean);
+    const patch = alignParts(/** @type {any} */ (items), edge);
+    if (patch) this._writeInner(patch, false);
   }
 
   /**
@@ -3924,7 +4063,7 @@ class ScCanvasEditor extends LitElement {
       const r = rects?.[part];
       if (!drawn.has(part) || !r) return '';
       return html`
-        <div class="inner-frame ${this._innerSel === part ? 'sel' : ''}" data-part=${part}
+        <div class="inner-frame ${this._isHeld(part) ? 'sel' : ''}" data-part=${part}
              style="left:${r.l}%; top:${r.t}%; width:${r.w}%; height:${r.h}%;"
              title=${`Drag the ${spec.label.toLowerCase()}, or its corner to resize it`}
              @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'move')}>
@@ -5359,22 +5498,39 @@ class ScCanvasEditor extends LitElement {
     const sel = alive(this._sel) ? this._sel : null;
     const selected = this._selection.filter(alive);
     const inner = this._innerTarget;
-    // A frame in hand borrows the two middle-axis buttons for itself.
-    const centring = this._innerOn && this._innerSel && inner?.parts[this._innerSel];
+    // A frame in hand borrows the two middle-axis buttons for itself, and
+    // several frames held together borrow the whole row: lining texts up with
+    // each other is the same question as lining elements up, asked of what is
+    // inside one of them.
+    const held = this._innerOn ? this._innerHeld : [];
+    const centring = held.length ? inner?.parts[held[0]] : null;
+    const heldMany = held.length > 1;
     const movers = this._distributable;
     // Three groups, in the order the work is usually done: the gaps first,
     // then the edges, then the middles - which are also the two a gauge's own
     // label and value borrow, so they sit together at the end.
-    const alignBtn = ([edge, what]) => html`
-      <button title=${centring && MIDDLE_AXIS[edge]
-                ? `Put the ${centring.label.toLowerCase()} back on the ${inner.k.noun}'s ${MIDDLE_AXIS[edge].what} middle`
-                : (movers < 2
-                    ? 'Two selected elements that can move are needed to line anything up'
-                    : `${what}. The outermost of them stays where it is.`)}
-              ?disabled=${centring && MIDDLE_AXIS[edge] ? false : movers < 2}
-              @click=${() => (centring && MIDDLE_AXIS[edge]
-                ? this._innerAlign(MIDDLE_AXIS[edge].axis)
-                : this._align(/** @type {any} */ (edge)))}>${alignIcon(/** @type {any} */ (edge))}</button>`;
+    const alignBtn = ([edge, what]) => {
+      // Three readings of the same button, in the order a press is meant:
+      // the middles put whatever is held back on the gauge's own axis, the
+      // edges line the held parts up on each other, and with nothing held
+      // they do what they have always done to the elements.
+      const onParts = centring && (MIDDLE_AXIS[edge] || heldMany);
+      const title = !onParts
+        ? (movers < 2
+            ? 'Two selected elements that can move are needed to line anything up'
+            : `${what}. The outermost of them stays where it is.`)
+        : (MIDDLE_AXIS[edge]
+            ? `Put ${heldMany ? 'everything held' : `the ${centring.label.toLowerCase()}`} back on the ${inner.k.noun}'s ${MIDDLE_AXIS[edge].what} middle`
+            : `${what}, among the parts held. The outermost of them stays where it is.`);
+      return html`
+        <button title=${title}
+                ?disabled=${onParts ? false : movers < 2}
+                @click=${() => (!onParts
+                  ? this._align(/** @type {any} */ (edge))
+                  : (MIDDLE_AXIS[edge]
+                      ? this._innerAlign(MIDDLE_AXIS[edge].axis)
+                      : this._innerAlignEdge(/** @type {any} */ (edge))))}>${alignIcon(/** @type {any} */ (edge))}</button>`;
+    };
 
     return html`
       <div class="col ${centring ? 'part-in-hand' : ''}">

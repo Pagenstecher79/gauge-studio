@@ -280,3 +280,58 @@ export function ringInnerEdge(stroke, scale) {
 export function strokeFromRadius(radius, scale) {
   return clamp(tenth(GAUGE_CENTER - 1 - radius / (scale || 1)), 0, STROKE_MAX);
 }
+
+/**
+ * Which axis an edge is about, and how a box is measured along it.
+ *
+ * The six edges are the ones the canvas already lines elements up by, and a
+ * part is lined up by the same words: it is the same thing asked of something
+ * smaller.
+ */
+const EDGE_AXIS = Object.freeze({
+  left:   { axis: 'x', pos: 'l', size: 'w', at: 'near' },
+  right:  { axis: 'x', pos: 'l', size: 'w', at: 'far' },
+  top:    { axis: 'y', pos: 't', size: 'h', at: 'near' },
+  bottom: { axis: 'y', pos: 't', size: 'h', at: 'far' },
+});
+
+/**
+ * Line several of a gauge's texts up on one edge.
+ *
+ * Measured rather than worked out. A part's offset says where its *anchor*
+ * goes - the middle of the text for one, the baseline for the next - so two
+ * parts sharing an offset do not share an edge, and the edge is the thing
+ * being lined up. The boxes come in as they were measured off the drawing, in
+ * screen pixels; what goes back is each part's own offset field, moved by as
+ * far as its box has to travel.
+ *
+ * Because it is a travel rather than a position, the anchor each part uses
+ * cancels out and a baseline needs no special case.
+ *
+ * The outermost part stays where it is - it is what defines the edge - and a
+ * part whose offset does not actually change is left out of the patch, so a
+ * second press on the same button writes nothing.
+ *
+ * @param {{keys: {x: string, y: string}, box: {l: number, t: number, w: number, h: number},
+ *          from: {x: number, y: number}, per: number}[]} items
+ * @param {'left'|'right'|'top'|'bottom'} edge
+ * @returns {Record<string, number> | null}
+ */
+export function alignParts(items, edge) {
+  const how = EDGE_AXIS[edge];
+  const movers = (items || []).filter(i => i && i.box && i.per);
+  if (!how || movers.length < 2) return null;
+  const { axis, pos, size } = how;
+  const at = how.at === 'near'
+    ? Math.min(...movers.map(i => i.box[pos]))
+    : Math.max(...movers.map(i => i.box[pos] + i.box[size]));
+  /** @type {Record<string, number>} */
+  const patch = {};
+  for (const i of movers) {
+    const want = how.at === 'near' ? at : at - i.box[size];
+    const to = clamp(tenth(i.from[axis] + (want - i.box[pos]) / i.per),
+                     -OFFSET_LIMIT, OFFSET_LIMIT);
+    if (to !== i.from[axis]) patch[i.keys[axis]] = to;
+  }
+  return Object.keys(patch).length ? patch : null;
+}
