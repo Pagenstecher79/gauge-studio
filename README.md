@@ -187,3 +187,7 @@ Gauge Studio is released under the [MIT License](LICENSE).
 The development harness under [`docker/`](docker/) is adapted from
 [easy-floorplan](https://github.com/nicosandller/easy-floorplan) and carries
 its own MIT notice in [`docker/LICENSE`](docker/LICENSE).
+
+The icons in the editor are [Lucide](https://lucide.dev), inlined into the
+bundle. Lucide is ISC licensed and part of it is MIT; both notices are in
+[`LICENSES/lucide.txt`](LICENSES/lucide.txt).

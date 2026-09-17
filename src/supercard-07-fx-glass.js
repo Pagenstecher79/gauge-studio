@@ -3,6 +3,7 @@ import { DEAD_PATTERN_TARGETS } from "./config-cleanup.js";
 import { lightParams, bevelShadow, px, isRoundTarget, isReliefTarget, boxRingMask, isCircleRadius } from "./glass-light.js";
 import { lensScaleFraction, lensFilterMarkup, applyLensGeometry } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
+import { icon } from "./icons.js";
 
 const SC = window.SupercardUtils;
 
@@ -130,7 +131,7 @@ class ScShadowPad extends LitElement {
         ${this.preview ? html`
           <div class="sample ${isRoundTarget(this.pattern?.target) ? 'round' : ''}"
                style="box-shadow: ${bevelShadow(light, px)};"></div>` : ''}
-        <div class="thumb" style="left: ${tx}%; top: ${ty}%;"><div class="sun-icon">☀️</div></div>
+        <div class="thumb" style="left: ${tx}%; top: ${ty}%;"><div class="sun-icon">${icon('sun')}</div></div>
       </div>
       <label class="preview-toggle" title="A sample lit from where the sun is. Turn it off for a plain pad.">
         <input type="checkbox" .checked=${this.preview}
@@ -222,7 +223,7 @@ function glassFields() {
   const manual = pat => !isDirect(pat) || pat.manual_override;
 
   return [
-    { type: 'details', label: '📏 Dimensions & Shape', fields: [
+    { type: 'details', icon: icon('ruler'), label: 'Dimensions & Shape', fields: [
       { id: 'manual_override', label: 'Manual adjustments', type: 'checkbox', condition: isDirect,
         hint: "The glass fits the element by itself. Turn this on to depart from that - a negative edge distance makes it larger than the element, and the radius stops following the element's own." },
 
@@ -234,7 +235,7 @@ function glassFields() {
       { type: 'custom', condition: manual, render: ctx => radiusRow(ctx) },
     ] },
 
-    { type: 'details', label: '🍩 Ring / Donut Mask', fields: [
+    { type: 'details', icon: icon('donut'), label: 'Ring / Donut Mask', fields: [
       { id: 'ring_effect', label: 'Hide centre (hard edge)', type: 'checkbox',
         hint: 'Blur & colour only affect the edge exactly.', labelStyle: 'color:var(--primary-color)' },
       { id: 'use_custom_ring_width', label: 'Use custom mask thickness', type: 'checkbox',
@@ -247,14 +248,14 @@ function glassFields() {
         hint: '0 = blur & colour completely hollow' },
     ] },
 
-    { type: 'details', label: '🔍 Optics (Magnifier & Curvature)', fields: [
+    { type: 'details', icon: icon('search'), label: 'Optics (Magnifier & Curvature)', fields: [
       { id: 'zoom', label: 'Magnify content (zoom)', type: 'range', min: 1, max: 1.5, step: 0.01, placeholder: 1 },
       { id: 'glare', label: 'Convex 3D shine (%)', type: 'range', min: 0, max: 100, int: true, placeholder: 0 },
       { id: 'refraction', label: 'Edge refraction (%)', type: 'range', min: 0, max: 100, int: true, placeholder: 0,
         hint: 'Bends what is behind the edge, the way real glass does. With blur at 0 this is clear glass: what is underneath stays readable and only the rim curls. Not shown by Safari or Firefox, which draw the pane without it.' },
     ] },
 
-    { type: 'details', label: '💧 Glass & Blur', fields: [
+    { type: 'details', icon: icon('droplet'), label: 'Glass & Blur', fields: [
       { id: 'blur', label: 'Blur strength (px)', type: 'range', min: 0, max: 2, step: 0.01, placeholder: 10 },
       { id: 'opacity', label: 'Background opacity (%)', type: 'range', min: 0, max: 100, int: true, placeholder: 10 },
       { type: 'custom', render: ctx => html`
@@ -264,7 +265,7 @@ function glassFields() {
         </div>` },
     ] },
 
-    { type: 'details', label: '🌒 Light Refraction & Bevel (Physics)', fields: [
+    { type: 'details', icon: icon('moon'), label: 'Light Refraction & Bevel (Physics)', fields: [
       { id: 'shadow_style', label: 'Glass style', type: 'select', options: pat => [
         { value: 'none', label: 'Flat (no edges)', selected: pat.shadow_style === 'none' },
         { value: 'frosted', label: 'Frosted (soft edges)', selected: pat.shadow_style === 'frosted' },
@@ -282,7 +283,7 @@ function glassFields() {
         placeholder: 0.4, condition: pat => pat.shadow_style !== 'none' },
     ] },
 
-    { type: 'details', label: '⛰️ Relief',
+    { type: 'details', icon: icon('mountain'), label: 'Relief',
       condition: (pat, slot) => isReliefTarget(pat.target, slot), fields: [
       { id: 'segment_relief', label: 'Light the ring too', type: 'checkbox',
         hint: 'Gives the ring an edge of its own, lit from the same sun as the glass - each pill on a segmented bar, the stroke on a continuous one.' },
@@ -450,7 +451,7 @@ class ScFxGlassPanel extends LitElement {
 
     return html`
       <div class="fx-switch">
-        <label>${this.label || '✨ Glass FX'}</label>
+        <label>${icon('sparkles')} ${this.label || 'Glass FX'}</label>
         <ha-switch .checked=${on} @change=${e => this._toggle(e.target.checked)}></ha-switch>
       </div>
       ${on && pat ? html`<div class="fx-body">${glassBody(pat, set, setMany, this.slot)}</div>` : ''}
@@ -545,9 +546,9 @@ class ScFxGlassEditor extends LitElement {
 
     return html`
       <details class="inner-section">
-        <summary>✨ FX: Frosted & Liquid Glass (other targets)
+        <summary>${icon('sparkles')} FX: Frosted & Liquid Glass (other targets)
           ${SC.tipDot("Gauges, bars and labels carry their own Glass FX switch in their editor, and the card's is in Card & Dimensions. What is left here is the icon, surfaces and layout cells.")}
-          <span style="font-size:10px">▼</span></summary>
+          <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
         <div class="inner-content">
           ${rows.map(({ pat, idx }, n) => {
             const isExp = !!this._expanded[pat.id];
@@ -574,15 +575,15 @@ class ScFxGlassEditor extends LitElement {
               >
                 <div class="pattern-header" @click=${e => this._toggle(pat.id, e)}>
                   <div>
-                    <span class="drag-handle" @mousedown=${e => { e.stopPropagation(); e.target.closest('.pattern-card').setAttribute('draggable', 'true'); }} @mouseup=${e => { e.stopPropagation(); e.target.closest('.pattern-card').removeAttribute('draggable'); }} @mouseleave=${e => e.target.closest('.pattern-card').removeAttribute('draggable')}>⋮⋮</span>
-                    <span class="toggle-icon">${isExp ? '▼' : '▶'}</span>
+                    <span class="drag-handle" @mousedown=${e => { e.stopPropagation(); e.target.closest('.pattern-card').setAttribute('draggable', 'true'); }} @mouseup=${e => { e.stopPropagation(); e.target.closest('.pattern-card').removeAttribute('draggable'); }} @mouseleave=${e => e.target.closest('.pattern-card').removeAttribute('draggable')}>${icon('grip-vertical')}</span>
+                    <span class="toggle-icon">${icon(isExp ? 'chevron-down' : 'chevron-right')}</span>
                     <span style="color:${pat.enabled ? 'var(--primary-text-color)' : 'var(--secondary-text-color)'}">Glass effect ${n + 1}</span>
                     <span style="font-size:10px;color:${pat.target === 'none' ? '#f44' : 'var(--secondary-text-color)'};margin-left:8px;font-weight:normal;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;">(${targetLabel})</span>
                   </div>
                   <div style="display:flex;align-items:center;gap:8px">
                     <ha-switch .checked=${!!pat.enabled} @click=${e => e.stopPropagation()} @change=${e => { this._set(patterns, idx, 'enabled', e.target.checked); }}></ha-switch>
-                    <button type="button" title="Clone" @click=${e => { e.preventDefault(); e.stopPropagation(); const n = structuredClone(patterns); const clone = structuredClone(pat); clone.id = Date.now(); clone.target = 'none'; n.splice(idx + 1, 0, clone); this._commit(n); this.requestUpdate(); }} style="background:none;border:none;color:var(--primary-color);cursor:pointer;padding:4px;font-size:14px;">⧉</button>
-                    <button type="button" title="Delete" @click=${e => { e.preventDefault(); e.stopPropagation(); const n = [...patterns]; n.splice(idx, 1); this._commit(n); }} style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">🗑</button>
+                    <button type="button" title="Clone" @click=${e => { e.preventDefault(); e.stopPropagation(); const n = structuredClone(patterns); const clone = structuredClone(pat); clone.id = Date.now(); clone.target = 'none'; n.splice(idx + 1, 0, clone); this._commit(n); this.requestUpdate(); }} style="background:none;border:none;color:var(--primary-color);cursor:pointer;padding:4px;font-size:14px;">${icon('copy')}</button>
+                    <button type="button" title="Delete" @click=${e => { e.preventDefault(); e.stopPropagation(); const n = [...patterns]; n.splice(idx, 1); this._commit(n); }} style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">${icon('trash-2')}</button>
                   </div>
                 </div>
 
@@ -620,7 +621,7 @@ class ScFxGlassEditor extends LitElement {
             this._commit(n);
             this._expanded = { ...this._expanded, [newId]: true };
             this.requestUpdate();
-          }}>＋ Add new glass effect</button>
+          }}>${icon('plus')} Add new glass effect</button>
         </div>
       </details>
     `;

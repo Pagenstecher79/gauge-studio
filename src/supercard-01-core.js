@@ -1,7 +1,8 @@
-import { LitElement, html, css, nothing } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { LitElement, html, css, unsafeCSS, nothing } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { reportedRows, isHeightPinned, canvasFromGrid, defaultShapeRows } from "./canvas-model.js";
 import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { rowsAsCanvas } from "./rows-compat.js";
+import { icon } from "./icons.js";
 
 // --- CENTRAL LAYER DICTIONARY ---
 export const SC_LAYERS = {
@@ -550,6 +551,9 @@ Object.assign(window.SupercardUtils, (() => {
     // A hint may be a function, for the ones that quote a value back.
     const hint = typeof field.hint === 'function' ? field.hint(ctx.entry, ctx) : field.hint;
     const text = typeof field.label === 'function' ? field.label(ctx.entry, ctx) : field.label;
+    // A heading's icon is beside its label, never inside it: the label stays a
+    // string, which is what a fold is keyed by and what a search finds.
+    const mark = field.icon ? html`<span class="field-icon">${field.icon}</span>` : '';
     // A hint is a balloon on the label's mark, not a line under it: the prose
     // is read once and the line would cost its height for good.
     const label = hint ? html`${text} ${tipDot(hint)}` : text;
@@ -570,7 +574,7 @@ Object.assign(window.SupercardUtils, (() => {
         return field.render(ctx);
 
       case 'heading':
-        return html`<div class="section-title">${text}</div>`;
+        return html`<div class="section-title">${mark}${text}</div>`;
 
       // A section that folds away, with fields of its own.
       // A folded section, drawn the way the gauge and the bar draw theirs, so
@@ -578,7 +582,7 @@ Object.assign(window.SupercardUtils, (() => {
       case 'details':
         return html`
           <details class="inner-section" style=${field.style || 'margin: 0;'}>
-            <summary><span style="flex: 1;">${text} ${tipDot(hint)}</span><span style="font-size:10px;">▼</span></summary>
+            <summary><span style="flex: 1;">${mark}${text} ${tipDot(hint)}</span><span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
             <div class="inner-content" style=${field.contentStyle || nothing}>
               ${(field.fields || []).map(f => renderField(f, ctx))}
             </div>
@@ -589,7 +593,7 @@ Object.assign(window.SupercardUtils, (() => {
       case 'group':
         return html`
           <div class=${field.class || nothing} style=${field.style || nothing}>
-            ${field.label ? html`<label style=${field.labelStyle || nothing}>${text}</label>` : ''}
+            ${field.label ? html`<label style=${field.labelStyle || nothing}>${mark}${text}</label>` : ''}
             ${(field.fields || []).map(f => renderField(f, ctx))}
           </div>`;
 
@@ -600,8 +604,8 @@ Object.assign(window.SupercardUtils, (() => {
         const cls = field.class ?? 'row';
         return html`
           <div class=${cls || nothing} style=${field.style || nothing}>
-            ${field.bare ? text
-              : html`<label style=${field.labelStyle || nothing}>${text}</label>`}
+            ${field.bare ? html`${mark}${text}`
+              : html`<label style=${field.labelStyle || nothing}>${mark}${text}</label>`}
           </div>`;
       }
 
@@ -683,7 +687,7 @@ Object.assign(window.SupercardUtils, (() => {
   // Used by the module editors that list pattern/label cards (color,
   // progressbar, labels, fx-glass, interaction). Identified by ha-switch.
   /**
-   * The ⓘ and the balloon it opens: every explanation in every editor.
+   * The mark and the balloon it opens: every explanation in every editor.
    *
    * Prose under a control reads once and then costs that line for good, in an
    * editor that is already taller than the screen. The mark is the primary
@@ -712,7 +716,7 @@ Object.assign(window.SupercardUtils, (() => {
   `;
 
   /**
-   * The ⓘ that opens one explanation. `right` hangs the balloon from the mark's
+   * The mark that opens one explanation. `right` hangs the balloon from the mark's
    * right edge, for a mark near the right of its row.
    *
    * The click is swallowed because a mark often sits inside a `<label>`, and a
@@ -726,10 +730,80 @@ Object.assign(window.SupercardUtils, (() => {
     return html`<span class="tip-dot${opts.right ? ' right' : ''}" tabindex="0"
                       data-tip=${text}
                       @click=${(/** @type {Event} */ e) => { e.preventDefault(); e.stopPropagation(); }}
-                      >ⓘ</span>`;
+                      >${icon('info')}</span>`;
   }
 
+  /**
+   * The parts whose highlight is a frame round them rather than a glow on
+   * them: a word is read, and a word with a halo is a word that is harder to
+   * read. Everything else a renderer marks - a tick, a mark, a ring, a dot -
+   * is a shape, and a shape says it is in hand by glowing.
+   */
+  const HL_FRAMED = ['tick_labels', 'gauge_label', 'value', 'scale_label',
+                     'multiplier', 'label'];
+
+  /** The rest: the shapes, which say they are in hand by glowing. */
+  const HL_GLOWING = ['gauge_ring', 'frame_ring', 'ticks', 'sub_ticks',
+                      'pointer', 'pointer_center', 'pill'];
+
+  /**
+   * Which part of its drawing an element is showing as the one in hand.
+   *
+   * The canvas puts the part's name on the renderer as data-sc-hl, and the
+   * renderer answers for it here, because only the renderer's own stylesheet
+   * can reach inside its shadow root. The marks are the ones the editor
+   * already presses by - data-sc-part - so nothing new has to be drawn or
+   * named for a part to be able to light up.
+   *
+   * A glow rather than a colour: the colour of a tick is the setting being
+   * edited, and a highlight that paints over it hides the very thing the
+   * hand is on. The glow traces the shape, so it works the same on a line in
+   * an SVG and on a row of divs in a bar.
+   *
+   * Nothing is highlighted while data-sc-hl is absent, which is also how the
+   * canvas stands out of the way for a few seconds after a colour is changed.
+   */
+  const partHighlight = (() => {
+    const one = (/** @type {string} */ p) =>
+      `:host([data-sc-hl="${p}"]) [data-sc-part="${p}"]`;
+    const framed = HL_FRAMED.map(one).join(',\n');
+    const glow = HL_GLOWING.map(one).join(',\n');
+    return css`
+      ${unsafeCSS(glow)} {
+        animation: sc-hl-glow 1.6s ease-in-out infinite;
+      }
+      ${unsafeCSS(framed)} {
+        animation: sc-hl-frame 1.6s ease-in-out infinite;
+        outline: 1.5px solid transparent; outline-offset: 2px;
+      }
+      /* The gradient ring is a picture, so it has nothing to glow with. The
+         arc the editor presses it by is drawn in nothing at all, and while
+         the ring is in hand that arc is what pulses - a ring round the ring. */
+      :host([data-sc-hl="gauge_ring"]) [data-sc-part="gauge_ring"][stroke="transparent"] {
+        animation: sc-hl-ring 1.6s ease-in-out infinite;
+      }
+      @keyframes sc-hl-glow {
+        0%, 100% { filter: drop-shadow(0 0 0 var(--sc-hl, #ffd400)); }
+        50%      { filter: drop-shadow(0 0 3px var(--sc-hl, #ffd400))
+                           drop-shadow(0 0 7px var(--sc-hl, #ffd400)); }
+      }
+      @keyframes sc-hl-frame {
+        0%, 100% { outline-color: transparent; }
+        50%      { outline-color: var(--sc-hl, #ffd400); }
+      }
+      @keyframes sc-hl-ring {
+        0%, 100% { stroke: rgba(0,0,0,0); }
+        50%      { stroke: var(--sc-hl, #ffd400); }
+      }
+    `;
+  })();
+
   const editorStyles = css`
+    /* The mark in front of a heading. It is sized by the text it stands
+       beside and takes its colour, so a heading is one thing, not a picture
+       and a word that have to be kept in step. */
+    .field-icon { display: inline-flex; align-items: center; margin-right: 6px;
+                  vertical-align: -.125em; opacity: .85; }
     /* The space below a menu belongs to the menu, not to the list it sits in:
        a module that renders nothing - the glass list on a healthy canvas, say -
        must leave no gap behind, and a gap on the container would leave one. */
@@ -742,7 +816,9 @@ Object.assign(window.SupercardUtils, (() => {
     select, input[type="text"], input[type="number"], input[type="range"] { background: var(--card-background-color, #2b2b2b); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; padding: 6px; }
     .add-btn { background: transparent; border: 1px dashed var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; text-align: center; }
     ha-switch { --switch-checked-button-color: var(--primary-color); scale: 0.8; }
-    .toggle-icon { font-size: 10px; margin-right: 8px; display: inline-block; width: 12px; }
+    .toggle-icon { font-size: 13px; margin-right: 8px; width: 13px;
+                   display: inline-flex; align-items: center; justify-content: center;
+                   opacity: .7; }
     .section-title { font-size: 11px; font-weight: bold; color: var(--primary-color); text-transform: uppercase; border-bottom: 1px solid var(--divider-color,#333); padding-bottom: 4px; margin-top: 8px; margin-bottom: -4px; }
     .color-row { display: flex; align-items: center; gap: 6px; }
     .color-row input[type="text"] { flex: 1; }
@@ -758,6 +834,11 @@ Object.assign(window.SupercardUtils, (() => {
   // Identified by the hand-rolled .toggle switch instead of ha-switch.
   const formStyles = css`
     * { box-sizing: border-box; }
+    /* The mark in front of a heading. It is sized by the text it stands
+       beside and takes its colour, so a heading is one thing, not a picture
+       and a word that have to be kept in step. */
+    .field-icon { display: inline-flex; align-items: center; margin-right: 6px;
+                  vertical-align: -.125em; opacity: .85; }
     label { font-size: 13px; color: var(--primary-text-color); }
     .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .col { display: flex; flex-direction: column; gap: 4px; }
@@ -828,7 +909,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, slider, sliderRow, sliderField, tipDot,
     renderField, renderFields, fieldFramed, framedPart,
-    editorStyles, formStyles
+    editorStyles, formStyles, partHighlight
   });
 })());
 
@@ -940,7 +1021,24 @@ class SupercardCore extends LitElement {
         box-sizing: border-box !important;
       }
 
+      /*
+       * The card's whole z-index scale lives inside this box.
+       *
+       * SC_LAYERS counts to 1800, and the colour and glass modules pin the
+       * content container at 500 so the backgrounds they inject can sit under
+       * it. None of that is meant to be seen from outside - but ha-card is
+       * only position: relative, which is no stacking context, so every one
+       * of those numbers was being read against whatever context happened to
+       * be above the card. Home Assistant's own header is a fixed box at
+       * z-index 4, so a card that says 500 scrolls over the navigation and
+       * takes the dashboard's tabs with it.
+       *
+       * isolation: isolate makes this the context they are all measured in.
+       * The card itself then stands where an ordinary card stands, and the
+       * header is above it again.
+       */
       ha-card {
+        isolation: isolate;
         display: grid !important;
         grid-template-columns: 100% !important;
         grid-template-rows: 100% !important;
@@ -1295,7 +1393,7 @@ class ScGenericModuleEditor extends LitElement {
     return html`
       <div style="padding: 0 16px;">
         <details class="inner-section" ?open=${this._isOpen} @toggle=${e => this._isOpen = e.target.open}>
-          <summary>── ${this.title} <span style="font-size:10px;">▼</span></summary>
+          <summary>── ${this.title} <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
           <div class="inner-content">
             ${this.fields.map(f => this._renderField(f))}
           </div>
@@ -1524,7 +1622,7 @@ Object.assign(window.SupercardModules['core'], (() => {
       return html`
         <div style="padding:0 16px;">
           <details class="inner-section" ?open=${this._expanded.dim} @toggle=${e => this._expanded = {...this._expanded, dim: e.target.open}}>
-            <summary>📐 Card & Dimensions <span style="font-size:10px;">▼</span></summary>
+            <summary>${icon('proportions')} Card & Dimensions <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
             <div class="inner-content">
               ${onCanvas ? html`
                 <sc-canvas-dimensions .slot=${this.slot} .cardConfig=${this.cardConfig}
@@ -1594,21 +1692,21 @@ Object.assign(window.SupercardModules['core'], (() => {
 
               <div style="margin-top:8px; padding-top:12px; border-top:1px dashed var(--divider-color,#444);">
                 <sc-color-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
-                                .target=${'main'} .label=${'🎨 Colour & pattern (entire card)'}></sc-color-panel>
+                                .target=${'main'} .label=${'Colour & pattern (entire card)'}></sc-color-panel>
               </div>
               <div style="margin-top:8px;">
                 <sc-fx-glass-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
-                                   .target=${'main'} .label=${'✨ Glass FX (entire card)'}></sc-fx-glass-panel>
+                                   .target=${'main'} .label=${'Glass FX (entire card)'}></sc-fx-glass-panel>
               </div>
               <div style="margin-top:8px;">
                 <sc-push-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
-                               .target=${'main'} .label=${'👆 Push behaviour (entire card)'}></sc-push-panel>
+                               .target=${'main'} .label=${'Push behaviour (entire card)'}></sc-push-panel>
               </div>
             </div>
           </details>
 
           <details class="inner-section" ?open=${this._expanded.basis} @toggle=${e => this._expanded = {...this._expanded, basis: e.target.open}}>
-            <summary>⚙️ Basics & Entity(ies) & Aliases <span style="font-size:10px;">▼</span></summary>
+            <summary>${icon('settings')} Basics & Entity(ies) & Aliases <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
             <div class="inner-content">
 
               <div class="col">
@@ -1627,7 +1725,7 @@ Object.assign(window.SupercardModules['core'], (() => {
                   if (!named || !this.hass || this.hass.states[named]) return '';
                   return html`
                     <span style="font-size:11px;color:var(--error-color,#f44336);margin-top:4px;">
-                      ⚠ Home Assistant does not know <code>${named}</code> - renamed or removed.
+                      ${icon('triangle-alert')} Home Assistant does not know <code>${named}</code> - renamed or removed.
                       The card still draws; the Icon, Name and State elements have nothing to show.
                     </span>`;
                 })()}

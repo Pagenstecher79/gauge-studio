@@ -1,4 +1,5 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { icon } from "./icons.js";
 import { normalizeStops, addStop, removeStop, moveStop, withStop,
          distributeStops, stopsToCss } from "./gradient-stops.js";
 
@@ -45,7 +46,7 @@ class ScGradientStops extends LitElement {
     this.stops = [];
     this.absolute = false;
     this.blocks = false;
-    this.addLabel = '＋ Add colour';
+    this.addLabel = 'Add colour';
     this.previewCss = '';
     this.itemLabel = 'Color';
     this._open = {};
@@ -99,13 +100,13 @@ class ScGradientStops extends LitElement {
             const next = addStop(stops, { absolute: this.absolute });
             this._fold(next.length - 1, true);
             this._emit(next);
-          }}>${this.addLabel}</button>
+          }}>${icon('plus')} ${this.addLabel}</button>
           <button type="button" class="plain" ?disabled=${stops.length < 2}
                   title="Spread the colours evenly"
                   @click=${e => {
                     e.preventDefault();
                     this._emit(distributeStops(stops, { absolute: this.absolute, blocks: this.blocks }));
-                  }}>⬌ Distribute evenly</button>
+                  }}>${icon('align-horizontal-distribute-center')} Distribute evenly</button>
         </div>
 
         ${stops.map((st, i) => html`
@@ -136,7 +137,7 @@ class ScGradientStops extends LitElement {
               <div class="head">
                 <span class="grip" title="Move"
                       @mousedown=${e => e.target.closest('details').setAttribute('draggable', 'true')}
-                      @mouseup=${e => e.target.closest('details').removeAttribute('draggable')}>⋮⋮</span>
+                      @mouseup=${e => e.target.closest('details').removeAttribute('draggable')}>${icon('grip-vertical')}</span>
                 ${this.itemLabel} ${i + 1}
                 <span class="pos">[${this.absolute ? 'Value' : 'Position'}: ${st.pos ?? 'auto'}]</span>
                 <span class="dot" style="background:${st.color}"></span>
@@ -145,7 +146,7 @@ class ScGradientStops extends LitElement {
                 <button class="bin" title="Remove" @click=${e => {
                   e.preventDefault();
                   this._emit(removeStop(stops, i));
-                }}>🗑</button>
+                }}>${icon('trash-2')}</button>
               </div>
             </summary>
             <div class="inner-content" style="padding-top:4px; gap:8px;">

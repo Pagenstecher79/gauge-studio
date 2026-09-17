@@ -2,6 +2,7 @@ import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/co
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GAUGE_DEFAULT } from "./element-templates.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
+import { icon } from "./icons.js";
 
 const SC = window.SupercardUtils;
 
@@ -98,7 +99,7 @@ const presetPatch = (/** @type {any} */ preset, /** @type {any} */ cfg) => {
 };
 
 const STYLE_FIELDS = [
-  { id: '_section_shape',      label: '── 📐 Shape & Position',    type: 'section' },
+  { id: '_section_shape',      icon: icon('proportions'), label: '── Shape & Position',    type: 'section' },
   { id: 'gauge_type',          label: 'Gauge type',             type: 'select', options: [ { value: 'full', label: 'Full 360°' }, { value: 'semi', label: 'Semi 270°' } ] },
   // Four positions used to be the whole offer here, on a dial that has 360 of
   // them. The slider reads clockwise from the top and `gauge-angle.js` turns
@@ -129,7 +130,7 @@ const STYLE_FIELDS = [
   { id: 'gauge_offset_x',      label: 'Offset X (px)',         type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0', condition: hasOwnBox },
   { id: 'gauge_offset_y',      label: 'Offset Y (px)',         type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0', condition: hasOwnBox },
 
-  { id: '_section_frame',           label: '── ⭕ Frame Ring',               type: 'section'  },
+  { id: '_section_frame',           icon: icon('circle'), label: '── Frame Ring',               type: 'section'  },
   { id: 'frame_ring_active',        label: 'Frame active',                 type: 'checkbox', framedBy: 'frame_ring' },
   { id: 'frame_ring_closed',        label: 'Closed circle',          type: 'checkbox', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
   { id: 'frame_ring_width',         label: 'Width',                       type: 'range',    min: 0, max: 8, step: 0.1,  placeholder: '1.5', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
@@ -138,7 +139,7 @@ const STYLE_FIELDS = [
   { id: 'frame_ring_color',         framedBy: 'frame_ring', label: 'Colour (fixed)',                  type: 'color',    condition: cfg => !!cfg.frame_ring_active && cfg.frame_ring_color_type !== 'adaptive' },
   { id: 'frame_ring_opacity',       label: 'Opacity',                    type: 'range',    min: 0, max: 1, step: 0.01,  placeholder: '1.0', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
 
-  { id: '_section_bg',           label: '── 🖼️ Background',             type: 'section' },
+  { id: '_section_bg',           icon: icon('image'), label: '── Background',             type: 'section' },
   { id: 'bg_mode',               label: 'Background mode',          type: 'select', options: [ { value: 'none', label: 'None' }, { value: 'adaptive', label: 'Adaptive (theme)' }, { value: 'solid', label: 'Solid colour' }, { value: 'linear', label: 'Linear gradient' }, { value: 'radial', label: 'Radial gradient' } ] },
   { id: 'bg_gradient_preset',    label: 'Gradient type',                type: 'select', options: [ { value: 'classic', label: 'Classic (2 colours)' }, { value: 'manual', label: 'Manual (list)' } ], condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) },
   { id: 'bg_threshold_unit',     label: 'Threshold unit',          type: 'select',
@@ -180,7 +181,7 @@ const STYLE_FIELDS = [
   { id: 'bg_threshold_anim_ripple_multi',   label: 'Multiple ripple rings (3×)',        type: 'checkbox', condition: cfg => !!cfg.bg_threshold_anim_active && cfg.bg_threshold_anim_type === 'ripple' },
   { id: 'bg_threshold_anim_ripple_inv',     label: 'Implosion (reverse direction)',    type: 'checkbox', condition: cfg => !!cfg.bg_threshold_anim_active && ['ripple', 'waves'].includes(cfg.bg_threshold_anim_type) },
 
-  { id: '_section_data',        label: '── 📊 Data & Scaling',  type: 'section' },
+  { id: '_section_data',        icon: icon('chart-column'), label: '── Data & Scaling',  type: 'section' },
   { id: 'min',                  label: 'Min value',               type: 'number', placeholder: '0'   },
   { id: 'max',                  label: 'Max value',               type: 'number', placeholder: '100' },
   { id: 'value_autorange',      label: 'Auto-range',             type: 'checkbox' },
@@ -188,7 +189,7 @@ const STYLE_FIELDS = [
   { id: 'dynamic_max_scale',    label: 'Dynamic max',        type: 'checkbox' },
   { id: 'autoscale_hysteresis', label: 'Hysteresis (%)',          type: 'number', placeholder: '10'  },
 
-  { id: '_section_color',    label: '── 🎨 Colour & Gradient',   type: 'section' },
+  { id: '_section_color',    icon: icon('palette'), label: '── Colour & Gradient',   type: 'section' },
   { id: 'stroke_width',        label: 'Ring thickness',            type: 'range',    min: 0, max: 5, step: 0.01,  placeholder: '3', framedBy: 'gauge_ring'   },
   { id: 'gradient_ramp',     type: 'gradient_ramp', condition: cfg => ['manual', undefined, ''].includes(cfg.gradient_preset) },
   { id: 'gradient_preset',   label: 'Colour mode',             type: 'select', framedBy: 'gauge_ring', options: [ { value: 'manual', label: 'Manual (list)' }, { value: 'symmetriccustom', label: 'Symmetric (custom)' }, { value: 'symmetric', label: 'Symmetric (default)' }, { value: 'linear', label: 'Linear traffic light' } ] },
@@ -217,7 +218,7 @@ const STYLE_FIELDS = [
   { id: 'threshold1', label: 'Start spread (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '20', condition: cfg => cfg.gradient_preset === 'linear' },
   { id: 'threshold2', label: 'Mid spread (%)', framedBy: 'gauge_ring', type: 'range', min: 0, max: 100, step: 1, placeholder: '60', condition: cfg => cfg.gradient_preset === 'linear' },
 
-  { id: '_section_pointer',       label: '── 🧭 Pointer',                  type: 'section' },
+  { id: '_section_pointer',       icon: icon('compass'), label: '── Pointer',                  type: 'section' },
   { id: 'pointer_type',           label: 'Pointer shape',                type: 'select',  options: [ { value: 'needle', label: 'Needle' }, { value: 'triangle', label: 'Triangle' } ], framedBy: 'pointer' },
   { id: 'pointer_width',          label: 'Pointer width',              type: 'range',    min: 0, max: 5, step: 0.1,   placeholder: '2', framedBy: 'pointer'   },
   { id: 'pointer_length',         label: 'Pointer length',               type: 'range',    min: 0, max: 50, step: 0.1,  placeholder: '10', framedBy: 'pointer'  },
@@ -252,7 +253,7 @@ const STYLE_FIELDS = [
   { id: 'animation_spring_bounces', label: 'Number of overshoots', type: 'range', min: 1, max: 10, step: 1, placeholder: '3', condition: cfg => cfg.animation_easing === 'spring' },
   { id: 'animation_spring_amplitude', label: 'Spring amplitude (intensity %)', type: 'range', min: 0, max: 100, step: 1, placeholder: '50', condition: cfg => cfg.animation_easing === 'spring' },
 
-  { id: '_section_ticks',           label: '── 📏 Ticks',                    type: 'section' },
+  { id: '_section_ticks',           icon: icon('ruler'), label: '── Ticks',                    type: 'section' },
   { id: 'tick_preset',              type: 'tick_preset' },
   { id: 'tick_count',               label: 'Tick count',                 type: 'range',    min: 0, max: 50, step: 1,   placeholder: '0', framedBy: 'ticks'   },
   { id: 'tick_length',              label: 'Tick length',                  type: 'range',    min: 0, max: 6, step: 0.1,   placeholder: '3', framedBy: 'ticks'   },
@@ -295,10 +296,10 @@ const STYLE_FIELDS = [
   { id: '_section_custom_ticks',    label: '── Custom Ticks (Fixed Points)', type: 'subsection' },
   { id: 'custom_ticks',             type: 'custom_ticks' },
 
-  { id: '_section_sectors',         label: '── 🥧 Sectors (Areas)',       type: 'section' },
+  { id: '_section_sectors',         icon: icon('chart-pie'), label: '── Sectors (Areas)',       type: 'section' },
   { id: 'sectors',                  type: 'sectors' },
 
-  { id: '_section_labels',        label: '── 🔢 Value & Labels',           type: 'section' },
+  { id: '_section_labels',        icon: icon('hash'), label: '── Value & Labels',           type: 'section' },
   { id: 'show_value',             label: 'Show value',              type: 'checkbox' },
   { id: 'value_font_size',        label: 'Value font size',          type: 'range',    min: 0, max: 20, step: 0.1,  placeholder: '12',  condition: cfg => !!cfg.show_value, framedBy: 'value' },
   { id: 'value_font_weight',      label: 'Value weight',             type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => !!cfg.show_value, framedBy: 'value' },
@@ -328,7 +329,7 @@ const STYLE_FIELDS = [
   { id: 'multiplier_color_type', framedBy: 'multiplier', label: 'Colour mode',                 type: 'select',  options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_multiplier_label },
   { id: 'multiplier_color', framedBy: 'multiplier',      label: 'Colour (fixed)',                type: 'color',   condition: cfg => !!cfg.show_multiplier_label && cfg.multiplier_color_type !== 'adaptive' },
 
-  { id: '_section_gauge_label',    label: '── 🏷️ Gauge Label',       type: 'section' },
+  { id: '_section_gauge_label',    icon: icon('tag'), label: '── Gauge Label',       type: 'section' },
   // On unless it says otherwise, which is how the gauge itself reads the key:
   // a card that was given a label text by hand draws one, and the switch that
   // said "off" hid every field belonging to the label it was drawing.
@@ -460,7 +461,7 @@ class ScGaugeEditor extends LitElement {
 
     return html`
       <details class="inner-section">
-        <summary>⏱️ Gauges
+        <summary>${icon('gauge')} Gauges
           <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
             <span style="font-size:10px; opacity:.6; font-weight:400;">
               ${gauges.length} Gauge${gauges.length !== 1 ? 's' : ''}
@@ -477,7 +478,7 @@ class ScGaugeEditor extends LitElement {
             <div style="display:flex;flex-direction:column;gap:8px;">
               ${gauges.map((entry, idx) => this._renderGaugePanel(entry, idx, gauges))}
               <button class="add-btn" @click=${() => this._addGauge(gauges)}>
-                ＋ Add gauge
+                ${icon('plus')} Add gauge
               </button>
             </div>
           ` : ''}
@@ -584,7 +585,7 @@ class ScGaugeEditor extends LitElement {
               title="Move gauge"
               @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
               @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-            >⋮⋮</span>
+            >${icon('grip-vertical')}</span>
             ${title}
           </span>
 
@@ -596,15 +597,15 @@ class ScGaugeEditor extends LitElement {
                 const n = structuredClone(gauges);
                 const temp = n[idx-1]; n[idx-1] = n[idx]; n[idx] = temp;
                 this.commitFn('gauges', n);
-              }}>▲</button>
+              }}>${icon('chevron-up')}</button>
               <button title="Move down" ?disabled=${idx === gauges.length - 1} style="background:none;border:none;cursor:${idx === gauges.length - 1 ? 'default' : 'pointer'};font-size:14px;color:${idx === gauges.length - 1 ? 'var(--divider-color,#555)' : 'var(--primary-text-color)'};padding:0;" @click=${(e) => {
                 e.preventDefault();
                 if (idx === gauges.length - 1) return;
                 const n = structuredClone(gauges);
                 const temp = n[idx+1]; n[idx+1] = n[idx]; n[idx] = temp;
                 this.commitFn('gauges', n);
-              }}>▼</button>
-              <button title="Remove" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--error-color,#f44);padding:0;" @click=${(e) => { e.preventDefault(); this._removeGauge(idx, gauges); }}>🗑</button>
+              }}>${icon('chevron-down')}</button>
+              <button title="Remove" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--error-color,#f44);padding:0;" @click=${(e) => { e.preventDefault(); this._removeGauge(idx, gauges); }}>${icon('trash-2')}</button>
             </div>
           ` : ''}
         </summary>
@@ -728,11 +729,12 @@ class ScGaugeEditor extends LitElement {
 
     fields.forEach(f => {
       if (f.type === 'section') {
-        currentSection = { isRoot: false, id: f.id, title: f.label.replace('── ', ''), items: [], subsections: [] };
+        currentSection = { isRoot: false, id: f.id, icon: f.icon,
+                           title: f.label.replace('── ', ''), items: [], subsections: [] };
         rootSections.push(currentSection);
         currentSubsection = null; 
       } else if (f.type === 'subsection') {
-        currentSubsection = { id: f.id, title: f.label.replace('── ', ''), items: [] };
+        currentSubsection = { id: f.id, icon: f.icon, title: f.label.replace('── ', ''), items: [] };
         currentSection.subsections.push(currentSubsection);
       } else {
         if (currentSubsection) {
@@ -763,14 +765,15 @@ class ScGaugeEditor extends LitElement {
                    ?open=${this._expanded[detailKey] || wanted}
                    @toggle=${e => this._expanded[detailKey] = e.target.open}>
             <summary style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="flex: 1;">${sec.title}</span>
+              <span style="flex: 1;">${sec.icon
+                  ? html`<span class="field-icon">${sec.icon}</span>` : ''}${sec.title}</span>
               ${cloneableSections.includes(sec.id) && gauges.length > 1 ? html`
                 <select style="width: auto; max-width: 140px; padding: 2px 4px; font-size: 11px; margin-right: 8px; border: 1px solid var(--divider-color, #444); border-radius: 4px; background: rgba(0,0,0,0.2); color: var(--primary-text-color);" @click=${e => e.stopPropagation()} @change=${e => this._cloneSection(idx, parseInt(e.target.value), sec, gauges, e.target)}>
                   <option value="" disabled selected>Copy from...</option>
                   ${gauges.map((g, i) => i !== idx ? html`<option value="${i}">Gauge ${i+1}</option>` : '')}
                 </select>
               ` : ''}
-              <span style="font-size:10px;">▼</span>
+              <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span>
             </summary>
             
             <div class="inner-content">
@@ -784,8 +787,9 @@ class ScGaugeEditor extends LitElement {
                 return html`
                   <details class="inner-section ${subWanted ? 'wanted' : ''}" data-section=${subsec.id || ''} style="margin-top: 8px; background: rgba(0,0,0,0.15);" ?open=${this._expanded[subDetailKey] || subWanted} @toggle=${e => this._expanded[subDetailKey] = e.target.open}>
                     <summary style="font-size: 13px; font-weight: 500;">
-                      ↳ ${subsec.title}
-                      <span style="font-size:10px;">▼</span>
+                      <span class="field-icon">${icon('corner-down-right')}</span>${subsec.icon
+                          ? html`<span class="field-icon">${subsec.icon}</span>` : ''}${subsec.title}
+                      <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span>
                     </summary>
                     <div class="inner-content">
                       ${this._framedNote(subsec.items, entry)}
@@ -885,7 +889,7 @@ class ScGaugeEditor extends LitElement {
         content = html`
           <sc-color-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
                           .switchless=${true} .noPump=${true}
-                          .label=${'🎨 Background pattern & animation'}
+                          .label=${'Background pattern & animation'}
                           .target=${'elm_gauge_' + idx}></sc-color-panel>`;
         break;
       }
@@ -989,7 +993,7 @@ class ScGaugeEditor extends LitElement {
                         style="cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px;" 
                         @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
                         @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-                      >⋮⋮</span>
+                      >${icon('grip-vertical')}</span>
                       Tick ${ctIdx+1}
                     </div>
                     <div @click=${e => e.stopPropagation()}>
@@ -997,7 +1001,7 @@ class ScGaugeEditor extends LitElement {
                         const n = structuredClone(gauges);
                         n[idx].custom_ticks.splice(ctIdx, 1);
                         this.commitFn('gauges', n);
-                      }}>🗑</button>
+                      }}>${icon('trash-2')}</button>
                     </div>
                   </summary>
                   <div class="inner-content" style="padding-top:4px; gap:8px;">
@@ -1032,7 +1036,7 @@ class ScGaugeEditor extends LitElement {
               n[idx].custom_ticks.push({ value: 0, length: 4, width: 1, offset: 0, color: '#ff0000', label: '' });
               this._setUnfolded(`g${idx}_tick:${n[idx].custom_ticks.length - 1}`, true);
               this.commitFn('gauges', n);
-            }}>＋ Add custom tick</button>
+            }}>${icon('plus')} Add custom tick</button>
           </div>
         `;
         break;
@@ -1078,7 +1082,7 @@ class ScGaugeEditor extends LitElement {
                         style="cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px;" 
                         @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
                         @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-                      >⋮⋮</span>
+                      >${icon('grip-vertical')}</span>
                       Sector ${sIdx+1}
                     </div>
                     <div @click=${e => e.stopPropagation()}>
@@ -1086,7 +1090,7 @@ class ScGaugeEditor extends LitElement {
                         const n = structuredClone(gauges);
                         n[idx].sectors.splice(sIdx, 1);
                         this.commitFn('gauges', n);
-                      }}>🗑</button>
+                      }}>${icon('trash-2')}</button>
                     </div>
                   </summary>
                   <div class="inner-content" style="padding-top:4px; gap:8px;">
@@ -1173,7 +1177,7 @@ class ScGaugeEditor extends LitElement {
               n[idx].sectors.push({ start_percent: 75, length_percent: 25, inner_radius: 12, outer_radius: 22, opacity: 0.85, color: '#dc3232' });
               this._setUnfolded(`g${idx}_sector:${n[idx].sectors.length - 1}`, true);
               this.commitFn('gauges', n);
-            }}>＋ Add sector</button>
+            }}>${icon('plus')} Add sector</button>
           </div>
         `;
         break;
