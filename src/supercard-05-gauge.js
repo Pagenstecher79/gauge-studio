@@ -730,9 +730,23 @@ class ScGauge extends LitElement {
         const dec = tickDecimals;
         return dec > 0 ? parseFloat(v.toFixed(dec)).toString() : v.toFixed(0);
       };
+      // A dial that comes full circle draws its last tick on top of its
+      // first, and with it the last label on top of the first - which is how
+      // 2500 and 0 came to sit inside each other at the top of a full gauge.
+      // So the last one is not drawn at all: on a closed dial it is the first
+      // one, one lap later, and the tick under it is the same tick. Where
+      // both readings are wanted, they are joined into the one label that
+      // stands at the seam, in the order the eye meets them going round - the
+      // lap that is ending, then the one that is starting.
+      const closedDial = totalAngle >= 360 && tCount > 1;
+      const joinEnds = closedDial && this._get('tick_label_join_ends', false);
+      const plainTexts = Array.from({length: tCount}, (_, i) => tickText(i));
+      const labelText = (/** @type {number} */ i) => (joinEnds && i === 0)
+        ? `${plainTexts[tCount - 1]} / ${plainTexts[0]}` : plainTexts[i];
       const plan = { count: tCount, startAngle, totalAngle, radius: radius + tlOff,
-                     fontSize: tlSize, outward: tlOff >= 0,
-                     texts: Array.from({length: tCount}, (_, i) => tickText(i)) };
+                     fontSize: tlSize, outward: tlOff >= 0, closed: closedDial,
+                     texts: plainTexts.map((_, i) => labelText(i)),
+                     reachTexts: plainTexts };
       // A step nobody set is the card's to choose: it labels as many ticks as
       // stand clear of each other, which is the thing the old hand-tuned
       // spread was reaching for and could not hold on to, because the answer
@@ -742,7 +756,8 @@ class ScGauge extends LitElement {
       // The row shares one circle: every label is pushed off it by the reach
       // of the widest of them, so a two-digit number does not stand half a
       // digit deeper than the one-digit number beside it.
-      const labelReachBox = rowBox(plan.texts.filter((_, i) => i % labelStep === 0), tlSize);
+      const labelReachBox = rowBox(plainTexts.filter(
+        (_, i) => i % labelStep === 0 && !(closedDial && i === tCount - 1)), tlSize);
       // Or it keeps every label and sends the crowded ones out a row, which is
       // the one way of separating them that leaves each over its own tick.
       const labelRows = this._get('tick_label_stagger', false) ? staggerRows(plan, labelStep) : [];
@@ -768,6 +783,9 @@ class ScGauge extends LitElement {
       }
 
       for (let i=0; i<tCount; i++) {
+        // The seam of a closed dial: this tick and this label are the first
+        // ones, drawn a second time in the same place.
+        if (closedDial && i === tCount - 1) continue;
         const ang=startAngle+(i/div)*totalAngle;
         const isLabel=this._get('show_tick_labels',false) && (i%labelStep===0);
         const curRIn=isLabel ? rOut-tLen-safeFloat(this._get('tick_label_extra_length',0),0)*scale : rIn;
@@ -776,7 +794,7 @@ class ScGauge extends LitElement {
         ticks.push(svg`<line class="layer-elm-static" x1="${p1.x.toFixed(3)}" y1="${p1.y.toFixed(3)}" x2="${p2.x.toFixed(3)}" y2="${p2.y.toFixed(3)}" stroke="${curCol}" stroke-width="${tWid}" stroke-linecap="round"/>`);
         
         if (isLabel) {
-          const tStr = tickText(i);
+          const tStr = labelText(i);
           
           const rad = ang * Math.PI / 180;
           const cosA = Math.cos(rad), sinA = Math.sin(rad);

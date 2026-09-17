@@ -159,3 +159,46 @@ describe('one circle for a row of labels', () => {
     expect(rowBox(undefined, 10).w).toBeGreaterThan(0);
   });
 });
+
+describe('the seam of a dial that comes full circle', () => {
+  const dial = (count, extra) => ({
+    count, startAngle: -90, totalAngle: 360, radius: 40, fontSize: 3,
+    texts: Array.from({ length: count }, (_, i) => String(i * 100)),
+    ...extra,
+  });
+
+  it('used to thin a closed dial to nothing, and does not now', () => {
+    // The last tick stands on the first, so the two labels could never clear
+    // each other however far the step walked - and the walk gave up and
+    // returned half the count. With the duplicate out of the plan the same
+    // dial is read on its merits.
+    const spec = dial(13, { closed: true });
+    expect(autoStep(spec)).toBeLessThan(autoStep(dial(13)));
+  });
+
+  it('still measures the pair that meet round the seam', () => {
+    // Not the duplicate, but label 0 and the last one actually drawn: on a
+    // closed dial they are neighbours, and nothing else checks that pair.
+    const tight = dial(37, { closed: true, fontSize: 9 });
+    expect(autoStep(tight)).toBeGreaterThan(1);
+  });
+
+  it('keeps the joined label out of the row it shares a circle with', () => {
+    // A seam that reads "1200 / 0" is two labels in one box. Letting its
+    // width govern would push every label at the sides of the dial out by a
+    // number that is only at the top.
+    const plain = dial(13, { closed: true });
+    const joined = dial(13, { closed: true,
+      texts: ['1200 / 0', ...plain.texts.slice(1)], reachTexts: plain.texts });
+    expect(autoStep(joined)).toBe(autoStep(plain));
+  });
+
+  it('drops nothing on a dial that does not come round', () => {
+    // The last label of an open dial is a label like any other: it is placed,
+    // and it is sent out a row when it is crowded. Only a closed dial has a
+    // duplicate to leave out.
+    const tight = { ...dial(13), fontSize: 9 };
+    expect(staggerRows({ ...tight, totalAngle: 270 }, 1)[12]).toBe(1);
+    expect(staggerRows({ ...tight, closed: true }, 1)[12]).toBeUndefined();
+  });
+});

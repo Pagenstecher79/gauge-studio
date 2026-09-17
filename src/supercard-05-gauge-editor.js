@@ -277,6 +277,8 @@ const STYLE_FIELDS = [
     hint: 'Rather than labelling fewer ticks, send the crowded ones out by a row. Each label stays over its own tick.' },
   { id: 'tick_label_font_size',     label: 'Label font size',          type: 'range',    min: 0, max: 20, step: 0.5, placeholder: '7',  condition: cfg => !!cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_label_offset',        label: 'Label distance from ring',      type: 'range',    min: -15, max: 15, step: 0.1,  placeholder: '-8', condition: cfg => !!cfg.show_tick_labels, framedBy: 'tick_labels' },
+  { id: 'tick_label_join_ends', framedBy: 'tick_labels',    label: 'Join both ends into one label', type: 'checkbox', condition: cfg => !!cfg.show_tick_labels && (cfg.gauge_type ?? 'full') === 'full',
+    hint: 'A full circle ends where it began, so both readings share a tick. Off, only the starting one is drawn.' },
   { id: 'tick_label_decimals', framedBy: 'tick_labels',      label: 'Label decimals',        type: 'range',    min: 0, max: 6, step: 1,   placeholder: '0',  condition: cfg => !!cfg.show_tick_labels },
   { id: 'tick_label_color_type', framedBy: 'tick_labels',    label: 'Label colour mode',            type: 'select',   options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_tick_labels },
   { id: 'tick_label_color', framedBy: 'tick_labels',         label: 'Label colour (fixed)',           type: 'color',    condition: cfg => !!cfg.show_tick_labels && cfg.tick_label_color_type !== 'adaptive' },
