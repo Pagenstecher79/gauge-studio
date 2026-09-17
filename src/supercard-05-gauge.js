@@ -313,7 +313,7 @@ class ScGauge extends LitElement {
         out.push(`M${c1.x.toFixed(3)},${c1.y.toFixed(3)} A${radius},${radius},0,0,1,${c2.x.toFixed(3)},${c2.y.toFixed(3)}`);
       }
       return color
-        ? svg`<path class="layer-elm-base" d="${out.join(' ')}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="butt"/>`
+        ? svg`<path class="layer-elm-base" data-sc-part="gauge_ring" d="${out.join(' ')}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="butt"/>`
         : out.join(' ');
     };
 
@@ -348,6 +348,13 @@ class ScGauge extends LitElement {
       <foreignObject class="layer-elm-base" x="0" y="0" width="${this.CENTER * 2}" height="${this.CENTER * 2}" mask="url(#scRingMask)" style="pointer-events:none">
         <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;pointer-events:none;background:conic-gradient(from ${base.toFixed(3)}deg, ${gradStops.join(', ')})"></div>
       </foreignObject>
+      <!-- The gradient ring is painted by a div behind a mask, and a div is
+           not a shape the editor can ask whether a press is on it. So the
+           same arc is drawn once more in nothing at all: it paints no pixel
+           and it is what data-sc-part names, so a press on the ring finds
+           the ring here rather than nowhere. -->
+      <path class="layer-elm-base" data-sc-part="gauge_ring" d="${arc(startAngle, startAngle + totalAngle)}"
+            stroke="transparent" stroke-width="${stroke}" fill="none" stroke-linecap="butt"/>
     </g>`;
   }
 
@@ -690,12 +697,12 @@ class ScGauge extends LitElement {
       const pulseFrameStroke = pulseFrameClass ? `stroke: ${animCol};` : `stroke: ${fCol};`;
       
       if (fClosed || totalAngle >= 360) {
-        frameNode = svg`<circle class="layer-elm-base ${pulseFrameClass}" cx="${this.CENTER}" cy="${this.CENTER}" r="${fRadius}" stroke-width="${fStroke}" fill="none" opacity="${fOpacity}" style="${pulseFrameStroke} transition: stroke 0.4s ease;"/>`;
+        frameNode = svg`<circle class="layer-elm-base ${pulseFrameClass}" data-sc-part="frame_ring" cx="${this.CENTER}" cy="${this.CENTER}" r="${fRadius}" stroke-width="${fStroke}" fill="none" opacity="${fOpacity}" style="${pulseFrameStroke} transition: stroke 0.4s ease;"/>`;
       } else {
         const c1f=polarToCart(this.CENTER,this.CENTER,fRadius,startAngle);
         const c2f=polarToCart(this.CENTER,this.CENTER,fRadius,startAngle+totalAngle-0.01);
         const la=totalAngle>180?1:0;
-        frameNode = svg`<path class="layer-elm-base ${pulseFrameClass}" d="M${c1f.x.toFixed(3)},${c1f.y.toFixed(3)} A${fRadius},${fRadius},0,${la},1,${c2f.x.toFixed(3)},${c2f.y.toFixed(3)}" stroke-width="${fStroke}" fill="none" stroke-linecap="round" opacity="${fOpacity}" style="${pulseFrameStroke} transition: stroke 0.4s ease;"/>`;
+        frameNode = svg`<path class="layer-elm-base ${pulseFrameClass}" data-sc-part="frame_ring" d="M${c1f.x.toFixed(3)},${c1f.y.toFixed(3)} A${fRadius},${fRadius},0,${la},1,${c2f.x.toFixed(3)},${c2f.y.toFixed(3)}" stroke-width="${fStroke}" fill="none" stroke-linecap="round" opacity="${fOpacity}" style="${pulseFrameStroke} transition: stroke 0.4s ease;"/>`;
       }
     }
 
@@ -777,7 +784,7 @@ class ScGauge extends LitElement {
             const ang = angStart + j * angStep;
             const p1 = polarToCart(this.CENTER, this.CENTER, stRIn, ang);
             const p2 = polarToCart(this.CENTER, this.CENTER, stROut, ang);
-            ticks.push(svg`<line class="layer-elm-static" x1="${p1.x.toFixed(3)}" y1="${p1.y.toFixed(3)}" x2="${p2.x.toFixed(3)}" y2="${p2.y.toFixed(3)}" stroke="${stCol}" stroke-width="${stWid}" stroke-linecap="round"/>`);
+            ticks.push(svg`<line class="layer-elm-static" data-sc-part="sub_ticks" x1="${p1.x.toFixed(3)}" y1="${p1.y.toFixed(3)}" x2="${p2.x.toFixed(3)}" y2="${p2.y.toFixed(3)}" stroke="${stCol}" stroke-width="${stWid}" stroke-linecap="round"/>`);
           }
         }
       }
@@ -791,7 +798,7 @@ class ScGauge extends LitElement {
         const curRIn=isLabel ? rOut-tLen-safeFloat(this._get('tick_label_extra_length',0),0)*scale : rIn;
         const p1=polarToCart(this.CENTER,this.CENTER,curRIn,ang), p2=polarToCart(this.CENTER,this.CENTER,rOut,ang);
         const curCol=isLabel?(this._get('tick_label_inherit_color',false)?tlCol:labelTickCol):tCol;
-        ticks.push(svg`<line class="layer-elm-static" x1="${p1.x.toFixed(3)}" y1="${p1.y.toFixed(3)}" x2="${p2.x.toFixed(3)}" y2="${p2.y.toFixed(3)}" stroke="${curCol}" stroke-width="${tWid}" stroke-linecap="round"/>`);
+        ticks.push(svg`<line class="layer-elm-static" data-sc-part="ticks" x1="${p1.x.toFixed(3)}" y1="${p1.y.toFixed(3)}" x2="${p2.x.toFixed(3)}" y2="${p2.y.toFixed(3)}" stroke="${curCol}" stroke-width="${tWid}" stroke-linecap="round"/>`);
         
         if (isLabel) {
           const tStr = labelText(i);
@@ -817,7 +824,7 @@ class ScGauge extends LitElement {
              pL.x += (cosA > 0 ? 1 : -1) * tlSpread * intensity;
           }
 
-          tLabels.push(svg`<text class="layer-elm-static" x="${pL.x.toFixed(3)}" y="${pL.y.toFixed(3)}" fill="${tlCol}" font-size="${tlSize}px" text-anchor="middle" dominant-baseline="central">${tStr}</text>`);
+          tLabels.push(svg`<text class="layer-elm-static" data-sc-part="tick_labels" x="${pL.x.toFixed(3)}" y="${pL.y.toFixed(3)}" fill="${tlCol}" font-size="${tlSize}px" text-anchor="middle" dominant-baseline="central">${tStr}</text>`);
         }
       }
     }

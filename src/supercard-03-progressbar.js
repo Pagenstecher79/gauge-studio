@@ -542,7 +542,7 @@ class ScProgressbar extends LitElement {
 
          // 1. The real layer
          realPillHtml = html`
-            <div class="sc-pb-pill" style="position:absolute; z-index:${ELM_FLOAT + 50}; background:${finalBg}; color:${pCol}; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; font-weight:bold; display:flex; align-items:center; justify-content:center; ${glassCSS} ${pPosStyle}">
+            <div class="sc-pb-pill" data-sc-part="pill" style="position:absolute; z-index:${ELM_FLOAT + 50}; background:${finalBg}; color:${pCol}; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; font-weight:bold; display:flex; align-items:center; justify-content:center; ${glassCSS} ${pPosStyle}">
               ${indDisplayValue}
             </div>`;
 
@@ -555,7 +555,7 @@ class ScProgressbar extends LitElement {
          }
       }
       
-      indicatorTopHtml = html`<div class="sc-pb-indicator-line" style="${lineStyle}"></div>${realPillHtml}`;
+      indicatorTopHtml = html`<div class="sc-pb-indicator-line" data-sc-part="pill" style="${lineStyle}"></div>${realPillHtml}`;
     }
 
     let circularHtml = ''; 
@@ -928,8 +928,8 @@ class ScProgressbar extends LitElement {
             labelsEmptyArr.push(html`<span style="${styleBase} color:${tlColorEmpty};">${txt}</span>`);
             labelsFilledArr.push(html`<span style="${styleBase} color:${tlColorFilled};">${txt}</span>`);
           }
-          tickLabelsEmptyHtml = html`<div class="sc-pb-tick-labels" style="position:absolute; inset:0; pointer-events:none; z-index:${ELM_DYNAMIC + 51};">${labelsEmptyArr}</div>`;
-          tickLabelsFilledHtml = html`<div class="sc-pb-tick-labels" style="position:absolute; inset:0; pointer-events:none;">${labelsFilledArr}</div>`;
+          tickLabelsEmptyHtml = html`<div class="sc-pb-tick-labels" data-sc-part="tick_labels" style="position:absolute; inset:0; pointer-events:none; z-index:${ELM_DYNAMIC + 51};">${labelsEmptyArr}</div>`;
+          tickLabelsFilledHtml = html`<div class="sc-pb-tick-labels" data-sc-part="tick_labels" style="position:absolute; inset:0; pointer-events:none;">${labelsFilledArr}</div>`;
         }
       }
     }
@@ -950,7 +950,7 @@ class ScProgressbar extends LitElement {
       const finalLabelText = (this.config.global_id && this.config.global_id !== 'manual' && this._get('use_alias_name', false)) ? (resolvedAliasName || fallbackLabel) : (this._get('label_text', '') || fallbackLabel);
       
       if (isCirc) {
-        labelHtml = html`<span style="color:${lColor}; font-size:${lSizeStr}; font-weight:${lWeight}; text-shadow:0 1px 2px rgba(0,0,0,0.5); opacity: 0.8; transform: translateY(${parseDim(this._get('circular_label_offset_y', 0), `0cqmin`, 'cqmin')}); display: block; transition: color 0.1s linear;">${finalLabelText}</span>`;
+        labelHtml = html`<span data-sc-part="label" style="color:${lColor}; font-size:${lSizeStr}; font-weight:${lWeight}; text-shadow:0 1px 2px rgba(0,0,0,0.5); opacity: 0.8; transform: translateY(${parseDim(this._get('circular_label_offset_y', 0), `0cqmin`, 'cqmin')}); display: block; transition: color 0.1s linear;">${finalLabelText}</span>`;
       } else {
         const lPos = this._get('label_position', 'center'); 
         let ljc = 'center', lai = 'center'; 
@@ -959,7 +959,7 @@ class ScProgressbar extends LitElement {
         
         labelHtml = html`
           <div class="sc-pb-labels" style="display:flex; width:100%; height:100%; position:absolute; inset:0; pointer-events:none; z-index:${ELM_FLOAT}; justify-content:${ljc}; align-items:${lai}; padding:4px 8px; box-sizing:border-box;">
-            <span style="color:${lColor}; font-size:${lSizeStr}; font-weight:${lWeight}; text-shadow:0 1px 2px rgba(0,0,0,0.5); white-space:nowrap; transform: translate(${parseDim(this._get('label_offset_x', 0), `0${u}`, u)}, ${parseDim(this._get('label_offset_y', 0), `0${u}`, u)}) rotate(${this._get('label_rotation', '0')}deg); display:inline-block; transition: color 0.1s linear;">${finalLabelText}</span>
+            <span data-sc-part="label" style="color:${lColor}; font-size:${lSizeStr}; font-weight:${lWeight}; text-shadow:0 1px 2px rgba(0,0,0,0.5); white-space:nowrap; transform: translate(${parseDim(this._get('label_offset_x', 0), `0${u}`, u)}, ${parseDim(this._get('label_offset_y', 0), `0${u}`, u)}) rotate(${this._get('label_rotation', '0')}deg); display:inline-block; transition: color 0.1s linear;">${finalLabelText}</span>
           </div>`;
       }
     }
@@ -1047,13 +1047,13 @@ class ScProgressbar extends LitElement {
         ${floatingValueHtml}
         
         ${this._get('show_ticks', false) && !isCirc ? html`
-          <div class="sc-pb-subticks" style="position:absolute; inset:0; z-index:${ELM_DYNAMIC + 40};">${subtickElementsEmptyArr}</div>
-          <div class="sc-pb-ticks" style="z-index:${ELM_DYNAMIC + 50}; ${ticksStyle}">${tickElementsEmptyArr}</div>
+          <div class="sc-pb-subticks" data-sc-part="sub_ticks" style="position:absolute; inset:0; z-index:${ELM_DYNAMIC + 40};">${subtickElementsEmptyArr}</div>
+          <div class="sc-pb-ticks" data-sc-part="ticks" style="z-index:${ELM_DYNAMIC + 50}; ${ticksStyle}">${tickElementsEmptyArr}</div>
           ${tickLabelsEmptyHtml}
           
           <div style="position:absolute; inset:0; z-index:${ELM_DYNAMIC + 55}; clip-path: ${fillClipPath}; pointer-events:none;">
-            <div class="sc-pb-subticks" style="position:absolute; inset:0;">${subtickElementsFilledArr}</div>
-            <div class="sc-pb-ticks" style="position:absolute; inset:0; ${ticksStyle}">${tickElementsFilledArr}</div>
+            <div class="sc-pb-subticks" data-sc-part="sub_ticks" style="position:absolute; inset:0;">${subtickElementsFilledArr}</div>
+            <div class="sc-pb-ticks" data-sc-part="ticks" style="position:absolute; inset:0; ${ticksStyle}">${tickElementsFilledArr}</div>
             ${tickLabelsFilledHtml}
           </div>
         ` : ''}

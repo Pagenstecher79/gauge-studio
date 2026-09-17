@@ -1670,6 +1670,123 @@ function boxFrame(box) {
 }
 
 /**
+ * How far a press may miss what it was aimed at and still land on it.
+ *
+ * A tick is a pixel wide. It is also a thing a finger is aimed at, so a press
+ * is allowed to be a little off - but only a little: a bar's marks stand a
+ * few pixels apart, and a reach wide enough to feel generous is wide enough
+ * to answer with the neighbour.
+ */
+const PART_HIT_SLOP = 5;
+
+/** The press itself, and eight points a slop out from it. */
+const HIT_RING = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1],
+                  [0.7, 0.7], [0.7, -0.7], [-0.7, 0.7], [-0.7, -0.7]]
+  .map(([x, y]) => [x * PART_HIT_SLOP, y * PART_HIT_SLOP]);
+
+/**
+ * Whether a press is on this shape, and how big a thing it would be landing
+ * on - 0 for a miss.
+ *
+ * Its rectangle is the wrong question for anything drawn round: the box of a
+ * gauge's ring is the whole gauge, and a press in the middle of one is a
+ * press on nothing. So a shape is asked - `isPointInStroke`, and `isPointInFill`
+ * only where there is a fill to be inside, because the fill *geometry* of a
+ * ring drawn with `fill="none"` is still the disc it encloses. Everything
+ * else is a box and is taken as one.
+ *
+ * The slop is sampled around the press rather than added to the shape,
+ * because a stroke cannot be widened without redrawing it.
+ */
+function paints(/** @type {any} */ node) {
+  if (node.textContent?.trim()) return true;
+  const cs = getComputedStyle(node);
+  if (cs.backgroundImage !== 'none' || cs.boxShadow !== 'none') return true;
+  if (parseFloat(cs.borderTopWidth) || parseFloat(cs.borderLeftWidth)) return true;
+  const bg = cs.backgroundColor;
+  return !(bg === 'transparent' || /,\s*0\)$/.test(bg) || /\/\s*0\s*\)$/.test(bg));
+}
+
+/**
+ * Whether the press is on this shape: 2 on it, 1 within a slop of it, 0 not.
+ *
+ * Its rectangle is the wrong question for anything drawn round: the box of a
+ * gauge's ring is the whole gauge, and a press in the middle of one is a
+ * press on nothing. So a shape is asked - `isPointInStroke`, and
+ * `isPointInFill` only where there is a fill to be inside, because the fill
+ * *geometry* of a ring drawn with `fill="none"` is still the disc it
+ * encloses. Everything else is a box and is taken as one.
+ *
+ * The slop is sampled around the press rather than added to the shape,
+ * because a stroke cannot be widened without redrawing it.
+ */
+function hitNode(/** @type {any} */ node, /** @type {number} */ x, /** @type {number} */ y) {
+  const r = node.getBoundingClientRect();
+  if (!r.width && !r.height) return 0;
+  // A row of ticks whose ticks are switched off is still a box the width of
+  // the bar, and it would swallow every press meant for the bare drawing -
+  // including the one that is how a part is let go of. A leaf that paints
+  // nothing is not a part; it is where a part would have been.
+  const svg = typeof node.isPointInStroke === 'function';
+  if (!svg && !node.children.length && !paints(node)) return 0;
+  if (x < r.left - PART_HIT_SLOP || x > r.right + PART_HIT_SLOP
+      || y < r.top - PART_HIT_SLOP || y > r.bottom + PART_HIT_SLOP) return 0;
+  const inBox = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  const ctm = svg && node.getScreenCTM?.();
+  if (!ctm) return inBox ? 2 : 1;
+  const inv = ctm.inverse();
+  const filled = getComputedStyle(node).fill !== 'none';
+  const on = (/** @type {DOMPoint} */ p) =>
+    node.isPointInStroke(p) || (filled && node.isPointInFill(p));
+  if (on(new DOMPoint(x, y).matrixTransform(inv))) return 2;
+  for (const [dx, dy] of HIT_RING) {
+    if (on(new DOMPoint(x + dx, y + dy).matrixTransform(inv))) return 1;
+  }
+  return 0;
+}
+
+/**
+ * Which part of what an element draws a press landed on, or null.
+ *
+ * The renderers mark what they draw with `data-sc-part` - the same attribute
+ * a gauge's texts are already measured by - so what can be taken hold of is
+ * what is actually on the screen, wherever the renderer decided to put it,
+ * and the editor needs to know no geometry of its own. A mark that stands for
+ * a row of things is marked once and its children are what is tested, because
+ * the row is the part and a tick is where the press is.
+ *
+ * What is on wins over what is merely near, and after that the last one drawn
+ * wins - not the smallest. A tick is smaller than the pill lying over it and
+ * would otherwise be answered with through the pill; document order is the
+ * order the renderer painted in, so the thing on top is the thing named.
+ *
+ * @param {any} box the element's box on the canvas
+ * @param {number} x
+ * @param {number} y
+ * @param {any} parts the parts this kind will answer with
+ * @returns {string|null}
+ */
+function drawnPartAt(box, x, y, parts) {
+  const root = box?.querySelector('sc-gauge, sc-progressbar')?.shadowRoot;
+  if (!root) return null;
+  const scan = (/** @type {any} */ node) => {
+    if (!node.children.length) return hitNode(node, x, y);
+    let best = 0;
+    for (const kid of node.children) best = Math.max(best, scan(kid));
+    return best;
+  };
+  let hit = null;
+  let sure = 0;
+  for (const node of root.querySelectorAll('[data-sc-part]')) {
+    const part = /** @type {any} */ (node).dataset.scPart;
+    if (!parts[part]) continue;
+    const h = scan(node);
+    if (h && h >= sure) { sure = h; hit = part; }
+  }
+  return hit;
+}
+
+/**
  * The kinds of element whose own parts the canvas can take in hand, and what
  * each one is made of.
  *
@@ -3247,10 +3364,12 @@ class ScCanvasEditor extends LitElement {
       return this._startPan(e);
     }
     e.stopPropagation();
-    // A press that gets this far is on bare canvas or on an element's own box,
-    // never on a gauge's part - every one of those stops the event where it is
-    // taken hold of. So it is how a part is let go of again, which until now
-    // could only be done by taking hold of a different one.
+    if (mode === 'move' && this._takeDrawnPart(e)) return;
+    // A press that gets this far is on bare canvas, or on an element's own box
+    // where it draws nothing - every part stops the event where it is taken
+    // hold of, and the drawing has just had its turn. So it is how a part is
+    // let go of again, which until then could only be done by taking hold of
+    // a different one.
     this._letGoOfPart();
     const surface = e.currentTarget.closest('.canvas');
     const rect = surface.getBoundingClientRect();
@@ -5052,6 +5171,50 @@ class ScCanvasEditor extends LitElement {
    * only becomes a frame once the pointer has actually travelled - otherwise
    * every click would flash a zero-sized box.
    */
+  /**
+   * Offer a press to what the open element draws, and take that part in hand.
+   *
+   * The part is where it is drawn. A chip stands beside the drawing and a
+   * frame is thrown round it, but neither is the thing itself, and hunting
+   * along a row of chips for the one that names the tick already under the
+   * finger is the proxy the canvas is meant to do away with.
+   *
+   * Only while an element is open: outside that the press belongs to the
+   * element, and a pill covers most of a bar, so a bar could no longer be
+   * picked up by its middle. A press that lands on no part is not taken, and
+   * falls through to whatever the press would otherwise have been - which is
+   * what keeps bare ground the way to let go of a part.
+   *
+   * @param {any} e
+   * @returns {boolean} whether the press has been answered
+   */
+  _takeDrawnPart(e) {
+    if (!this._innerOn) return false;
+    const t = this._innerTarget;
+    const box = t && this.shadowRoot?.querySelector(`.el[data-item-id="${t.id}"]`);
+    if (!box) return false;
+    const part = drawnPartAt(box, e.clientX, e.clientY, { ...t.parts, ...t.rings });
+    if (!part) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    // The same modifier that picks a second element on the canvas adds a
+    // second text to what is held.
+    if (t.parts[part] && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      this._toggleHeld(part);
+      return true;
+    }
+    const fresh = this._innerSel !== part;
+    this._innerSel = part;
+    // A ring is not held together with a text, the same rule the chips and
+    // the frames go by.
+    if (t.rings[part]) this._innerAlso = [];
+    // On release, like every other way of taking a part in hand: the reveal
+    // scrolls the dialog, and doing that under a finger that is still down
+    // moves the drawing out from under it.
+    if (fresh) this._revealOnUp = part;
+    return true;
+  }
+
   _onCanvasDown(e) {
     // Every touch on the canvas is remembered, whatever it turns out to be:
     // the second one is a pinch, and a pinch has to be able to take over from
@@ -5072,6 +5235,10 @@ class ScCanvasEditor extends LitElement {
     // past its client box, which is the scrollbar's own strip.
     if (view && e.target === view
         && (e.offsetX >= view.clientWidth || e.offsetY >= view.clientHeight)) return;
+    // A gauge draws well outside its box - most of a dial's numbers stand
+    // beyond it - so a press on one of them arrives here rather than at the
+    // element, and the drawing has to be offered the press from both sides.
+    if (this._takeDrawnPart(e)) return;
     this._letGoOfPart();
     const canvas = e.currentTarget.querySelector('.canvas');
     if (!canvas) return;
