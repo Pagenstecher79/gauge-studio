@@ -273,7 +273,7 @@ class ScProgressbar extends LitElement {
   }
 
   static get styles() {
-    return css`
+    return [SC.partHighlight, css`
       :host {
         display: block; position: absolute; width: 100%; height: 100%;
         pointer-events: none; contain: layout style;
@@ -328,7 +328,7 @@ class ScProgressbar extends LitElement {
 
       .sc-pb-ticks { position: absolute; inset: 0; pointer-events: none; opacity: var(--pb-tick-opacity, 1); z-index: ${ELM_DYNAMIC + 50}; }
       .sc-pb-labels { position: absolute; inset: 0; pointer-events: none; z-index: ${ELM_FLOAT}; }
-    `;
+    `];
   }
 
   render() {

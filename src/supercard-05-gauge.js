@@ -48,7 +48,7 @@ class ScGauge extends LitElement {
   }
 
   static get styles() {
-    return css`
+    return [SC.partHighlight, css`
       :host { display: block; position: relative; width: 100%; height: 100%; pointer-events: none; }
       
       .text-container      { position: static !important; }
@@ -112,7 +112,7 @@ class ScGauge extends LitElement {
       .layer-elm-static  { z-index: 800; }
       .layer-elm-dynamic { z-index: 900; }
       .layer-elm-float   { z-index: 1000; }
-    `;
+    `];
   }
 
   constructor() {
@@ -995,7 +995,7 @@ class ScGauge extends LitElement {
 
     const pointerLayers = html`
       ${filterAttr ? shadowAt(svg`<circle cx="0" cy="0" r="${dotR}" fill="${sCol}"/>${is3d ? '' : shape(sCol, null)}`) : ''}
-      ${layer(pivot, pivot, false, svg`<circle cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${resolveColor(this._get('pointer_dot_color_type','fixed'), this._get('pointer_dot_color',[255,255,255]))}"/>`)}
+      ${layer(pivot, pivot, false, svg`<circle data-sc-part="pointer_center" cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${resolveColor(this._get('pointer_dot_color_type','fixed'), this._get('pointer_dot_color',[255,255,255]))}"/>`)}
       ${(filterAttr && is3d) ? shadowAt(shape(sCol, null)) : ''}
       ${layer(pivot, pivot, true, svg`
           ${is3d ? svg`<defs>

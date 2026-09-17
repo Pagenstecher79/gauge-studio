@@ -1,4 +1,4 @@
-import { LitElement, html, svg, css, unsafeCSS } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { LitElement, html, svg, css, unsafeCSS, nothing } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distributeElements,
          elementsInRect, duplicateElements,
          isSquareLocked, isPinned, DEFAULT_CANVAS, DEFAULT_GRID,
@@ -1956,6 +1956,12 @@ class ScCanvasEditor extends LitElement {
       _inner: { type: String, state: true },
       _innerRects: { type: Object, state: true },
       _innerSel: { type: String, state: true },
+      // Whether the part in hand is shown on the drawing itself, and until
+      // when that is held off. Both are state and neither is config: the
+      // highlight is a way of looking at the canvas, not a property of the
+      // card being drawn.
+      _hl: { type: Boolean, state: true },
+      _hlHold: { type: Number, state: true },
       // The parts held *besides* the one in hand. A plain array rather than a
       // Set, because lit's change detection is identity on both and an array
       // is what the render walks.
@@ -2010,6 +2016,8 @@ class ScCanvasEditor extends LitElement {
     this._revealOnUp = null;
     this._innerSel = null;
     this._innerAlso = [];
+    this._hl = true;
+    this._hlHold = 0;
     this._innerFrame = 0;
     this._innerRects = null;
     this._innerDrag = null;
@@ -4428,7 +4436,45 @@ class ScCanvasEditor extends LitElement {
    * `quiet` keeps the write off the undo stack, which is what makes a whole
    * drag one step rather than one per frame.
    */
+  /**
+   * Which part this element should be showing as the one in hand.
+   *
+   * The renderer is told by name, on the host, because a stylesheet cannot
+   * reach into another element's shadow root and the part is drawn in there.
+   * `nothing` and not an empty string: an absent attribute is what the
+   * renderer's rules are written against, and an empty one would still match.
+   *
+   * Nothing is shown for a few seconds after the part's colour was set. A
+   * highlight over the colour being chosen is a highlight in the way, so the
+   * drawing answers the colour picker plainly first and starts pulsing again
+   * once the hand has moved on.
+   *
+   * @param {string} id
+   */
+  _hlPart(id) {
+    if (!this._hl || !this._innerOn || this._inner !== id) return nothing;
+    if (this._hlHold > Date.now()) return nothing;
+    return this._innerSel || nothing;
+  }
+
+  /**
+   * Hold the highlight off for five seconds, and put it back afterwards.
+   *
+   * The timer is the only thing that can bring it back - nothing else is
+   * going to re-render at the right moment - and a later colour change
+   * simply moves the deadline, so the wait is always five seconds from the
+   * last one rather than from the first.
+   */
+  _holdHighlight() {
+    this._hlHold = Date.now() + 5000;
+    clearTimeout(this.__hlTimer);
+    this.__hlTimer = setTimeout(() => { this._hlHold = 0; }, 5100);
+  }
+
   _writeInner(patch, quiet) {
+    // A colour being chosen is the one thing the highlight must not sit on
+    // top of, so writing one puts it away for a while.
+    if (Object.keys(patch || {}).some(k => /colou?r$/.test(k))) this._holdHighlight();
     const t = this._innerTarget;
     const out = t && t.k.write(this.slot || {}, t, patch);
     if (!out) return;
@@ -5375,6 +5421,7 @@ class ScCanvasEditor extends LitElement {
       const frozen = this._innerOn && this._inner === el.id
                      && FROZEN_WHILE_HELD.has(this._innerSel || '');
       return html`<sc-gauge .config=${cfg} .hass=${this.hass} .frozen=${frozen}
+                            data-sc-hl=${this._hlPart(el.id)}
                             .globalEntities=${slot.global_entities} .onCanvas=${true}></sc-gauge>`;
     }
 
@@ -5383,6 +5430,7 @@ class ScCanvasEditor extends LitElement {
     const cfg = bars[idx];
     if (!cfg || cfg.active === false) return null;
     return html`<sc-progressbar .config=${cfg} .hass=${this.hass} .rootConfig=${slot}
+                                data-sc-hl=${this._hlPart(el.id)}
                                 .globalEntities=${slot.global_entities}></sc-progressbar>`;
   }
 
@@ -5865,6 +5913,7 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
+    const hlTip = 'The part in hand pulses on the drawing itself: a shape glows, a text is framed. A colour just changed is shown plain for five seconds first, so the highlight is never what you are looking at.';
     const liveTip = this._live
       ? "The real gauges and bars. Text sizes are the card's, not this preview's."
       : 'Plain boxes - easier to see and to grab.';
@@ -5888,6 +5937,10 @@ class ScCanvasEditor extends LitElement {
         <span class="settings-label">Live preview ${SC.tipDot(liveTip, { right: true })}</span>
         <ha-switch .checked=${this._live}
                    @change=${e => this._send('live_preview', e.target.checked ? undefined : false)}></ha-switch>
+        <span class="gap"></span>
+        <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
+        <ha-switch .checked=${this._hl}
+                   @change=${(/** @type {any} */ e) => { this._hl = e.target.checked; }}></ha-switch>
       </div>`;
   }
 

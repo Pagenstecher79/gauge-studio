@@ -1,4 +1,4 @@
-import { LitElement, html, css, nothing } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { LitElement, html, css, unsafeCSS, nothing } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { reportedRows, isHeightPinned, canvasFromGrid, defaultShapeRows } from "./canvas-model.js";
 import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { rowsAsCanvas } from "./rows-compat.js";
@@ -733,6 +733,71 @@ Object.assign(window.SupercardUtils, (() => {
                       >${icon('info')}</span>`;
   }
 
+  /**
+   * The parts whose highlight is a frame round them rather than a glow on
+   * them: a word is read, and a word with a halo is a word that is harder to
+   * read. Everything else a renderer marks - a tick, a mark, a ring, a dot -
+   * is a shape, and a shape says it is in hand by glowing.
+   */
+  const HL_FRAMED = ['tick_labels', 'gauge_label', 'value', 'scale_label',
+                     'multiplier', 'label'];
+
+  /** The rest: the shapes, which say they are in hand by glowing. */
+  const HL_GLOWING = ['gauge_ring', 'frame_ring', 'ticks', 'sub_ticks',
+                      'pointer', 'pointer_center', 'pill'];
+
+  /**
+   * Which part of its drawing an element is showing as the one in hand.
+   *
+   * The canvas puts the part's name on the renderer as data-sc-hl, and the
+   * renderer answers for it here, because only the renderer's own stylesheet
+   * can reach inside its shadow root. The marks are the ones the editor
+   * already presses by - data-sc-part - so nothing new has to be drawn or
+   * named for a part to be able to light up.
+   *
+   * A glow rather than a colour: the colour of a tick is the setting being
+   * edited, and a highlight that paints over it hides the very thing the
+   * hand is on. The glow traces the shape, so it works the same on a line in
+   * an SVG and on a row of divs in a bar.
+   *
+   * Nothing is highlighted while data-sc-hl is absent, which is also how the
+   * canvas stands out of the way for a few seconds after a colour is changed.
+   */
+  const partHighlight = (() => {
+    const one = (/** @type {string} */ p) =>
+      `:host([data-sc-hl="${p}"]) [data-sc-part="${p}"]`;
+    const framed = HL_FRAMED.map(one).join(',\n');
+    const glow = HL_GLOWING.map(one).join(',\n');
+    return css`
+      ${unsafeCSS(glow)} {
+        animation: sc-hl-glow 1.6s ease-in-out infinite;
+      }
+      ${unsafeCSS(framed)} {
+        animation: sc-hl-frame 1.6s ease-in-out infinite;
+        outline: 1.5px solid transparent; outline-offset: 2px;
+      }
+      /* The gradient ring is a picture, so it has nothing to glow with. The
+         arc the editor presses it by is drawn in nothing at all, and while
+         the ring is in hand that arc is what pulses - a ring round the ring. */
+      :host([data-sc-hl="gauge_ring"]) [data-sc-part="gauge_ring"][stroke="transparent"] {
+        animation: sc-hl-ring 1.6s ease-in-out infinite;
+      }
+      @keyframes sc-hl-glow {
+        0%, 100% { filter: drop-shadow(0 0 0 var(--sc-hl, #ffd400)); }
+        50%      { filter: drop-shadow(0 0 3px var(--sc-hl, #ffd400))
+                           drop-shadow(0 0 7px var(--sc-hl, #ffd400)); }
+      }
+      @keyframes sc-hl-frame {
+        0%, 100% { outline-color: transparent; }
+        50%      { outline-color: var(--sc-hl, #ffd400); }
+      }
+      @keyframes sc-hl-ring {
+        0%, 100% { stroke: rgba(0,0,0,0); }
+        50%      { stroke: var(--sc-hl, #ffd400); }
+      }
+    `;
+  })();
+
   const editorStyles = css`
     /* The mark in front of a heading. It is sized by the text it stands
        beside and takes its colour, so a heading is one thing, not a picture
@@ -844,7 +909,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, slider, sliderRow, sliderField, tipDot,
     renderField, renderFields, fieldFramed, framedPart,
-    editorStyles, formStyles
+    editorStyles, formStyles, partHighlight
   });
 })());
 
