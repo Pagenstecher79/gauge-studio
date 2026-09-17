@@ -2001,7 +2001,9 @@ class ScCanvasEditor extends LitElement {
       .canvas-settings ha-switch { margin-left: -4px; }
       .canvas-settings .settings-label { display: inline-flex; align-items: center; gap: 4px;
                                          color: var(--primary-text-color); }
-      .canvas-wrap { position: relative; background: rgba(0,0,0,0.15); border: 1px dashed var(--divider-color,#444); border-radius: 4px; padding: 0; display: flex; justify-content: center; }
+      .canvas-wrap { position: relative;
+        background: color-mix(in srgb, var(--primary-text-color, #fff) 6%, transparent);
+        border: 1px dashed var(--divider-color,#444); border-radius: 4px; padding: 0; display: flex; justify-content: center; }
       /* The canvas' own breathing room, moved onto a strip that takes pointer
          events. A selection frame has to be able to start and end *outside*
          the canvas, or an element lying flush against an edge can never be
@@ -2113,8 +2115,20 @@ class ScCanvasEditor extends LitElement {
       /* border-box, so the 1px border is inside the width the zoom sets: as
          content-box it made the canvas 2px wider than the window it is drawn
          in, which is two scrollbars at 100% for a border. */
-      .canvas { position: relative; width: 100%; box-sizing: border-box; background: #1a1a1a; border: 1px solid #555; border-radius: 4px; overflow: hidden; touch-action: none; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-      .grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px); }
+      /* The drawing surface stands for the card, so it takes the card's own
+         colour and follows the theme with it - on a light theme a fixed dark
+         slab is not a neutral backdrop, it is a wrong preview of where the
+         elements will end up. The border and the shadow are what keep it
+         legible against a dialog painted the same colour. */
+      .canvas { position: relative; width: 100%; box-sizing: border-box;
+        background: var(--ha-card-background, var(--card-background-color, #1a1a1a));
+        border: 1px solid var(--divider-color, #555); border-radius: 4px; overflow: hidden;
+        touch-action: none; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+      /* Mixed from the ink rather than fixed to white: the grid has to read
+         as a faint ruling on whatever the surface turned out to be. */
+      .grid { position: absolute; inset: 0; pointer-events: none;
+        --sc-rule: color-mix(in srgb, var(--primary-text-color, #fff) 9%, transparent);
+        background-image: linear-gradient(to right, var(--sc-rule) 1px, transparent 1px), linear-gradient(to bottom, var(--sc-rule) 1px, transparent 1px); }
       /* Isolated because the live preview draws real gauges and bars, and
          those stack themselves with SC_LAYERS - numbers in the thousands,
          against the editor's own 2-to-5. Kept inside the box it is drawn in,
@@ -2202,7 +2216,9 @@ class ScCanvasEditor extends LitElement {
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         text-shadow: none;
       }
-      .handle { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; background: rgba(255,255,255,0.85); border-radius: 100% 0 0 0; cursor: nwse-resize; touch-action: none; }
+      /* Ink, not white: on a light surface a white grip is the surface. */
+      .handle { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px;
+        background: color-mix(in srgb, var(--primary-text-color, #fff) 85%, transparent); border-radius: 100% 0 0 0; cursor: nwse-resize; touch-action: none; }
       .handle::after { content: ''; position: absolute; right: -10px; bottom: -10px; width: 22px; height: 22px; }
       /* The frames over a gauge's own text. The outline is drawn outside the
          measured rect, because the rect is the glyphs and a border on it would
