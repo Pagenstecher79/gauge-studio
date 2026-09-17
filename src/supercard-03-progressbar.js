@@ -1144,7 +1144,7 @@ const STYLE_FIELDS = [
   { id: 'tick_length',         label: 'Main tick length (%, px)', type: 'text', placeholder: '100%', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
   { id: 'tick_width',          label: 'Tick width (px or %)', type: 'text', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
   { id: 'tick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
-  { id: 'tick_color',          label: 'Manual colour',        type: 'color',  placeholder: 'rgba(255,255,255,0.3)', condition: cfg => isLin(cfg) && cfg.show_ticks && !cfg.tick_color_adaptive },
+  { id: 'tick_color',          label: 'Manual colour',        type: 'color',  placeholder: 'rgba(255,255,255,0.3)', condition: cfg => isLin(cfg) && cfg.show_ticks && !cfg.tick_color_adaptive, framedBy: 'ticks' },
 
   { id: '_section_segments',   icon: icon('puzzle'), label: '── Segments (circle)',   type: 'section', condition: cfg => isCirc(cfg) },
   { id: 'circular_segmented',  label: 'Split circle into pill segments', type: 'checkbox', condition: cfg => isCirc(cfg) },
@@ -1160,7 +1160,7 @@ const STYLE_FIELDS = [
   { id: 'subtick_length',      label: 'Subtick length (% or px)',type: 'text', placeholder: '50%', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && cfg.subtick_pos !== 'full', framedBy: 'sub_ticks' },
   { id: 'subtick_width',       label: 'Width (px or %)',    type: 'text', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
   { id: 'subtick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', placeholder: 'false', default: false, condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
-  { id: 'subtick_color',       label: 'Manual colour',        type: 'color', placeholder: 'rgba(255,255,255,0.2)', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && !cfg.subtick_color_adaptive },
+  { id: 'subtick_color',       label: 'Manual colour',        type: 'color', placeholder: 'rgba(255,255,255,0.2)', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && !cfg.subtick_color_adaptive, framedBy: 'sub_ticks' },
 
   { id: '_section_custom_ticks', icon: icon('pin'), label: '── Custom Ticks', type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
   { id: 'custom_ticks',        label: 'Insert additional / manual ticks', type: 'custom-ticks', condition: cfg => isLin(cfg) && cfg.show_ticks },
@@ -1182,7 +1182,7 @@ const STYLE_FIELDS = [
     { value: '180', label: '180° (upside down)' }
   ], condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
   { id: 'tick_labels_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
-  { id: 'tick_labels_color',   label: 'Custom colour',          type: 'color', placeholder: 'var(--secondary-text-color)', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels && !cfg.tick_labels_color_adaptive },
+  { id: 'tick_labels_color',   label: 'Custom colour',          type: 'color', placeholder: 'var(--secondary-text-color)', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels && !cfg.tick_labels_color_adaptive, framedBy: 'tick_labels' },
   { id: 'tick_labels_pos',     label: 'Positioning',        type: 'select', options: [{value:'start', label:'Before / above'}, {value:'end', label:'After / below'}, {value:'center', label:'Centered'}], condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
   { id: 'tick_labels_shift',   label: 'Offset from centre', type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels },
   { id: 'tick_labels_tick_gap',label: 'Gap to tick', type: 'text', placeholder: '4', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels && cfg.tick_labels_pos !== 'center' },
@@ -1233,12 +1233,12 @@ const STYLE_FIELDS = [
 
   { id: '_section_indicator',  icon: icon('pill'), label: '── Indicator & Pill',  type: 'section', condition: cfg => isLin(cfg) },
   { id: 'show_indicator',      label: 'Show indicator line', type: 'checkbox', condition: cfg => isLin(cfg) },
-  { id: 'indicator_color',     label: 'Line colour',       type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator },
-  { id: 'indicator_thickness', label: 'Line thickness (px/%)',type: 'text', placeholder: '2px', condition: cfg => isLin(cfg) && cfg.show_indicator },
-  { type: 'note', framedWhen: 'pill', label: 'The pill is on the canvas while this bar is open - its places, its opacity and its glass are under the chip.' },
+  { id: 'indicator_color',     label: 'Line colour',       type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
+  { id: 'indicator_thickness', label: 'Line thickness (px/%)',type: 'text', placeholder: '2px', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
+  { type: 'note', framedWhen: 'pill', label: 'The pill is on the canvas while this bar is open - the line it rides, its own colours, its type and its glass are all under the chip.' },
   { id: 'indicator_value',     label: 'Show pill with value on line', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
-  { id: 'value_animated',      label: 'Animate value (follow fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
-  { id: 'indicator_value_rotation', label: 'Pill rotation', type: 'select', options: [
+  { id: 'value_animated',      label: 'Animate value (follow fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
+  { id: 'indicator_value_rotation', label: 'Pill rotation', type: 'select', framedBy: 'pill', options: [
     { value: 'auto', label: 'Auto (H ↔ V crossed)' },
     { value: '0', label: '0° (horizontal)' },
     { value: '90', label: '90°' },
@@ -1246,12 +1246,12 @@ const STYLE_FIELDS = [
     { value: '180', label: '180° (upside down)' }
   ], condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
   { id: 'indicator_value_decimals', label: 'Pill decimal places', type: 'range', min: 0, max: 3, step: 1, placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
-  { id: 'indicator_value_adaptive_mode', label: 'Adaptive behavior', type: 'select', options: [
+  { id: 'indicator_value_adaptive_mode', label: 'Adaptive behavior', type: 'select', framedBy: 'pill', options: [
     { value: 'none', label: 'None (manual colours)' },
     { value: 'pill', label: 'Whole pill (background adaptive, text contrast)' },
     { value: 'text', label: 'Text only (text adaptive, background manual)' }
   ], condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
-  { id: 'indicator_value_bg',  label: 'Pill background colour', type: 'color',  placeholder: '#000000', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value && cfg.indicator_value_adaptive_mode !== 'pill' },
+  { id: 'indicator_value_bg',  label: 'Pill background colour', type: 'color',  placeholder: '#000000', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value && cfg.indicator_value_adaptive_mode !== 'pill', framedBy: 'pill' },
   { id: 'indicator_value_opacity', label: 'Pill opacity (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '100', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
   { id: 'indicator_glass_effect', label: 'Glass effect (pill)', type: 'select', framedBy: 'pill', options: [
     { value: 'none', label: 'No effect (default)' },
@@ -1263,8 +1263,8 @@ const STYLE_FIELDS = [
     { value: 'glass_liquid', label: 'Liquid glass (refracts the bar)' },
     { value: 'glass_liquid_heavy', label: 'Liquid glass, thick (more refraction)' }
   ], condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
-  { id: 'indicator_value_color', label: 'Pill text colour',     type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value && cfg.indicator_value_adaptive_mode === 'none' },
-  { id: 'indicator_value_font_size', label: 'Pill font size (CSS text)', type: 'text', placeholder: '10', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
+  { id: 'indicator_value_color', label: 'Pill text colour',     type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value && cfg.indicator_value_adaptive_mode === 'none', framedBy: 'pill' },
+  { id: 'indicator_value_font_size', label: 'Pill font size (CSS text)', type: 'text', placeholder: '10', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
 ];
 
 /**

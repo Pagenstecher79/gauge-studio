@@ -45,6 +45,23 @@ const SC = window.SupercardUtils;
 const TPL_CELL = Object.freeze({ w: 100, h: 66 });
 
 /**
+ * What stands over an element in the editor rather than being drawn by it.
+ *
+ * The frame is one box, and the element's own drawing is only one of its
+ * children: the chips, the panel of numbers, the grips and the buttons are
+ * siblings of it. So a rule written for what the element draws has to say so,
+ * or it reaches the furniture too - and the overrides here are `!important`,
+ * which is how an element with its overflow let out silently stopped its own
+ * panel from scrolling, and one set in bold put its chips in bold with it.
+ *
+ * Excluding the grip by name was already the shape of the answer; this is the
+ * whole list, in one place, so a new piece of furniture is added here rather
+ * than found later as a chip in the wrong font.
+ */
+const EDITOR_FURNITURE = ['.handle', '.inner-open', '.inner-frame', '.inner-adds',
+  '.corner-grip', '.ring-tag', '.ring-steps', '.ring-shape', '.ring-layer'].join(', ');
+
+/**
  * Per-element typography, as CSS text.
  *
  * The card puts this on the slot it renders an element into; the canvas
@@ -765,6 +782,40 @@ const colourRows = (/** @type {string} */ mode, /** @type {string} */ key,
 ];
 
 /**
+ * The swatch that belongs beside a bar's adaptive switch.
+ *
+ * A bar says how a mark is coloured with a flag rather than with the gauge's
+ * fixed/adaptive pair, so `colourRows` does not fit - but the hole it leaves
+ * is the same one. With adaptive off the mark is drawn in a colour of the
+ * card's own, and the only way to that colour was the form.
+ */
+const barPaint = (/** @type {string} */ key, /** @type {string} */ flag,
+                  /** @type {string} */ what, /** @type {string} */ fallback) => ({
+  icon: icon('paintbrush'), what: 'fixed ' + what + ' colour', paint: true,
+  condition: (/** @type {any} */ cfg) => !cfg[flag],
+  // Through the fallback rather than past it: what the swatch should show
+  // when the card says nothing is what the renderer draws, which may be a
+  // `var()` and is never a hex.
+  read: (/** @type {any} */ cfg) => markHex(cfg[key] ?? fallback, '#ffffff'),
+  patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }),
+});
+
+/**
+ * A slider over one of the lengths a bar keeps as text.
+ *
+ * `slide` writes the number it shows, and for one of these that would drop
+ * the `px` or the `%` that says what the number means. So the unit the card
+ * already carries is put back on - or, where the card says nothing, the one
+ * the renderer falls back to.
+ */
+const barSlide = (/** @type {string} */ key, /** @type {string} */ dflt,
+                  /** @type {string} */ what, /** @type {any} */ opts) => ({
+  key, what, dflt, slide: true, unit: true, ...opts,
+  patch: (/** @type {any} */ cfg, /** @type {number} */ v) =>
+    ({ [key]: v + splitUnit(cfg[key], dflt).unit }),
+});
+
+/**
  * Where a part stands and how big it is the first time it is switched on.
  *
  * A part used to arrive at whatever the renderer falls back to when a card
@@ -1326,10 +1377,44 @@ const BAR_PARTS = Object.freeze({
     turnOn: { show_indicator: true, indicator_value: true },
     turnOff: { indicator_value: false },
     steps: [
+      { icon: icon('paintbrush'), what: 'line colour', paint: true,
+        read: (/** @type {any} */ cfg) => markHex(cfg.indicator_color, '#ffffff'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ indicator_color: v }) },
+      barSlide('indicator_thickness', '2px', 'line thickness',
+               { icon: THICK, by: 0.5, min: 0, max: 10 }),
+      { key: 'indicator_value_rotation', icon: icon('rotate-cw'), what: 'rotation',
+        read: (/** @type {any} */ cfg) => String(cfg.indicator_value_rotation ?? 'auto'),
+        picks: [{ value: 'auto', label: 'Crossed with the bar', short: 'Auto' },
+                { value: '0', label: 'Horizontal', short: '0\u00B0' },
+                { value: '90', label: 'Quarter turn', short: '90\u00B0' },
+                { value: '-90', label: 'Quarter turn back', short: '-90\u00B0' },
+                { value: '180', label: 'Upside down', short: '180\u00B0' }] },
       { key: 'indicator_value_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 3, dflt: 0,
         what: 'decimal places' },
+      barSlide('indicator_value_font_size', '10', 'type size',
+               { icon: icon('a-large-small'), by: 1, min: 4, max: 20 }),
+      { key: 'indicator_value_adaptive_mode', icon: icon('palette'),
+        what: 'colour mode',
+        read: (/** @type {any} */ cfg) => cfg.indicator_value_adaptive_mode || 'none',
+        picks: [{ value: 'none', label: 'Nothing - both colours are set here', short: 'Manual' },
+                { value: 'pill', label: 'The pill, with the text for contrast', short: 'Pill' },
+                { value: 'text', label: 'The text alone', short: 'Text' }] },
+      { icon: icon('droplet'), what: 'background colour', paint: true,
+        condition: (/** @type {any} */ cfg) =>
+          (cfg.indicator_value_adaptive_mode || 'none') !== 'pill',
+        read: (/** @type {any} */ cfg) => markHex(cfg.indicator_value_bg, '#000000'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
+          ({ indicator_value_bg: v }) },
+      { icon: icon('type'), what: 'text colour', paint: true,
+        condition: (/** @type {any} */ cfg) =>
+          (cfg.indicator_value_adaptive_mode || 'none') === 'none',
+        read: (/** @type {any} */ cfg) => markHex(cfg.indicator_value_color, '#ffffff'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
+          ({ indicator_value_color: v }) },
       { key: 'indicator_value_opacity', icon: icon('contrast'), by: 5, min: 0, max: 100, dflt: 100,
-        what: 'pill opacity' },
+        what: 'opacity' },
+      { key: 'value_animated', icon: icon('waves'), flag: true,
+        what: 'animated value' },
       { key: 'indicator_glass_effect', icon: icon('pill'), what: 'glass effect',
         read: (/** @type {any} */ cfg) => cfg.indicator_glass_effect || 'none',
         picks: [{ value: 'none', label: 'No effect', short: 'Flat' },
@@ -1374,6 +1459,7 @@ const BAR_PARTS = Object.freeze({
           cfg.tick_align === 'start' || cfg.tick_align === 'end' },
       { key: 'tick_hide_last', icon: icon('scissors'), flag: true, what: 'no last tick' },
       { key: 'tick_color_adaptive', icon: icon('palette'), flag: true, what: 'adaptive colour' },
+      barPaint('tick_color', 'tick_color_adaptive', 'tick', 'rgba(255,255,255,0.3)'),
     ],
   },
   sub_ticks: {
@@ -1406,6 +1492,8 @@ const BAR_PARTS = Object.freeze({
           cfg.subtick_pos === 'start' || cfg.subtick_pos === 'end' },
       { key: 'subtick_color_adaptive', icon: icon('palette'), flag: true,
         what: 'adaptive colour' },
+      barPaint('subtick_color', 'subtick_color_adaptive', 'sub-tick',
+               'rgba(255,255,255,0.2)'),
     ],
   },
   tick_labels: {
@@ -1421,7 +1509,7 @@ const BAR_PARTS = Object.freeze({
       { key: 'tick_labels_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 3, dflt: 0,
         what: 'decimal places' },
       { key: 'tick_labels_size', icon: icon('a-large-small'), by: 1, min: 1, max: 80, dflt: '10', unit: true,
-        what: 'label type' },
+        what: 'label size' },
       { key: 'tick_labeled_extralength', icon: LONG, by: 1, min: 0, max: 200, dflt: '0',
         unit: true, what: 'extra length on a numbered tick',
         // The extra length is added to the tick, and a tick pinned to both
@@ -1432,6 +1520,8 @@ const BAR_PARTS = Object.freeze({
       { key: 'tick_labels_hide_last', icon: icon('arrow-right-to-line'), flag: true, what: 'no last' },
       { key: 'tick_labels_color_adaptive', icon: icon('palette'), flag: true,
         what: 'adaptive colour' },
+      barPaint('tick_labels_color', 'tick_labels_color_adaptive', 'tick label',
+               'var(--secondary-text-color)'),
     ],
   },
 });
@@ -4861,7 +4951,8 @@ class ScCanvasEditor extends LitElement {
                    const v = SC.safeFloat(e.target.value, st.dflt);
                    this._writeInner(st.patch ? st.patch(cfg, v) : { [st.key]: v }, false);
                  }}>
-          <span class="ring-step-val">${now(st)}</span>
+          <span class="ring-step-val">${st.unit
+            ? now(st) + splitUnit(cfg[st.key], st.dflt).unit : now(st)}</span>
         </span>`;
       if (st.picks) return html`
         <span class="ring-group">${stepIcon(st)}
@@ -5746,7 +5837,7 @@ class ScCanvasEditor extends LitElement {
       <div class="col ${centring ? 'part-in-hand' : ''}">
         <style>${this._live ? els.filter(e => !e.surface).map(el => itemTypography(el,
           `.el.live[data-item-id="${el.id}"]`,
-          `.el.live[data-item-id="${el.id}"] > :not(.handle)`)).join('\n') : ''}</style>
+          `.el.live[data-item-id="${el.id}"] > :not(${EDITOR_FURNITURE})`)).join('\n') : ''}</style>
 
         <div class="tool-row">
           <div class="menu-wrap">
