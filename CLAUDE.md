@@ -421,4 +421,11 @@ notes appended under a rule. So write the tag message for users:
 `git tag -a vX.Y.Z -m "..."`. A lightweight tag yields no intro - the workflow
 guards against falling back to the commit message.
 
+**Release notes are written in English**, whatever language the work was
+discussed in - the tag message and the release body both. v2.1.7 to v2.2.1 were
+written in German by following the previous release's language; their release
+bodies have since been translated back, but the tag messages those bodies came
+from are still German, because force-pushing a tag re-fires the release
+workflow and ships a new build to everyone.
+
 `dist/` is gitignored; the release workflow builds it. Never commit build output.
