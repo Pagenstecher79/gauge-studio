@@ -16,6 +16,7 @@ import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          ringInnerEdge, strokeFromRadius, alignParts, frameBand, gaugeScaleOf, gaugeOuter,
          frameInnerEdge, scaleFromRadius, frameWidthFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
+import { revealBy, scrollParent } from "./reveal-scroll.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
@@ -1761,6 +1762,8 @@ class ScCanvasEditor extends LitElement {
     // measured for them, and the gesture moving one. The rects are state
     // because they are measured from what was drawn and then drawn from.
     this._inner = null;
+    /** @type {string|null} The part whose settings to show once the press is over. */
+    this._revealOnUp = null;
     this._innerSel = null;
     this._innerAlso = [];
     this._innerFrame = 0;
@@ -3622,13 +3625,17 @@ class ScCanvasEditor extends LitElement {
         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       }
       const fresh2 = this._innerSel !== part;
+      // Not now: this press may yet become a drag of the chip, and anything
+      // that scrolls while the finger is down moves the drawing out from
+      // under it - the box this drag is measured against was read a line ago
+      // and would be stale by the time the finger moved.
+      if (fresh2) this._revealOnUp = part;
       // A press on the chip that is already in hand is the way back out: the
       // panel of numbers is put away on release, unless the press turned into
       // a drag, which is the chip being moved rather than pressed.
       if (this._innerDrag) this._innerDrag.held = !fresh2;
       this._innerSel = part;
       this._innerAlso = [];
-      if (fresh2) this._revealPart(part);
       return;
     }
     // A corner grip belongs to the element rather than to any one part, so it
@@ -3652,7 +3659,8 @@ class ScCanvasEditor extends LitElement {
     if (target.rings[part]) this._innerAlso = [];
     // After the assignment, never before: what the reveal has to scroll to is
     // the section the new selection has just pulled to the top of the editor.
-    if (fresh) this._revealPart(part);
+    // On release, though, for the same reason a chip's is deferred.
+    if (fresh) this._revealOnUp = part;
     // A ring is dragged in and out rather than about, so what the gesture
     // carries is the geometry it is measured against, not a pair of offsets.
     if (mode === 'ring' || mode === 'needle') {
@@ -4045,7 +4053,20 @@ class ScCanvasEditor extends LitElement {
     // The heading, not the whole fold: it is the shortest thing that proves
     // the settings are there, so the dialog moves as little as it can and the
     // canvas keeps as much of the screen as it can.
-    (fold.querySelector('summary') || fold).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    //
+    // Worked out rather than handed to `scrollIntoView`, which scrolls every
+    // scrollable ancestor: in the config dialog the nearest one holds the
+    // canvas too, so the nudge used to take the drawing off the screen. On a
+    // touchscreen that was the whole of what a tap on a chip appeared to do.
+    const head = fold.querySelector('summary') || fold;
+    const view = scrollParent(head);
+    if (!view) return;
+    // What may not be scrolled away is the element being worked on, not the
+    // whole canvas: its frames and its chips are what the next gesture aims
+    // at, and one with an edge off the screen cannot be dragged by that edge.
+    const dy = revealBy(head.getBoundingClientRect(), view.getBoundingClientRect(),
+                        this._innerBoxRect());
+    if (dy) view.scrollBy({ top: dy, behavior: 'smooth' });
   }
 
   /**
@@ -4912,8 +4933,18 @@ class ScCanvasEditor extends LitElement {
       if (d.mode === 'chip' && d.held && !d.started && this._innerSel === d.part) {
         this._innerSel = null;
       }
+      // A press that turned into a drag has been answered by the drag, and
+      // the part it was about may not even be the one in hand any more.
+      const reveal = this._revealOnUp;
+      this._revealOnUp = null;
+      if (reveal && !d.started && this._innerSel === reveal) this._revealPart(reveal);
       return;
     }
+    // A press that started no drag at all - a ring with no band of its own,
+    // or one whose gauge could not be measured - still selected something.
+    const pending = this._revealOnUp;
+    this._revealOnUp = null;
+    if (pending && this._innerSel === pending) this._revealPart(pending);
     // A pinch ends with the second finger, and the one still down does not
     // then start dragging whatever it happens to be resting on.
     if (this._pinch && this._touches.size < 2) {
