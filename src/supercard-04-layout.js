@@ -2238,9 +2238,18 @@ class ScCanvasEditor extends LitElement {
          frame; amber is the one part in hand, and it is warm rather than loud
          because it lies over artwork somebody is trying to look at. */
       :host { --sc-part: #8ce0ff; --sc-part-sel: #f2b544; --sc-part-sel-ink: #1b1200; }
+      /* The halo and the offset outline both paint *outside* the box, and a
+         drag moves the box by rewriting left/top. WebKit then repaints
+         only the border box and leaves the ring behind, so a label dragged
+         across a gauge on an iPad trails grey fragments of its own shadow -
+         which the light surface made plain to see. Its own compositing layer
+         is what fixes that: the layer is redrawn whole, so there is no dirty
+         rectangle to get wrong. Only the parts of the one element being
+         worked on carry a frame, so this is a handful of layers, not many. */
       .inner-frame { position: absolute; outline: 1px dashed var(--sc-part);
         outline-offset: 3px; box-shadow: 0 0 0 4px rgba(0,0,0,0.55);
         background: rgba(3,169,244,0.14); cursor: move;
+        will-change: transform;
         touch-action: none; z-index: 5; }
       .inner-frame::after { content: ''; position: absolute; inset: -8px; }
       /* Which of the two the middle-axis buttons would act on. */
