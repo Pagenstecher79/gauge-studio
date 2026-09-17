@@ -956,7 +956,24 @@ class SupercardCore extends LitElement {
         box-sizing: border-box !important;
       }
 
+      /*
+       * The card's whole z-index scale lives inside this box.
+       *
+       * SC_LAYERS counts to 1800, and the colour and glass modules pin the
+       * content container at 500 so the backgrounds they inject can sit under
+       * it. None of that is meant to be seen from outside - but ha-card is
+       * only position: relative, which is no stacking context, so every one
+       * of those numbers was being read against whatever context happened to
+       * be above the card. Home Assistant's own header is a fixed box at
+       * z-index 4, so a card that says 500 scrolls over the navigation and
+       * takes the dashboard's tabs with it.
+       *
+       * isolation: isolate makes this the context they are all measured in.
+       * The card itself then stands where an ordinary card stands, and the
+       * header is above it again.
+       */
       ha-card {
+        isolation: isolate;
         display: grid !important;
         grid-template-columns: 100% !important;
         grid-template-rows: 100% !important;
