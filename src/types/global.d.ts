@@ -160,6 +160,10 @@ declare global {
     renderField: (field: any, ctx: EditorFieldCtx) => any;
     /** Every field of a list, in order. */
     renderFields: (fields: any[], ctx: EditorFieldCtx) => any[];
+    /** Whether the canvas has taken a field over and it is not to be drawn. */
+    fieldFramed: (field: any, entry: any, framed?: Set<string>) => boolean;
+    /** Which of a field's parts took it, for the line that stands in for it. */
+    framedPart: (field: any, entry: any, framed?: Set<string>) => string | null;
     /** Shared chrome for the card-list module editors (ha-switch family). */
     editorStyles: CSSResult;
     /** Shared chrome for the compact config forms (.toggle family). */

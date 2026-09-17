@@ -17,6 +17,7 @@ import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          frameInnerEdge, scaleFromRadius, frameWidthFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { revealBy, scrollParent } from "./reveal-scroll.js";
+import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
@@ -699,6 +700,38 @@ const RAMP_PICKS = Object.freeze([
                                    short: pr.label })),
 ]);
 
+/**
+ * How far the dial goes round, and where it begins.
+ *
+ * One question asked twice, so the two rows travel together - and they are
+ * offered under two chips, because the answer belongs to two things at once.
+ * The sweep is the ring's, which is what draws it; the start is the
+ * pointer's, which is what you watch while you set it. Listed twice rather
+ * than written twice: it is the same pair of rows either way, so the two
+ * chips cannot drift apart.
+ *
+ * The sweep has two values, so it reads as the switch it is rather than as a
+ * list with two things in it. The start is shown clockwise from the top and
+ * stored in the renderer's unit, where zero is three o'clock - hence the two
+ * translators; see `gauge-angle.js` for why the stored unit cannot simply
+ * change. `read` alone would only get a translated value as far as the
+ * thumb, which is why the slider honours `patch` too. A semi gauge is
+ * anchored where its gap looks right and has no say in where it starts,
+ * which is the condition the form's own field carries as well.
+ */
+const SWEEP_STEPS = Object.freeze([
+  { key: 'gauge_type', icon: '\u25D4', what: 'sweep',
+    read: (/** @type {any} */ cfg) => cfg.gauge_type || 'full',
+    picks: [{ value: 'full', label: 'Full 360\u00B0', short: '360\u00B0' },
+            { value: 'semi', label: 'Semi 270\u00B0', short: '270\u00B0' }] },
+  { key: 'gauge_start_angle', icon: '\u{1F9ED}', slide: true, by: 1, min: 0, max: 359,
+    dflt: 0, what: 'start position, clockwise from the top',
+    condition: (/** @type {any} */ cfg) => (cfg.gauge_type ?? 'full') === 'full',
+    read: (/** @type {any} */ cfg) => dialFromStartAngle(cfg.gauge_start_angle),
+    patch: (/** @type {any} */ _cfg, /** @type {number} */ v) =>
+      ({ gauge_start_angle: startAngleFromDial(v) }) },
+]);
+
 /** One swatch on the ring, for the presets that are three colours rather than a list. */
 const ringColour = (/** @type {string} */ key, /** @type {string} */ what,
                     /** @type {string} */ dflt, /** @type {any} */ condition) => ({
@@ -867,14 +900,8 @@ const GAUGE_RINGS = Object.freeze({
       ringInnerEdge(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale)),
     fromRadius: (/** @type {number} */ r, /** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
       ({ stroke_width: strokeFromRadius(r, scale, frameBand(_cfg, scale)) }),
-    // How far the ring goes round is the ring's own business, and the ring is
-    // what is in hand while this is showing. Two values, so it reads as the
-    // switch it is rather than as a list with two things in it.
     steps: [
-      { key: 'gauge_type', icon: '\u25D4', what: 'sweep',
-        read: (/** @type {any} */ cfg) => cfg.gauge_type || 'full',
-        picks: [{ value: 'full', label: 'Full 360\u00B0', short: '360\u00B0' },
-                { value: 'semi', label: 'Semi 270\u00B0', short: '270\u00B0' }] },
+      ...SWEEP_STEPS,
       { key: 'gradient_preset', icon: '\u{1F3A8}', what: 'colour mode', picks: RING_COLOUR_MODE,
         read: (/** @type {any} */ cfg) => cfg.gradient_preset || 'manual' },
       // A ramp is not a mode and nothing remembers it was picked: it writes a
@@ -1064,6 +1091,7 @@ const GAUGE_RINGS = Object.freeze({
     // offset are the two ends being dragged, and a second control for either
     // would be a second answer to a question already asked.
     steps: [
+      ...SWEEP_STEPS,
       { key: 'pointer_width', icon: THICK, slide: true, by: 0.1, min: 0.1, max: 10,
         dflt: 2, what: 'pointer width' },
       ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
@@ -4775,8 +4803,14 @@ class ScCanvasEditor extends LitElement {
           <input type="range" class="ring-slide" title=${`Set the ${st.what}`}
                  min=${st.min} max=${st.max} step=${st.by} .value=${String(now(st))}
                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
-                 @input=${(/** @type {any} */ e) =>
-                   this._writeInner({ [st.key]: SC.safeFloat(e.target.value, st.dflt) }, false)}>
+                 @input=${(/** @type {any} */ e) => {
+                   // Same escape hatch the select below has: most sliders set
+                   // the number they show, but one whose stored unit is not
+                   // its shown one has to translate, and `read` alone only
+                   // gets it as far as the thumb.
+                   const v = SC.safeFloat(e.target.value, st.dflt);
+                   this._writeInner(st.patch ? st.patch(cfg, v) : { [st.key]: v }, false);
+                 }}>
           <span class="ring-step-val">${now(st)}</span>
         </span>`;
       if (st.picks) return html`

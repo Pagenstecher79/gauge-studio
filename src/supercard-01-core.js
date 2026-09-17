@@ -499,7 +499,11 @@ Object.assign(window.SupercardUtils, (() => {
    * field, and the field goes while that part is framed - two live controls
    * for one value is worse than one badly placed control. It may be a function
    * of the entry, for where that depends on what is being edited: a solid
-   * colour is a swatch on the drawing, a gradient is a list and is not.
+   * colour is a swatch on the drawing, a gradient is a list and is not. It
+   * may also name several parts, for a setting that more than one of them
+   * offers - where the dial starts is asked under the ring that draws the
+   * sweep and under the pointer that walks it, and the form has to let go
+   * for either.
    * `framedWhen` is the mirror, for the line that stands in for what has gone,
    * so a fold that has lost most of its rows does not read as one that is
    * missing something.
@@ -507,16 +511,27 @@ Object.assign(window.SupercardUtils, (() => {
    * Here rather than inside `renderField` because one editor - the bar's -
    * draws its own fields, and the rule has to be the same rule there.
    *
+   * `framedPart` is the same question asked for an answer rather than a yes:
+   * which of a field's parts is the one that took it. A note that stands in
+   * for the missing rows has to say what took them, and with a field that
+   * names several parts, reading `framedBy` back is no longer that answer.
+   *
    * @param {any} field
    * @param {any} entry the config being edited
    * @param {Set<string>|undefined} framed the parts the canvas has taken over
    * @returns {boolean} true when the field is not to be drawn
    */
-  const fieldFramed = (field, entry, framed) => {
-    if (!field) return false;
+  const framedPart = (field, entry, framed) => {
+    if (!field) return null;
     const by = typeof field.framedBy === 'function'
       ? field.framedBy(entry) : field.framedBy;
-    if (by && framed?.has?.(by)) return true;
+    const parts = Array.isArray(by) ? by : (by ? [by] : []);
+    return parts.find((p) => framed?.has?.(p)) ?? null;
+  };
+
+  const fieldFramed = (field, entry, framed) => {
+    if (!field) return false;
+    if (framedPart(field, entry, framed)) return true;
     return !!field.framedWhen && !framed?.has?.(field.framedWhen);
   };
 
@@ -812,7 +827,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     resolveAlias, withPatch, gaugeIsResponsive, onCanvas, cardIsPill, cardRadius,
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, slider, sliderRow, sliderField, tipDot,
-    renderField, renderFields, fieldFramed,
+    renderField, renderFields, fieldFramed, framedPart,
     editorStyles, formStyles
   });
 })());

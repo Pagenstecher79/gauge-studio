@@ -111,6 +111,7 @@ const STYLE_FIELDS = [
   // on the very gauge that has just been added.
   { id: 'gauge_start_angle',   label: 'Start position (° clockwise from the top)', type: 'range', min: 0, max: 359, step: 1, placeholder: '0',
                                fromStored: dialFromStartAngle, toStored: startAngleFromDial,
+                               framedBy: ['gauge_ring', 'pointer'],
                                condition: cfg => (cfg.gauge_type ?? 'full') === 'full' },
   { id: 'gauge_scale',         label: 'Scale',            type: 'range',    min: 0.2, max: 1, step: 0.01,  placeholder: '1', framedBy: 'frame_ring'  },
 
@@ -771,7 +772,7 @@ class ScGaugeEditor extends LitElement {
             </summary>
             
             <div class="inner-content">
-              ${this._framedNote(sec.items)}
+              ${this._framedNote(sec.items, entry)}
               ${renderItems(sec.items)}
               
               ${sec.subsections.map(subsec => {
@@ -785,7 +786,7 @@ class ScGaugeEditor extends LitElement {
                       <span style="font-size:10px;">▼</span>
                     </summary>
                     <div class="inner-content">
-                      ${this._framedNote(subsec.items)}
+                      ${this._framedNote(subsec.items, entry)}
                       ${renderItems(subsec.items)}
                     </div>
                   </details>
@@ -809,20 +810,26 @@ class ScGaugeEditor extends LitElement {
    * section's own list or one of its subsections - because a ring's distance
    * and a value's offsets live at different depths of the same menu.
    */
-  _framedNote(items) {
-    const framed = items.find(f => f.framedBy && this._framed.has(f.framedBy));
-    if (!framed) return '';
+  _framedNote(items, entry) {
+    // Through the shared rule, not a second reading of `framedBy`: a field
+    // may name several parts, and only one of them is the one in hand.
+    let part = null;
+    for (const f of items) {
+      const p = SC.framedPart(f, entry, this._framed);
+      if (p) { part = p; break; }
+    }
+    if (!part) return '';
     // The needle is the one framed part that is dragged by its ends rather
     // than in and out, so it is the one that has to say so.
     // The ring grows inward from an outer edge that stands still, so what is
     // dragged is the inner edge and the note has to say which.
-    return html`<div class="framed-note">${framed.framedBy === 'gauge_ring'
+    return html`<div class="framed-note">${part === 'gauge_ring'
       ? html`Thickness is on the canvas while this one is selected - drag the
              ring's inner edge, which is the edge of it that moves - and so is
              how it is coloured, under its chip. The list of stops stays here:
              a row of colours to be dragged about is not a control that fits
              on a dial.`
-      : framed.framedBy === 'frame_ring'
+      : part === 'frame_ring'
       // Two edges that are two different settings, which is worth spelling
       // out: nothing else on a gauge is dragged by the outside of it, and a
       // gauge with no frame drawn still has that outer edge to be sized by.
@@ -831,11 +838,11 @@ class ScGaugeEditor extends LitElement {
              the inside to set how wide the frame is drawn. A gauge with no
              frame still shows the outer edge, faintly, because that is what
              its size is. The rest of what the frame is stands under its chip.`
-      : framed.framedBy === 'pointer'
+      : part === 'pointer'
       ? html`Shape, length and offset are on the canvas while this one is
              selected - drag either end of the needle, or use the buttons on
              and under its chip.`
-      : RING_PARTS.has(framed.framedBy)
+      : RING_PARTS.has(part)
       ? html`This one is on the canvas while it is selected - its distance is
              the ring you drag, and the rest of what it is stands under its
              chip.`
@@ -850,7 +857,7 @@ class ScGaugeEditor extends LitElement {
     // Size and place are the frame's job while that frame is the one in hand:
     // two ways to set one number, side by side, is one way too many. The other
     // part keeps its sliders, because only the selected one is being worked on.
-    if (field.framedBy && this._framed.has(field.framedBy)) return html``;
+    if (SC.fieldFramed(field, entry, this._framed)) return html``;
 
     let content;
     const val = entry[field.id];
