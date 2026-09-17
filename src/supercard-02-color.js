@@ -440,7 +440,7 @@ class ScColorEditor extends LitElement {
               <div class="pattern-card">
                 <div class="pattern-header" @click=${e => this._toggle(pat.id, e)}>
                   <div>
-                    <span class="toggle-icon">${isExp ? '▼' : '▶'}</span>
+                    <span class="toggle-icon">${icon(isExp ? 'chevron-down' : 'chevron-right')}</span>
                     <span style="color:${pat.enabled ? 'var(--primary-text-color)' : 'var(--secondary-text-color)'}">${pat.name || 'New pattern'}</span>
                     <span style="font-size:10px;color:${pat.target === 'none' ? '#f44' : 'var(--secondary-text-color)'};margin-left:8px;font-weight:normal">(${targetLabel})</span>
                   </div>
@@ -461,7 +461,7 @@ class ScColorEditor extends LitElement {
                       n.splice(idx + 1, 0, clone);
                       this._commit(n);
                       this._expanded = { ...this._expanded, [clone.id]: true };
-                    }} style="background:none;border:none;color:var(--primary-color);cursor:pointer;padding:4px;font-size:14px;">⧉</button>
+                    }} style="background:none;border:none;color:var(--primary-color);cursor:pointer;padding:4px;font-size:14px;">${icon('copy')}</button>
 
                     <button @click=${e => { e.stopPropagation(); const n = [...patterns]; n.splice(idx, 1); this._commit(n); }}
                       style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">${icon('trash-2')}</button>
@@ -489,7 +489,7 @@ class ScColorEditor extends LitElement {
             const fresh = defaultColorPattern('none');
             this._commit([...patterns, fresh]);
             this._expanded = { ...this._expanded, [fresh.id]: true };
-          }}>＋ Add new pattern</button>
+          }}>${icon('plus')} Add new pattern</button>
         </div>
       </details>
     `;

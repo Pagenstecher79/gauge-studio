@@ -478,7 +478,7 @@ class ScGaugeEditor extends LitElement {
             <div style="display:flex;flex-direction:column;gap:8px;">
               ${gauges.map((entry, idx) => this._renderGaugePanel(entry, idx, gauges))}
               <button class="add-btn" @click=${() => this._addGauge(gauges)}>
-                ＋ Add gauge
+                ${icon('plus')} Add gauge
               </button>
             </div>
           ` : ''}
@@ -585,7 +585,7 @@ class ScGaugeEditor extends LitElement {
               title="Move gauge"
               @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
               @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-            >⋮⋮</span>
+            >${icon('grip-vertical')}</span>
             ${title}
           </span>
 
@@ -597,14 +597,14 @@ class ScGaugeEditor extends LitElement {
                 const n = structuredClone(gauges);
                 const temp = n[idx-1]; n[idx-1] = n[idx]; n[idx] = temp;
                 this.commitFn('gauges', n);
-              }}>▲</button>
+              }}>${icon('chevron-up')}</button>
               <button title="Move down" ?disabled=${idx === gauges.length - 1} style="background:none;border:none;cursor:${idx === gauges.length - 1 ? 'default' : 'pointer'};font-size:14px;color:${idx === gauges.length - 1 ? 'var(--divider-color,#555)' : 'var(--primary-text-color)'};padding:0;" @click=${(e) => {
                 e.preventDefault();
                 if (idx === gauges.length - 1) return;
                 const n = structuredClone(gauges);
                 const temp = n[idx+1]; n[idx+1] = n[idx]; n[idx] = temp;
                 this.commitFn('gauges', n);
-              }}>▼</button>
+              }}>${icon('chevron-down')}</button>
               <button title="Remove" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--error-color,#f44);padding:0;" @click=${(e) => { e.preventDefault(); this._removeGauge(idx, gauges); }}>${icon('trash-2')}</button>
             </div>
           ` : ''}
@@ -773,7 +773,7 @@ class ScGaugeEditor extends LitElement {
                   ${gauges.map((g, i) => i !== idx ? html`<option value="${i}">Gauge ${i+1}</option>` : '')}
                 </select>
               ` : ''}
-              <span style="font-size:10px;">▼</span>
+              <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span>
             </summary>
             
             <div class="inner-content">
@@ -787,9 +787,9 @@ class ScGaugeEditor extends LitElement {
                 return html`
                   <details class="inner-section ${subWanted ? 'wanted' : ''}" data-section=${subsec.id || ''} style="margin-top: 8px; background: rgba(0,0,0,0.15);" ?open=${this._expanded[subDetailKey] || subWanted} @toggle=${e => this._expanded[subDetailKey] = e.target.open}>
                     <summary style="font-size: 13px; font-weight: 500;">
-                      ↳ ${subsec.icon
+                      <span class="field-icon">${icon('corner-down-right')}</span>${subsec.icon
                           ? html`<span class="field-icon">${subsec.icon}</span>` : ''}${subsec.title}
-                      <span style="font-size:10px;">▼</span>
+                      <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span>
                     </summary>
                     <div class="inner-content">
                       ${this._framedNote(subsec.items, entry)}
@@ -993,7 +993,7 @@ class ScGaugeEditor extends LitElement {
                         style="cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px;" 
                         @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
                         @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-                      >⋮⋮</span>
+                      >${icon('grip-vertical')}</span>
                       Tick ${ctIdx+1}
                     </div>
                     <div @click=${e => e.stopPropagation()}>
@@ -1036,7 +1036,7 @@ class ScGaugeEditor extends LitElement {
               n[idx].custom_ticks.push({ value: 0, length: 4, width: 1, offset: 0, color: '#ff0000', label: '' });
               this._setUnfolded(`g${idx}_tick:${n[idx].custom_ticks.length - 1}`, true);
               this.commitFn('gauges', n);
-            }}>＋ Add custom tick</button>
+            }}>${icon('plus')} Add custom tick</button>
           </div>
         `;
         break;
@@ -1082,7 +1082,7 @@ class ScGaugeEditor extends LitElement {
                         style="cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px;" 
                         @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
                         @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-                      >⋮⋮</span>
+                      >${icon('grip-vertical')}</span>
                       Sector ${sIdx+1}
                     </div>
                     <div @click=${e => e.stopPropagation()}>
@@ -1177,7 +1177,7 @@ class ScGaugeEditor extends LitElement {
               n[idx].sectors.push({ start_percent: 75, length_percent: 25, inner_radius: 12, outer_radius: 22, opacity: 0.85, color: '#dc3232' });
               this._setUnfolded(`g${idx}_sector:${n[idx].sectors.length - 1}`, true);
               this.commitFn('gauges', n);
-            }}>＋ Add sector</button>
+            }}>${icon('plus')} Add sector</button>
           </div>
         `;
         break;

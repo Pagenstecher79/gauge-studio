@@ -46,7 +46,7 @@ class ScGradientStops extends LitElement {
     this.stops = [];
     this.absolute = false;
     this.blocks = false;
-    this.addLabel = '＋ Add colour';
+    this.addLabel = 'Add colour';
     this.previewCss = '';
     this.itemLabel = 'Color';
     this._open = {};
@@ -100,7 +100,7 @@ class ScGradientStops extends LitElement {
             const next = addStop(stops, { absolute: this.absolute });
             this._fold(next.length - 1, true);
             this._emit(next);
-          }}>${this.addLabel}</button>
+          }}>${icon('plus')} ${this.addLabel}</button>
           <button type="button" class="plain" ?disabled=${stops.length < 2}
                   title="Spread the colours evenly"
                   @click=${e => {
@@ -137,7 +137,7 @@ class ScGradientStops extends LitElement {
               <div class="head">
                 <span class="grip" title="Move"
                       @mousedown=${e => e.target.closest('details').setAttribute('draggable', 'true')}
-                      @mouseup=${e => e.target.closest('details').removeAttribute('draggable')}>⋮⋮</span>
+                      @mouseup=${e => e.target.closest('details').removeAttribute('draggable')}>${icon('grip-vertical')}</span>
                 ${this.itemLabel} ${i + 1}
                 <span class="pos">[${this.absolute ? 'Value' : 'Position'}: ${st.pos ?? 'auto'}]</span>
                 <span class="dot" style="background:${st.color}"></span>

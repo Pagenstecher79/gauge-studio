@@ -548,7 +548,7 @@ class ScFxGlassEditor extends LitElement {
       <details class="inner-section">
         <summary>${icon('sparkles')} FX: Frosted & Liquid Glass (other targets)
           ${SC.tipDot("Gauges, bars and labels carry their own Glass FX switch in their editor, and the card's is in Card & Dimensions. What is left here is the icon, surfaces and layout cells.")}
-          <span style="font-size:10px">▼</span></summary>
+          <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
         <div class="inner-content">
           ${rows.map(({ pat, idx }, n) => {
             const isExp = !!this._expanded[pat.id];
@@ -575,14 +575,14 @@ class ScFxGlassEditor extends LitElement {
               >
                 <div class="pattern-header" @click=${e => this._toggle(pat.id, e)}>
                   <div>
-                    <span class="drag-handle" @mousedown=${e => { e.stopPropagation(); e.target.closest('.pattern-card').setAttribute('draggable', 'true'); }} @mouseup=${e => { e.stopPropagation(); e.target.closest('.pattern-card').removeAttribute('draggable'); }} @mouseleave=${e => e.target.closest('.pattern-card').removeAttribute('draggable')}>⋮⋮</span>
-                    <span class="toggle-icon">${isExp ? '▼' : '▶'}</span>
+                    <span class="drag-handle" @mousedown=${e => { e.stopPropagation(); e.target.closest('.pattern-card').setAttribute('draggable', 'true'); }} @mouseup=${e => { e.stopPropagation(); e.target.closest('.pattern-card').removeAttribute('draggable'); }} @mouseleave=${e => e.target.closest('.pattern-card').removeAttribute('draggable')}>${icon('grip-vertical')}</span>
+                    <span class="toggle-icon">${icon(isExp ? 'chevron-down' : 'chevron-right')}</span>
                     <span style="color:${pat.enabled ? 'var(--primary-text-color)' : 'var(--secondary-text-color)'}">Glass effect ${n + 1}</span>
                     <span style="font-size:10px;color:${pat.target === 'none' ? '#f44' : 'var(--secondary-text-color)'};margin-left:8px;font-weight:normal;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;">(${targetLabel})</span>
                   </div>
                   <div style="display:flex;align-items:center;gap:8px">
                     <ha-switch .checked=${!!pat.enabled} @click=${e => e.stopPropagation()} @change=${e => { this._set(patterns, idx, 'enabled', e.target.checked); }}></ha-switch>
-                    <button type="button" title="Clone" @click=${e => { e.preventDefault(); e.stopPropagation(); const n = structuredClone(patterns); const clone = structuredClone(pat); clone.id = Date.now(); clone.target = 'none'; n.splice(idx + 1, 0, clone); this._commit(n); this.requestUpdate(); }} style="background:none;border:none;color:var(--primary-color);cursor:pointer;padding:4px;font-size:14px;">⧉</button>
+                    <button type="button" title="Clone" @click=${e => { e.preventDefault(); e.stopPropagation(); const n = structuredClone(patterns); const clone = structuredClone(pat); clone.id = Date.now(); clone.target = 'none'; n.splice(idx + 1, 0, clone); this._commit(n); this.requestUpdate(); }} style="background:none;border:none;color:var(--primary-color);cursor:pointer;padding:4px;font-size:14px;">${icon('copy')}</button>
                     <button type="button" title="Delete" @click=${e => { e.preventDefault(); e.stopPropagation(); const n = [...patterns]; n.splice(idx, 1); this._commit(n); }} style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">${icon('trash-2')}</button>
                   </div>
                 </div>
@@ -621,7 +621,7 @@ class ScFxGlassEditor extends LitElement {
             this._commit(n);
             this._expanded = { ...this._expanded, [newId]: true };
             this.requestUpdate();
-          }}>＋ Add new glass effect</button>
+          }}>${icon('plus')} Add new glass effect</button>
         </div>
       </details>
     `;

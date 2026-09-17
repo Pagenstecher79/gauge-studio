@@ -261,7 +261,7 @@ class ScInteractionEditor extends LitElement {
       <details class="inner-section">
         <summary>${icon('pointer')} Push behaviour
           ${SC.tipDot('Gauges, bars, labels and the card itself carry their push behaviour in their own editor. What is left here is the icon, the name and the state, which have none - and anything pointing at an element the card no longer has.')}
-          <span style="font-size:10px">▼</span></summary>
+          <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
         <div class="inner-content">
           ${homeless.map(id => html`
             <div class="pattern-card">
@@ -278,7 +278,7 @@ class ScInteractionEditor extends LitElement {
               <div class="pattern-card">
                 <div class="pattern-header" @click=${e => this._toggle(pat.id, e)}>
                   <div>
-                    <span class="toggle-icon">${isExp ? '▼' : '▶'}</span>
+                    <span class="toggle-icon">${icon(isExp ? 'chevron-down' : 'chevron-right')}</span>
                     <span style="color:${pat.enabled ? 'var(--primary-text-color)' : 'var(--secondary-text-color)'}">
                       Push behaviour
                     </span>

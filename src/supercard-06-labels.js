@@ -116,7 +116,7 @@ class ScLabelsEditor extends LitElement {
       : '';
 
     return html`
-      <span class="toggle-icon">${this._expanded[item.id] ? '▼' : '▶'}</span>
+      <span class="toggle-icon">${icon(this._expanded[item.id] ? 'chevron-down' : 'chevron-right')}</span>
       <div style="display:flex;align-items:center;">
         ${iconPrev}
         ${name}
@@ -392,7 +392,7 @@ class ScLabelsEditor extends LitElement {
             const entry = newEntry();
             this._commit([...list, entry]);
             this._expanded = { ...this._expanded, [entry.id]: true };
-          }}>＋ Add label</button>
+          }}>${icon('plus')} Add label</button>
         </div>
       </details>
     `;

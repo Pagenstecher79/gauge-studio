@@ -1476,7 +1476,7 @@ class ScProgressbarEditor extends LitElement {
                 <button class="del-btn" @click=${() => updCt(ct.filter((_,i) => i !== ti))}>${icon('trash-2')}</button>
               </div>`)}
             <button type="button" class="add-btn" style="margin-top:4px; padding:6px;"
-              @click=${() => updCt([...ct, { value: 50, color: '#ff0000', width: '2px', length: '', align: 'main', mirror: false }])}>＋ Add custom tick</button>
+              @click=${() => updCt([...ct, { value: 50, color: '#ff0000', width: '2px', length: '', align: 'main', mirror: false }])}>${icon('plus')} Add custom tick</button>
           </div>`;
         break;
       }
@@ -1541,7 +1541,7 @@ class ScProgressbarEditor extends LitElement {
             <summary style="display:flex; justify-content:space-between; align-items:center;">
               <span style="flex: 1;">${g.icon
                   ? html`<span class="field-icon">${g.icon}</span>` : ''}${g.label}</span>
-              <span style="font-size:10px;">▼</span>
+              <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span>
             </summary>
             <div class="inner-content">
               ${g.fields.map(f => this._renderField(f, cfg, v => updateDirect(f.id, v), v => updateDebounced(f.id, v), idx))}
@@ -1599,13 +1599,13 @@ class ScProgressbarEditor extends LitElement {
                 this.commitFn('progressbars', n);
                 this._expanded[`pb_${idx + 1}`] = true;
                 this.requestUpdate();
-              }}>⧉</button>
+              }}>${icon('copy')}</button>
             <button title="Move up" ?disabled=${idx === 0}
               style="background:none;border:none;cursor:${idx===0?'default':'pointer'};font-size:14px;color:${idx===0?'var(--divider-color,#555)':'var(--primary-text-color)'};padding:0;"
-              @click=${e => { e.preventDefault(); if(idx===0) return; const n=structuredClone(bars); const t=n[idx-1]; n[idx-1]=n[idx]; n[idx]=t; this.commitFn('progressbars',n); }}>▲</button>
+              @click=${e => { e.preventDefault(); if(idx===0) return; const n=structuredClone(bars); const t=n[idx-1]; n[idx-1]=n[idx]; n[idx]=t; this.commitFn('progressbars',n); }}>${icon('chevron-up')}</button>
             <button title="Move down" ?disabled=${idx === bars.length-1}
               style="background:none;border:none;cursor:${idx===bars.length-1?'default':'pointer'};font-size:14px;color:${idx===bars.length-1?'var(--divider-color,#555)':'var(--primary-text-color)'};padding:0;"
-              @click=${e => { e.preventDefault(); if(idx===bars.length-1) return; const n=structuredClone(bars); const t=n[idx+1]; n[idx+1]=n[idx]; n[idx]=t; this.commitFn('progressbars',n); }}>▼</button>
+              @click=${e => { e.preventDefault(); if(idx===bars.length-1) return; const n=structuredClone(bars); const t=n[idx+1]; n[idx+1]=n[idx]; n[idx]=t; this.commitFn('progressbars',n); }}>${icon('chevron-down')}</button>
             <button title="Remove"
               style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--error-color,#f44);padding:0;"
               @click=${e => { e.preventDefault(); this._removeProgressbar(idx, bars); }}>${icon('trash-2')}</button>
@@ -1736,7 +1736,7 @@ class ScProgressbarEditor extends LitElement {
             </div>` : html`
             ${bars.map((entry, idx) => this._renderBarPanel(entry, idx, bars))}
             <button type="button" class="add-btn" @click=${() => this._addProgressbar(bars)}>
-              ＋ Add new progressbar
+              ${icon('plus')} Add new progressbar
             </button>`}
         </div>
       </details>`;

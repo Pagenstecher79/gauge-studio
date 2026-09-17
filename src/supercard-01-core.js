@@ -687,7 +687,7 @@ Object.assign(window.SupercardUtils, (() => {
   // Used by the module editors that list pattern/label cards (color,
   // progressbar, labels, fx-glass, interaction). Identified by ha-switch.
   /**
-   * The ⓘ and the balloon it opens: every explanation in every editor.
+   * The mark and the balloon it opens: every explanation in every editor.
    *
    * Prose under a control reads once and then costs that line for good, in an
    * editor that is already taller than the screen. The mark is the primary
@@ -716,7 +716,7 @@ Object.assign(window.SupercardUtils, (() => {
   `;
 
   /**
-   * The ⓘ that opens one explanation. `right` hangs the balloon from the mark's
+   * The mark that opens one explanation. `right` hangs the balloon from the mark's
    * right edge, for a mark near the right of its row.
    *
    * The click is swallowed because a mark often sits inside a `<label>`, and a
@@ -730,7 +730,7 @@ Object.assign(window.SupercardUtils, (() => {
     return html`<span class="tip-dot${opts.right ? ' right' : ''}" tabindex="0"
                       data-tip=${text}
                       @click=${(/** @type {Event} */ e) => { e.preventDefault(); e.stopPropagation(); }}
-                      >ⓘ</span>`;
+                      >${icon('info')}</span>`;
   }
 
   const editorStyles = css`
@@ -751,7 +751,9 @@ Object.assign(window.SupercardUtils, (() => {
     select, input[type="text"], input[type="number"], input[type="range"] { background: var(--card-background-color, #2b2b2b); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; padding: 6px; }
     .add-btn { background: transparent; border: 1px dashed var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; text-align: center; }
     ha-switch { --switch-checked-button-color: var(--primary-color); scale: 0.8; }
-    .toggle-icon { font-size: 10px; margin-right: 8px; display: inline-block; width: 12px; }
+    .toggle-icon { font-size: 13px; margin-right: 8px; width: 13px;
+                   display: inline-flex; align-items: center; justify-content: center;
+                   opacity: .7; }
     .section-title { font-size: 11px; font-weight: bold; color: var(--primary-color); text-transform: uppercase; border-bottom: 1px solid var(--divider-color,#333); padding-bottom: 4px; margin-top: 8px; margin-bottom: -4px; }
     .color-row { display: flex; align-items: center; gap: 6px; }
     .color-row input[type="text"] { flex: 1; }

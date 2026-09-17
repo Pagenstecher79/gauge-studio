@@ -2112,7 +2112,8 @@ class ScCanvasEditor extends LitElement {
       .layer-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px 6px; }
       .layer { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 6px; border-radius: 4px; background: rgba(255,255,255,0.03); }
       .layer.sel { background: rgba(3,169,244,0.18); box-shadow: inset 0 0 0 1px var(--primary-color,#03a9f4); }
-      .layer .grip { color: var(--secondary-text-color); cursor: grab; font-size: 11px; letter-spacing: -1px; }
+      .layer .grip { color: var(--secondary-text-color); cursor: grab; font-size: 14px;
+                     display: inline-flex; align-items: center; }
       .layer.dragging { opacity: 0.4; }
       .layer.drop { outline: 2px dashed var(--primary-color,#03a9f4); outline-offset: -2px; }
       .layer .who { flex: 1; min-width: 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2607,7 +2608,7 @@ class ScCanvasEditor extends LitElement {
          bounded by the max-height above and scrolling, because seven of these
          are taller than any menu should be allowed to grow. */
       .menu.wide { min-width: 340px; max-height: 420px; }
-      .menu-item .chev { float: right; color: var(--secondary-text-color); }
+      .menu-item .chev { float: right; color: var(--secondary-text-color); margin-top: 1px; }
       .menu-item .chev.back { float: none; margin-right: 6px; }
       .menu-item.back { color: var(--secondary-text-color); font-size: 11px; }
       .menu-item.tpl { display: flex; align-items: center; gap: 10px; padding: 6px; }
@@ -5262,7 +5263,7 @@ class ScCanvasEditor extends LitElement {
             <button class="menu-item" ?disabled=${!ok}
                     title=${ok ? '' : "This card's gauge is the card itself, from before a card could have more than one - a second one would replace it."}
                     @click=${() => hasTemplates ? (this._menuKind = k.kind) : this._startPlacing(k.kind)}>
-              ${k.label}${hasTemplates ? html`<span class="chev">›</span>` : ''}
+              ${k.label}${hasTemplates ? html`<span class="chev">${icon('chevron-right')}</span>` : ''}
             </button>`;
         })}
         ${unplaced.length ? html`
@@ -5291,11 +5292,11 @@ class ScCanvasEditor extends LitElement {
     return html`
       <div class="menu wide">
         <button class="menu-item back" @click=${() => { this._menuKind = null; }}>
-          <span class="chev back">‹</span>Back
+          <span class="chev back">${icon('chevron-left')}</span>Back
         </button>
         <div class="menu-group">New ${(k?.label || kind).toLowerCase()}</div>
         <button class="menu-item tpl" @click=${() => this._startPlacing(kind)}>
-          <span class="tpl-pv empty" style=${cell}>＋</span>
+          <span class="tpl-pv empty" style=${cell}>${icon('plus')}</span>
           <span class="tpl-text"><b>Empty</b><em>Nothing set, the way Add has always made one.</em></span>
         </button>
         ${templatesFor(kind).map(t => html`
@@ -5423,7 +5424,7 @@ class ScCanvasEditor extends LitElement {
                      e.currentTarget.classList.remove('dragging');
                      this._layerFrom = null;
                    }}>
-                <span class="grip" title="Drag to move it through the stack">⋮⋮</span>
+                <span class="grip" title="Drag to move it through the stack">${icon('grip-vertical')}</span>
                 <span class="who" title=${el.id} @click=${e => {
                         if (e.shiftKey || e.ctrlKey || e.metaKey) this._toggleSel(el.id);
                         else this._selectOnly(el.id);
@@ -5575,7 +5576,7 @@ class ScCanvasEditor extends LitElement {
    * Card & Dimensions: both describe this picture and nothing else, and both
    * are read while looking at what they change.
    *
-   * One line, with the prose in a balloon on the ⓘ rather than under the row:
+   * One line, with the prose in a balloon on the mark rather than under it:
    * the space over the canvas is the space the canvas wants, and an
    * explanation that is read once should not hold a line of it for good. The
    * balloon answers to hover and to focus, so it is reachable from a keyboard
