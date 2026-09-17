@@ -1999,7 +1999,22 @@ class ScCanvasEditor extends LitElement {
          reach it - an auto margin collapses to 0 instead. Both axes need it,
          which is why the window is a flex container: an auto margin only
          centres vertically inside one. */
+      /* The gutter is held open whether a scrollbar is in it or not, and
+         that is not tidiness - without it the window has a zoom at which it
+         cannot make up its mind. The canvas is a per cent of this box, so a
+         scrollbar appearing narrows it and shortens it with it; the window's
+         own height does not follow, because it is worked out from a width
+         the scrollbar has not been taken off yet. So just under the zoom
+         that fills the window in height, the canvas overflows while there is
+         no scrollbar and fits once there is one - neither answer stands, and
+         Chromium flips between them for as long as you look at it. Measured
+         on an 858px window: every zoom from 2.582 to 2.614 flutters, and
+         2.614 is exactly the zoom that going into a gauge aims for. Holding
+         the gutter open costs the width of one scrollbar and makes the
+         canvas' height the same number in both states, so there is nothing
+         left to flip. */
       .canvas-view { position: relative; width: 100%; overflow: auto;
+                     scrollbar-gutter: stable;
                      scrollbar-width: thin; display: flex; }
       /* flex: none, or a canvas drawn wider than the window would be shrunk
          back to fit by flex-shrink and there would be nothing to scroll. */
