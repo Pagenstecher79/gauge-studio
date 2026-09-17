@@ -124,19 +124,32 @@ function clears(a, b, gap) {
 /**
  * Place the labels a step would produce, as boxes in viewBox units.
  *
+ * `closed` is a dial that comes full circle: its last tick stands on its
+ * first, so the renderer draws only one of them and a plan that placed both
+ * would be measuring a label that is not there. `reachTexts` is for the one
+ * label that is two - the seam of such a dial, where both readings may be
+ * asked for in one box. That box is far wider than any other, and the reach
+ * is shared by the whole row, so letting it govern would push every label at
+ * the sides of the dial out by the width of a number that is only at the
+ * top. It crowds its neighbours with its own width all the same.
+ *
  * @param {{count: number, startAngle: number, totalAngle: number,
  *          radius: number, fontSize: number, texts: string[],
- *          outward?: boolean, rows?: number[]}} spec
+ *          outward?: boolean, rows?: number[], closed?: boolean,
+ *          reachTexts?: string[]}} spec
  */
 function place(spec, step) {
   const { count, startAngle, totalAngle, radius, fontSize, texts } = spec;
   const out = spec.outward;
   const div = count > 1 ? count - 1 : 1;
   const boxes = [];
+  const drawn = (/** @type {number} */ i) =>
+    i % step === 0 && !(spec.closed && i === count - 1);
   // One reach for the whole row, so the numbers share a circle; each label
   // still crowds its neighbour with its own width.
-  const reachBox = rowBox(texts.filter((_, i) => i % step === 0), fontSize);
+  const reachBox = rowBox((spec.reachTexts || texts).filter((_, i) => drawn(i)), fontSize);
   for (let i = 0; i < count; i += step) {
+    if (!drawn(i)) continue;
     const ang = rad(startAngle + (i / div) * totalAngle);
     const cos = Math.cos(ang), sin = Math.sin(ang);
     const row = spec.rows ? spec.rows[i] || 0 : 0;
@@ -160,7 +173,7 @@ function place(spec, step) {
  *
  * @param {{count: number, startAngle: number, totalAngle: number,
  *          radius: number, fontSize: number, texts: string[],
- *          outward?: boolean}} spec
+ *          outward?: boolean, closed?: boolean, reachTexts?: string[]}} spec
  */
 export function autoStep(spec) {
   if (!spec.count || spec.count < 2 || !spec.fontSize) return 1;
@@ -171,8 +184,10 @@ export function autoStep(spec) {
     for (let k = 1; k < placed.length && ok; k++) {
       if (!clears(placed[k - 1], placed[k], gap)) ok = false;
     }
-    // A dial that comes full circle has its first and last label in the same
-    // place, and they crowd each other like any other pair.
+    // A dial that comes full circle brings the row round to where it began,
+    // so the first and last of what was placed are neighbours too - and on a
+    // closed dial that is the only check there is on that pair, because the
+    // walk above never reaches round the seam.
     if (ok && placed.length > 2 && Math.abs(spec.totalAngle) >= 360
         && !clears(placed[0], placed[placed.length - 1], gap)) ok = false;
     if (ok) return step;
@@ -190,7 +205,7 @@ export function autoStep(spec) {
  *
  * @param {{count: number, startAngle: number, totalAngle: number,
  *          radius: number, fontSize: number, texts: string[],
- *          outward?: boolean}} spec
+ *          outward?: boolean, closed?: boolean, reachTexts?: string[]}} spec
  */
 export function staggerRows(spec, step) {
   /** @type {number[]} */

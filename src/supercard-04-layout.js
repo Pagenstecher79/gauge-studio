@@ -1063,6 +1063,12 @@ const GAUGE_RINGS = Object.freeze({
       // one's own has already answered it.
       { key: 'tick_label_stagger', icon: '\u2934', what: 'two rows', flag: true,
         condition: (/** @type {any} */ cfg) => !SC.safeFloat(cfg.tick_label_step, 0) },
+      // Only on a dial that comes full circle, where the two ends of the
+      // scale land on one tick. Off, the label there is the one the dial
+      // starts at; on, it reads both, ending lap first.
+      { key: 'tick_label_join_ends', icon: '\u29C4', flag: true,
+        what: 'both ends in one label',
+        condition: (/** @type {any} */ cfg) => (cfg.gauge_type ?? 'full') === 'full' },
       { key: 'tick_label_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
         what: 'decimals' },
       { key: 'tick_label_font_size', icon: 'A', by: 0.5, min: 1, max: 20, dflt: 7,
