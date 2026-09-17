@@ -1,4 +1,4 @@
-import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { LitElement, html, svg, css, unsafeCSS } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distributeElements,
          elementsInRect, duplicateElements,
          isSquareLocked, isPinned, DEFAULT_CANVAS, DEFAULT_GRID,
@@ -17,6 +17,7 @@ import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
          frameInnerEdge, scaleFromRadius, frameWidthFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { revealBy, scrollParent } from "./reveal-scroll.js";
+import { icon, iconMask } from "./icons.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
@@ -442,14 +443,16 @@ const SAME_SPOT_PX = 4;
 /**
  * The mark on an align button.
  *
- * Plain glyphs: the row reads as one line of symbols beside the distribute
- * pair and the pencil, which are glyphs too, rather than as four drawings
- * among them. The middles carry the stroke through the arrow, which is the
- * axis they put a thing back on.
+ * Each one shows what it does rather than which way it points: bars gathered
+ * against an edge, or run through the middle they are put back on. An arrow
+ * only says "that way", and six arrows in a row say it six times.
  */
 function alignIcon(edge) {
-  return { left: '\u2190', right: '\u2192', top: '\u2191', bottom: '\u2193',
-           hcenter: '\u21F9', vcenter: '\u21F3' }[edge] || '';
+  const name = { left: 'align-start-vertical', right: 'align-end-vertical',
+                 top: 'align-start-horizontal', bottom: 'align-end-horizontal',
+                 hcenter: 'align-center-vertical',
+                 vcenter: 'align-center-horizontal' }[edge];
+  return name ? icon(name) : '';
 }
 
 /**
@@ -643,11 +646,11 @@ const textWeights = (/** @type {string} */ key, /** @type {string} */ dflt) => (
 /**
  * The two glyphs that tell a mark's length from its thickness.
  *
- * A tick runs outward from the ring, so its length is the up-and-down arrow
+ * A tick runs outward from the ring, so its length is the up-and-down icon
  * and its width the one across - the same way round as the mark itself.
  */
-const LONG = '\u2195';
-const THICK = '\u2194';
+const LONG = icon('move-vertical');
+const THICK = icon('move-horizontal');
 
 /**
  * A mark's colour is stored the way the colour reader takes it - a hex string,
@@ -720,11 +723,11 @@ const RAMP_PICKS = Object.freeze([
  * which is the condition the form's own field carries as well.
  */
 const SWEEP_STEPS = Object.freeze([
-  { key: 'gauge_type', icon: '\u25D4', what: 'sweep',
+  { key: 'gauge_type', icon: icon('chart-pie'), what: 'sweep',
     read: (/** @type {any} */ cfg) => cfg.gauge_type || 'full',
     picks: [{ value: 'full', label: 'Full 360\u00B0', short: '360\u00B0' },
             { value: 'semi', label: 'Semi 270\u00B0', short: '270\u00B0' }] },
-  { key: 'gauge_start_angle', icon: '\u{1F9ED}', slide: true, by: 1, min: 0, max: 359,
+  { key: 'gauge_start_angle', icon: icon('compass'), slide: true, by: 1, min: 0, max: 359,
     dflt: 0, what: 'start position, clockwise from the top',
     condition: (/** @type {any} */ cfg) => (cfg.gauge_type ?? 'full') === 'full',
     read: (/** @type {any} */ cfg) => dialFromStartAngle(cfg.gauge_start_angle),
@@ -735,7 +738,7 @@ const SWEEP_STEPS = Object.freeze([
 /** One swatch on the ring, for the presets that are three colours rather than a list. */
 const ringColour = (/** @type {string} */ key, /** @type {string} */ what,
                     /** @type {string} */ dflt, /** @type {any} */ condition) => ({
-  icon: '\u25A0', what, paint: true, condition,
+  icon: icon('paintbrush'), what, paint: true, condition,
   read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
   patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ [key]: v }),
 });
@@ -751,10 +754,10 @@ const colourRows = (/** @type {string} */ mode, /** @type {string} */ key,
                     /** @type {string} */ what, /** @type {string} */ dflt,
                     /** @type {string} */ fallback,
                     /** @type {((cfg: any) => boolean)=} */ when) => [
-  { key: mode, icon: '\u{1F3A8}', what: what + ' colour', picks: COLOUR_MODE,
+  { key: mode, icon: icon('palette'), what: what + ' colour', picks: COLOUR_MODE,
     condition: when,
     read: (/** @type {any} */ cfg) => cfg[mode] || fallback },
-  { icon: '\u25A0', what: 'fixed ' + what + ' colour', paint: true,
+  { icon: icon('paintbrush'), what: 'fixed ' + what + ' colour', paint: true,
     condition: (/** @type {any} */ cfg) => (cfg[mode] || fallback) !== 'adaptive'
                                         && (!when || when(cfg)),
     read: (/** @type {any} */ cfg) => markHex(cfg[key], dflt),
@@ -805,11 +808,11 @@ const GAUGE_PARTS = Object.freeze({
            steps: [
              ...colourRows('value_color_type', 'value_color', 'value',
                            '#ffffff', 'adaptive'),
-             { key: 'value_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
+             { key: 'value_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 6, dflt: 0,
                what: 'decimals' },
-             { key: 'value_show_raw_unit', icon: '\u{1F517}', flag: true,
+             { key: 'value_show_raw_unit', icon: icon('link'), flag: true,
                what: 'show the unit' },
-             { key: 'value_replace_unit', icon: '\u21C4', flag: true,
+             { key: 'value_replace_unit', icon: icon('arrow-right-left'), flag: true,
                what: 'replace the unit',
                condition: (/** @type {any} */ cfg) => !!cfg.value_show_raw_unit },
            ] },
@@ -833,7 +836,7 @@ const GAUGE_PARTS = Object.freeze({
                  steps: [
                    ...colourRows('scale_label_color_type', 'scale_label_color', 'scale',
                                  '#ffffff', 'adaptive'),
-                   { key: 'scale_label_show_raw_unit', icon: '\u{1F517}', flag: true,
+                   { key: 'scale_label_show_raw_unit', icon: icon('link'), flag: true,
                      what: 'show the unit' },
                  ] },
   multiplier: { label: 'Multiplier', x: 'multiplier_offset_x', y: 'multiplier_offset_y',
@@ -862,9 +865,9 @@ const GAUGE_PARTS = Object.freeze({
                 steps: [
                   ...colourRows('multiplier_color_type', 'multiplier_color', 'multiplier',
                                 '#ffffff', 'adaptive'),
-                  { key: 'multiplier_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
+                  { key: 'multiplier_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 6, dflt: 0,
                     what: 'decimals' },
-                  { key: 'multiplier_divide_ticks', icon: '\u00F7', flag: true,
+                  { key: 'multiplier_divide_ticks', icon: icon('divide'), flag: true,
                     what: 'divide the tick labels by it',
                     condition: (/** @type {any} */ cfg) => !!cfg.show_tick_labels },
                 ] },
@@ -902,31 +905,31 @@ const GAUGE_RINGS = Object.freeze({
       ({ stroke_width: strokeFromRadius(r, scale, frameBand(_cfg, scale)) }),
     steps: [
       ...SWEEP_STEPS,
-      { key: 'gradient_preset', icon: '\u{1F3A8}', what: 'colour mode', picks: RING_COLOUR_MODE,
+      { key: 'gradient_preset', icon: icon('palette'), what: 'colour mode', picks: RING_COLOUR_MODE,
         read: (/** @type {any} */ cfg) => cfg.gradient_preset || 'manual' },
       // A ramp is not a mode and nothing remembers it was picked: it writes a
       // list of stops and steps back out of the way, which is why this row
       // reads its own name rather than a value.
-      { icon: '\u{1F308}', what: 'ready-made ramp', picks: RAMP_PICKS,
+      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
         condition: isStopList, read: () => '',
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => gradientPresetPatch(v) },
-      { key: 'gradient_mode', icon: '\u25A4', what: 'gradient type', condition: isStopList,
+      { key: 'gradient_mode', icon: icon('blend'), what: 'gradient type', condition: isStopList,
         read: (/** @type {any} */ cfg) => cfg.gradient_mode || 'smooth',
         picks: [{ value: 'smooth', label: 'Smooth', short: 'Smooth' },
                 { value: 'stepped', label: 'Stepped', short: 'Stepped' }] },
       ringColour('color1', 'outer colour', '#4caf50', isThreeColour),
       ringColour('color2', 'middle colour', '#ffeb3b', isThreeColour),
       ringColour('color3', 'centre colour', '#f44336', isThreeColour),
-      { key: 'threshold1', icon: '\u2460', slide: true, by: 1, min: 0, max: 98, dflt: 40,
+      { key: 'threshold1', icon: icon('signal-low'), slide: true, by: 1, min: 0, max: 98, dflt: 40,
         what: 'centre to middle (%)',
         condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
-      { key: 'threshold2', icon: '\u2461', slide: true, by: 1, min: 0, max: 100, dflt: 75,
+      { key: 'threshold2', icon: icon('signal-medium'), slide: true, by: 1, min: 0, max: 100, dflt: 75,
         what: 'middle to outer (%)',
         condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
-      { key: 'threshold3', icon: '\u2591', slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
+      { key: 'threshold3', icon: icon('fold-horizontal'), slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
         what: 'width of the first transition (%)',
         condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
-      { key: 'threshold4', icon: '\u2592', slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
+      { key: 'threshold4', icon: icon('unfold-horizontal'), slide: true, by: 0.5, min: 0.5, max: 30, dflt: 8,
         what: 'width of the second transition (%)',
         condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'symmetriccustom' },
       ringColour('color1', 'start colour', '#4caf50',
@@ -935,15 +938,15 @@ const GAUGE_RINGS = Object.freeze({
                  (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
       ringColour('color3', 'end colour', '#f44336',
                  (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear'),
-      { key: 'threshold1', icon: '\u2460', slide: true, by: 1, min: 0, max: 100, dflt: 20,
+      { key: 'threshold1', icon: icon('signal-low'), slide: true, by: 1, min: 0, max: 100, dflt: 20,
         what: 'start spread (%)',
         condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear' },
-      { key: 'threshold2', icon: '\u2461', slide: true, by: 1, min: 0, max: 100, dflt: 60,
+      { key: 'threshold2', icon: icon('signal-medium'), slide: true, by: 1, min: 0, max: 100, dflt: 60,
         what: 'mid spread (%)',
         condition: (/** @type {any} */ cfg) => cfg.gradient_preset === 'linear' },
       // Last, because it is the one row here that is not about which colour
       // goes where but about how finely the ring is cut to draw it.
-      { key: 'gradient_resolution', icon: '\u25EB', what: 'gradient resolution',
+      { key: 'gradient_resolution', icon: icon('grid-3x3'), what: 'gradient resolution',
         read: (/** @type {any} */ cfg) => cfg.gradient_resolution || 'auto',
         picks: [{ value: 'auto', label: 'Automatic (size-dependent)', short: 'Auto' },
                 { value: 'coarse', label: 'Coarse (1\u00D7 colour zones)', short: '1\u00D7' },
@@ -989,13 +992,13 @@ const GAUGE_RINGS = Object.freeze({
                      /** @type {number} */ scale) => frameWidthFromRadius(r, scale) },
     },
     steps: [
-      { key: 'frame_ring_active', icon: '\u2B55', what: 'frame drawn', flag: true },
-      { key: 'frame_ring_closed', icon: '\u25EF', what: 'closed circle', flag: true,
+      { key: 'frame_ring_active', icon: icon('circle'), what: 'frame drawn', flag: true },
+      { key: 'frame_ring_closed', icon: icon('circle-dashed'), what: 'closed circle', flag: true,
         condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true },
-      { key: 'frame_ring_gap', icon: '\u2195', by: 0.1, min: 0, max: 6, dflt: 1.5,
+      { key: 'frame_ring_gap', icon: icon('separator-horizontal'), by: 0.1, min: 0, max: 6, dflt: 1.5,
         what: 'gap to the ring inside it',
         condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true },
-      { key: 'frame_ring_opacity', icon: '\u25D1', by: 0.05, min: 0, max: 1, dflt: 1,
+      { key: 'frame_ring_opacity', icon: icon('contrast'), by: 0.05, min: 0, max: 1, dflt: 1,
         what: 'opacity',
         condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true },
       ...colourRows('frame_ring_color_type', 'frame_ring_color', 'frame', '#505050', 'fixed',
@@ -1012,7 +1015,7 @@ const GAUGE_RINGS = Object.freeze({
     // answer for 300 to 2500 in hundreds and for nothing else.
     seed: { tick_length: 1.8, tick_width: 0.3, tick_offset: -0.9 },
     steps: [
-      { key: 'tick_count', icon: '#', by: 1, min: 2, max: 50, dflt: 11, what: 'ticks' },
+      { key: 'tick_count', icon: icon('hash'), by: 1, min: 2, max: 50, dflt: 11, what: 'ticks' },
       { key: 'tick_length', icon: LONG, by: 0.1, min: 0, max: 6, dflt: 3, what: 'tick length' },
       { key: 'tick_width', icon: THICK, by: 0.1, min: 0, max: 5, dflt: 1, what: 'tick width' },
       ...colourRows('tick_color_type', 'tick_color', 'tick', '#808080', 'fixed'),
@@ -1028,7 +1031,7 @@ const GAUGE_RINGS = Object.freeze({
     seed: { tick_count: 11, sub_tick_length: 0.8, sub_tick_width: 0.1,
             sub_tick_offset: -1.2 },
     steps: [
-      { key: 'sub_tick_count', icon: '#', by: 1, min: 1, max: 10, dflt: 4, what: 'sub-ticks' },
+      { key: 'sub_tick_count', icon: icon('hash'), by: 1, min: 1, max: 10, dflt: 4, what: 'sub-ticks' },
       { key: 'sub_tick_length', icon: LONG, by: 0.1, min: 0, max: 3, dflt: 1.5,
         what: 'sub-tick length' },
       { key: 'sub_tick_width', icon: THICK, by: 0.1, min: 0, max: 3, dflt: 0.5,
@@ -1056,26 +1059,26 @@ const GAUGE_RINGS = Object.freeze({
     // drawn out, and in what colour. The distance from the ring is the frame's
     // own, so it is not repeated here.
     steps: [
-      { key: 'tick_label_step', icon: '\u2261', by: 1, min: 0, max: 10, dflt: 0,
+      { key: 'tick_label_step', icon: icon('list'), by: 1, min: 0, max: 10, dflt: 0,
         what: 'label interval' },
       // Only while the interval is left to the card: sending crowded labels
       // out by a row is the other answer to the same crowding, and a number of
       // one's own has already answered it.
-      { key: 'tick_label_stagger', icon: '\u2934', what: 'two rows', flag: true,
+      { key: 'tick_label_stagger', icon: icon('corner-right-up'), what: 'two rows', flag: true,
         condition: (/** @type {any} */ cfg) => !SC.safeFloat(cfg.tick_label_step, 0) },
       // Only on a dial that comes full circle, where the two ends of the
       // scale land on one tick. Off, the label there is the one the dial
       // starts at; on, it reads both, ending lap first.
-      { key: 'tick_label_join_ends', icon: '\u29C4', flag: true,
+      { key: 'tick_label_join_ends', icon: icon('combine'), flag: true,
         what: 'both ends in one label',
         condition: (/** @type {any} */ cfg) => (cfg.gauge_type ?? 'full') === 'full' },
-      { key: 'tick_label_decimals', icon: '.0', by: 1, min: 0, max: 6, dflt: 0,
+      { key: 'tick_label_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 6, dflt: 0,
         what: 'decimals' },
-      { key: 'tick_label_font_size', icon: 'A', by: 0.5, min: 1, max: 20, dflt: 7,
+      { key: 'tick_label_font_size', icon: icon('a-large-small'), by: 0.5, min: 1, max: 20, dflt: 7,
         what: 'label type' },
       { key: 'tick_label_extra_length', icon: LONG, by: 0.1, min: 0, max: 4, dflt: 0,
         what: 'extra length on a labelled tick' },
-      { key: 'tick_label_inherit_color', icon: '\u{1F517}', flag: true,
+      { key: 'tick_label_inherit_color', icon: icon('link'), flag: true,
         what: 'labelled tick takes the label colour' },
       ...colourRows('tick_label_color_type', 'tick_label_color', 'label',
                     '#ffffff', 'adaptive'),
@@ -1101,23 +1104,23 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_width', icon: THICK, slide: true, by: 0.1, min: 0.1, max: 10,
         dflt: 2, what: 'pointer width' },
       ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
-      { key: 'pointer_3d_effect', icon: '\u25D1', flag: true, what: 'plastic 3D' },
-      { key: 'pointer_shadow_type', icon: '\u{1F311}', what: 'shadow', picks: SHADOW_MODE,
+      { key: 'pointer_3d_effect', icon: icon('axis-3d'), flag: true, what: 'plastic 3D' },
+      { key: 'pointer_shadow_type', icon: icon('moon'), what: 'shadow', picks: SHADOW_MODE,
         read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
-      { icon: '\u25A0', what: 'shadow colour', paint: true,
+      { icon: icon('paintbrush'), what: 'shadow colour', paint: true,
         condition: (/** @type {any} */ cfg) => cfg.pointer_shadow_type === 'fixed',
         read: (/** @type {any} */ cfg) => markHex(cfg.pointer_shadow_color, '#000000'),
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
           ({ pointer_shadow_color: v }) },
       // The four that shape a shadow are not there to be read when there is no
       // shadow to shape - the panel is short enough without them.
-      { key: 'pointer_shadow_blur', icon: '\u2591', slide: true, by: 0.01, min: 0, max: 1,
+      { key: 'pointer_shadow_blur', icon: icon('droplet'), slide: true, by: 0.01, min: 0, max: 1,
         dflt: 0.8, what: 'shadow blur', condition: hasShadow },
-      { key: 'pointer_shadow_distance', icon: '\u2921', slide: true, by: 0.1, min: -5,
+      { key: 'pointer_shadow_distance', icon: icon('move-diagonal'), slide: true, by: 0.1, min: -5,
         max: 5, dflt: 0.5, what: 'shadow distance', condition: hasShadow },
-      { key: 'pointer_shadow_angle', icon: '\u21BB', slide: true, by: 5, min: 0, max: 360,
+      { key: 'pointer_shadow_angle', icon: icon('rotate-cw'), slide: true, by: 5, min: 0, max: 360,
         dflt: 90, what: 'shadow angle', condition: hasShadow },
-      { key: 'pointer_shadow_opacity', icon: '\u25D3', slide: true, by: 0.05, min: 0,
+      { key: 'pointer_shadow_opacity', icon: icon('contrast'), slide: true, by: 0.05, min: 0,
         max: 1, dflt: 0.35, what: 'shadow opacity', condition: hasShadow },
     ],
     // Shape is the other thing a needle is, and with only two of them a button
@@ -1268,14 +1271,14 @@ const SURFACE_PARTS = Object.freeze({
     label: 'Colour', spot: { l: 50, t: 14 },
     on: () => true,
     steps: [
-      { icon: '\u{1F3A8}', what: 'colour', paint: true,
+      { icon: icon('paintbrush'), what: 'colour', paint: true,
         // Only a solid pattern has *a* colour. The others have a list of them.
         condition: (/** @type {any} */ cfg) => (cfg.bg_type || 'solid') === 'solid',
         read: solidColorOf,
         patch: (/** @type {any} */ cfg, /** @type {string} */ v) => solidColorPatch(cfg, v) },
-      { key: 'animation', icon: '\u{1F3AC}', what: 'effect', picks: PATTERN_ANIMATIONS,
+      { key: 'animation', icon: icon('clapperboard'), what: 'effect', picks: PATTERN_ANIMATIONS,
         read: (/** @type {any} */ cfg) => cfg.animation || 'none' },
-      { key: 'opacity', icon: '\u25D0', by: 5, min: 0, max: 100, dflt: 100, what: 'opacity' },
+      { key: 'opacity', icon: icon('contrast'), by: 5, min: 0, max: 100, dflt: 100, what: 'opacity' },
     ],
   },
 });
@@ -1305,9 +1308,9 @@ const BAR_PARTS = Object.freeze({
     on: (/** @type {any} */ cfg) => !!cfg.show_label,
     turnOn: { show_label: true }, turnOff: { show_label: false },
     steps: [
-      { key: 'label_font_size', icon: 'A', by: 1, min: 4, max: 60, dflt: 12,
+      { key: 'label_font_size', icon: icon('a-large-small'), by: 1, min: 4, max: 60, dflt: 12,
         what: 'label type' },
-      { key: 'label_rotation', icon: '\u21BB', what: 'label rotation',
+      { key: 'label_rotation', icon: icon('rotate-cw'), what: 'label rotation',
         read: (/** @type {any} */ cfg) => String(cfg.label_rotation ?? '0'),
         picks: [{ value: '0', label: 'Horizontal', short: '0\u00B0' },
                 { value: '90', label: 'Quarter turn', short: '90\u00B0' },
@@ -1323,11 +1326,11 @@ const BAR_PARTS = Object.freeze({
     turnOn: { show_indicator: true, indicator_value: true },
     turnOff: { indicator_value: false },
     steps: [
-      { key: 'indicator_value_decimals', icon: '.0', by: 1, min: 0, max: 3, dflt: 0,
+      { key: 'indicator_value_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 3, dflt: 0,
         what: 'decimal places' },
-      { key: 'indicator_value_opacity', icon: '\u25D0', by: 5, min: 0, max: 100, dflt: 100,
+      { key: 'indicator_value_opacity', icon: icon('contrast'), by: 5, min: 0, max: 100, dflt: 100,
         what: 'pill opacity' },
-      { key: 'indicator_glass_effect', icon: '\u{1F48A}', what: 'glass effect',
+      { key: 'indicator_glass_effect', icon: icon('pill'), what: 'glass effect',
         read: (/** @type {any} */ cfg) => cfg.indicator_glass_effect || 'none',
         picks: [{ value: 'none', label: 'No effect', short: 'Flat' },
                 { value: 'glass_gooey', label: 'Liquid and gooey', short: 'Gooey' },
@@ -1351,8 +1354,8 @@ const BAR_PARTS = Object.freeze({
     // is not overwriting a design - there was none.
     seed: { tick_count: 11, tick_length: '100%', tick_width: '1' },
     steps: [
-      { key: 'tick_count', icon: '#', by: 1, min: 0, max: 51, dflt: 10, what: 'ticks' },
-      { key: 'tick_interval', icon: '\u2261', by: 1, min: 0, max: 1000, dflt: 0,
+      { key: 'tick_count', icon: icon('hash'), by: 1, min: 0, max: 51, dflt: 10, what: 'ticks' },
+      { key: 'tick_interval', icon: icon('list'), by: 1, min: 0, max: 1000, dflt: 0,
         what: 'tick interval, in the value\u2019s own units - 0 leaves it to the count' },
       { key: 'tick_length', icon: LONG, by: 5, min: 0, max: 400, dflt: '100%', unit: true,
         what: 'tick length',
@@ -1360,17 +1363,17 @@ const BAR_PARTS = Object.freeze({
         condition: (/** @type {any} */ cfg) => cfg.tick_align !== 'full' },
       { key: 'tick_width', icon: THICK, by: 0.5, min: 0, max: 50, dflt: '1', unit: true,
         what: 'tick width' },
-      { key: 'tick_align', icon: '\u25EB', what: 'tick alignment',
+      { key: 'tick_align', icon: icon('align-center-vertical'), what: 'tick alignment',
         read: (/** @type {any} */ cfg) => cfg.tick_align || 'center',
         picks: [{ value: 'center', label: 'Centred', short: 'Centre' },
                 { value: 'start', label: 'At the top or left edge', short: 'Edge' },
                 { value: 'end', label: 'At the opposite edge', short: 'Far' },
                 { value: 'full', label: 'Right across the bar', short: 'Across' }] },
-      { key: 'tick_mirror_side', icon: '\u{1FA9E}', flag: true, what: 'mirrored',
+      { key: 'tick_mirror_side', icon: icon('flip-vertical'), flag: true, what: 'mirrored',
         condition: (/** @type {any} */ cfg) =>
           cfg.tick_align === 'start' || cfg.tick_align === 'end' },
-      { key: 'tick_hide_last', icon: '\u2702', flag: true, what: 'no last tick' },
-      { key: 'tick_color_adaptive', icon: '\u{1F3A8}', flag: true, what: 'adaptive colour' },
+      { key: 'tick_hide_last', icon: icon('scissors'), flag: true, what: 'no last tick' },
+      { key: 'tick_color_adaptive', icon: icon('palette'), flag: true, what: 'adaptive colour' },
     ],
   },
   sub_ticks: {
@@ -1384,24 +1387,24 @@ const BAR_PARTS = Object.freeze({
     turnOff: { show_subticks: false },
     seed: { tick_count: 11, subtick_length: '50%', subtick_width: '1' },
     steps: [
-      { key: 'subtick_count', icon: '#', by: 1, min: 1, max: 20, dflt: 4,
+      { key: 'subtick_count', icon: icon('hash'), by: 1, min: 1, max: 20, dflt: 4,
         what: 'sub-ticks per interval' },
       { key: 'subtick_length', icon: LONG, by: 5, min: 0, max: 400, dflt: '50%', unit: true,
         what: 'sub-tick length',
         condition: (/** @type {any} */ cfg) => cfg.subtick_pos !== 'full' },
       { key: 'subtick_width', icon: THICK, by: 0.5, min: 0, max: 50, dflt: '1', unit: true,
         what: 'sub-tick width' },
-      { key: 'subtick_pos', icon: '\u25EB', what: 'sub-tick alignment',
+      { key: 'subtick_pos', icon: icon('align-center-vertical'), what: 'sub-tick alignment',
         read: (/** @type {any} */ cfg) => cfg.subtick_pos || 'main',
         picks: [{ value: 'main', label: 'As the main ticks', short: 'As ticks' },
                 { value: 'center', label: 'Centred', short: 'Centre' },
                 { value: 'start', label: 'At the top or left edge', short: 'Edge' },
                 { value: 'end', label: 'At the opposite edge', short: 'Far' },
                 { value: 'full', label: 'Right across the bar', short: 'Across' }] },
-      { key: 'subtick_mirror_side', icon: '\u{1FA9E}', flag: true, what: 'mirrored',
+      { key: 'subtick_mirror_side', icon: icon('flip-vertical'), flag: true, what: 'mirrored',
         condition: (/** @type {any} */ cfg) =>
           cfg.subtick_pos === 'start' || cfg.subtick_pos === 'end' },
-      { key: 'subtick_color_adaptive', icon: '\u{1F3A8}', flag: true,
+      { key: 'subtick_color_adaptive', icon: icon('palette'), flag: true,
         what: 'adaptive colour' },
     ],
   },
@@ -1413,21 +1416,21 @@ const BAR_PARTS = Object.freeze({
     turnOff: { show_tick_labels: false },
     seed: { tick_count: 11, tick_labels_size: '10' },
     steps: [
-      { key: 'tick_label_step', icon: '#', by: 1, min: 1, max: 20, dflt: 1,
+      { key: 'tick_label_step', icon: icon('hash'), by: 1, min: 1, max: 20, dflt: 1,
         what: 'every Xth tick numbered' },
-      { key: 'tick_labels_decimals', icon: '.0', by: 1, min: 0, max: 3, dflt: 0,
+      { key: 'tick_labels_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 3, dflt: 0,
         what: 'decimal places' },
-      { key: 'tick_labels_size', icon: 'A', by: 1, min: 1, max: 80, dflt: '10', unit: true,
+      { key: 'tick_labels_size', icon: icon('a-large-small'), by: 1, min: 1, max: 80, dflt: '10', unit: true,
         what: 'label type' },
       { key: 'tick_labeled_extralength', icon: LONG, by: 1, min: 0, max: 200, dflt: '0',
         unit: true, what: 'extra length on a numbered tick',
         // The extra length is added to the tick, and a tick pinned to both
         // edges has nothing to add it to.
         condition: (/** @type {any} */ cfg) => cfg.tick_align !== 'full' },
-      { key: 'tick_labels_hide_unit', icon: '\u{1F517}', flag: true, what: 'no unit' },
-      { key: 'tick_labels_hide_first', icon: '\u21E4', flag: true, what: 'no first' },
-      { key: 'tick_labels_hide_last', icon: '\u21E5', flag: true, what: 'no last' },
-      { key: 'tick_labels_color_adaptive', icon: '\u{1F3A8}', flag: true,
+      { key: 'tick_labels_hide_unit', icon: icon('link'), flag: true, what: 'no unit' },
+      { key: 'tick_labels_hide_first', icon: icon('arrow-left-to-line'), flag: true, what: 'no first' },
+      { key: 'tick_labels_hide_last', icon: icon('arrow-right-to-line'), flag: true, what: 'no last' },
+      { key: 'tick_labels_color_adaptive', icon: icon('palette'), flag: true,
         what: 'adaptive colour' },
     ],
   },
@@ -2161,24 +2164,32 @@ class ScCanvasEditor extends LitElement {
       /* Top right, and twice the size it was: whether a lock is open or shut
          is the one thing about it worth reading from across the canvas, and at
          9px the two glyphs were the same small smudge. The top left is the
-         ring steppers' corner now. */
-      .el.pinned::before { content: '🔒'; position: absolute; top: 6px; right: 6px;
-                           font-size: 18px; line-height: 1; z-index: 6;
-                           text-shadow: 0 1px 3px #000, 0 0 4px #000; }
+         ring steppers' corner now. A pseudo-element cannot hold an inline
+         SVG, so this one is the same drawing as a mask - which is also why it
+         takes a drop-shadow filter rather than a text-shadow. */
+      .el.pinned::before { content: ''; position: absolute; top: 6px; right: 6px;
+                           width: 18px; height: 18px; z-index: 6;
+                           background: #fff;
+                           filter: drop-shadow(0 1px 2px #000) drop-shadow(0 0 3px #000);
+                           -webkit-mask: var(--sc-lock-mask) center / contain no-repeat;
+                           mask: var(--sc-lock-mask) center / contain no-repeat; }
       /* Which boxes answer a push, and so take that click away from the card
          underneath them. Bottom left, clear of the lock above it and of the
          resize handle opposite. The card's own badge sits on the canvas frame.
          Both badges stand off the border the same distance the ring steppers
          do: against it a glyph reads as part of the frame's edge. */
+      /* A mask rather than a glyph, for the same reason the lock above is one.
+         The drawing already points up and to the left, so where the emoji had
+         to be mirrored and turned, this one is only turned - far enough that
+         the finger goes down into the box it belongs to. */
       .el.pushed::after, .canvas.pushed::after {
-        content: '👆'; position: absolute; bottom: 6px; left: 6px; z-index: 5;
-        font-size: 15px; line-height: 1; pointer-events: none;
-        text-shadow: 0 1px 3px #000, 0 0 4px #000;
-        /* Read right to left: the glyph is mirrored first, then turned a
-           quarter and an eighth to the left, so the finger points down into
-           the box it belongs to instead of away from it. */
-        transform: rotate(-135deg) scaleX(-1); transform-origin: center; }
-      .canvas.pushed::after { bottom: 4px; left: 5px; font-size: 20px; }
+        content: ''; position: absolute; bottom: 6px; left: 6px; z-index: 5;
+        width: 15px; height: 15px; pointer-events: none; background: #fff;
+        filter: drop-shadow(0 1px 2px #000) drop-shadow(0 0 3px #000);
+        -webkit-mask: var(--sc-push-mask) center / contain no-repeat;
+        mask: var(--sc-push-mask) center / contain no-repeat;
+        transform: rotate(135deg); transform-origin: center; }
+      .canvas.pushed::after { bottom: 4px; left: 5px; width: 20px; height: 20px; }
       /* Live, the box is a frame around someone else's drawing rather than a
          block of colour: the fill would hide the very thing being previewed,
          so selection is an inset ring instead. Size containment mirrors
@@ -2244,6 +2255,11 @@ class ScCanvasEditor extends LitElement {
          frame; amber is the one part in hand, and it is warm rather than loud
          because it lies over artwork somebody is trying to look at. */
       :host { --sc-part: #8ce0ff; --sc-part-sel: #f2b544; --sc-part-sel-ink: #1b1200; }
+      /* The lock the pinned badge is masked with, here because a content
+         property cannot hold an element and a mask has to come from
+         somewhere. */
+      :host { --sc-lock-mask: ${unsafeCSS(iconMask('lock'))};
+              --sc-push-mask: ${unsafeCSS(iconMask('pointer'))}; }
       /* The halo and the offset outline both paint *outside* the box, and a
          drag moves the box by rewriting left/top. WebKit then repaints
          only the border box and leaves the ring behind, so a label dragged
@@ -2440,8 +2456,10 @@ class ScCanvasEditor extends LitElement {
       /* Wide enough for an emoji: a glyph that carries its own colour is drawn
          at more than its font size, and at ten pixels the three surface icons
          were clipped down their left edge. */
-      .ring-step-icon { font-size: 12px; line-height: 1; color: var(--sc-part-sel);
-        min-width: 15px; text-align: center; }
+      /* The icon is sized by this font size, not by a width of its own. */
+      .ring-step-icon { font-size: 15px; line-height: 1; color: var(--sc-part-sel);
+        min-width: 15px; display: inline-flex; align-items: center;
+        justify-content: center; }
       .ring-step { width: 20px; height: 20px; padding: 0; font-size: 15px;
         line-height: 1; border-radius: 4px; cursor: pointer; touch-action: none;
         border: 1px solid var(--sc-part-sel); background: rgba(0,0,0,0.5); color: #fff; }
@@ -4794,7 +4812,7 @@ class ScCanvasEditor extends LitElement {
       (st.read ? st.read(cfg)
        : st.unit ? splitUnit(cfg[st.key], st.dflt).n
        : SC.safeFloat(cfg[st.key], st.dflt));
-    const icon = (/** @type {any} */ st) => html`
+    const stepIcon = (/** @type {any} */ st) => html`
       <span class="ring-step-icon" title=${`${spec.label}: ${st.what}`}>${st.icon}</span>`;
 
     const group = (/** @type {any} */ st) => {
@@ -4804,7 +4822,7 @@ class ScCanvasEditor extends LitElement {
       // A swatch and a select each take the three cells the two buttons and
       // the number would, so every row still reads as one line of the grid.
       if (st.paint) return html`
-        <span class="ring-group">${icon(st)}
+        <span class="ring-group">${stepIcon(st)}
           <label class="ring-wide ring-swatch" style="background:${now(st)}"
                  title=${`Set the ${st.what}`} @pointerdown=${swallow}>
             <input type="color" .value=${now(st)}
@@ -4816,7 +4834,7 @@ class ScCanvasEditor extends LitElement {
       // is off, and the shortest honest control for that is the box itself
       // with its name beside it.
       if (st.flag) return html`
-        <span class="ring-group">${icon(st)}
+        <span class="ring-group">${stepIcon(st)}
           <label class="ring-wide ring-flag" title=${`Turn ${st.what} on or off`}
                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}>
             <input type="checkbox" .checked=${!!cfg[st.key]}
@@ -4830,7 +4848,7 @@ class ScCanvasEditor extends LitElement {
       // to the number, because a slider with nothing reading out of it says
       // only "about here".
       if (st.slide) return html`
-        <span class="ring-group">${icon(st)}
+        <span class="ring-group">${stepIcon(st)}
           <input type="range" class="ring-slide" title=${`Set the ${st.what}`}
                  min=${st.min} max=${st.max} step=${st.by} .value=${String(now(st))}
                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
@@ -4845,7 +4863,7 @@ class ScCanvasEditor extends LitElement {
           <span class="ring-step-val">${now(st)}</span>
         </span>`;
       if (st.picks) return html`
-        <span class="ring-group">${icon(st)}
+        <span class="ring-group">${stepIcon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
                   @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
                   @change=${(/** @type {any} */ e) => {
@@ -4873,7 +4891,7 @@ class ScCanvasEditor extends LitElement {
                 @click=${() => this._stepRing(st, dir)}>${glyph}</button>`;
       const shown = st.unit ? val + splitUnit(cfg[st.key], st.dflt).unit : val;
       return html`
-        <span class="ring-group">${icon(st)}
+        <span class="ring-group">${stepIcon(st)}
           ${btn(-1, '−')}<span class="ring-step-val">${shown}</span>${btn(1, '+')}
         </span>`;
     };
@@ -5371,7 +5389,7 @@ class ScCanvasEditor extends LitElement {
     const rows = els.map((el, idx) => ({ el, idx })).reverse();
     return html`
       <details class="layers" ?open=${this._layers} @toggle=${e => { this._layers = e.target.open; }}>
-        <summary>▤ Layers (${els.length}) - the top of the list is drawn on top</summary>
+        <summary>${icon('layers')} Layers (${els.length}) - the top of the list is drawn on top</summary>
         <div class="layer-list">
           ${rows.map(({ el, idx }) => {
             const over = overlappingElements(this._canvas, el.id);
@@ -5411,15 +5429,15 @@ class ScCanvasEditor extends LitElement {
                         else this._selectOnly(el.id);
                       }}>${name || el.id}${name ? html`<span class="id">${el.id}</span>` : ''}</span>
                 ${over.length ? html`<span class="over"
-                  title="Shares its place with ${over.join(', ')}">⧉</span>` : ''}
+                  title="Shares its place with ${over.join(', ')}">${icon('layers')}</span>` : ''}
                 <button title="All the way to the front" ?disabled=${idx === last}
-                        @click=${() => this._reorder(idx, 'front')}>⤒</button>
+                        @click=${() => this._reorder(idx, 'front')}>${icon('chevrons-up')}</button>
                 <button title="One step forward" ?disabled=${idx === last}
-                        @click=${() => this._reorder(idx, idx + 1)}>↑</button>
+                        @click=${() => this._reorder(idx, idx + 1)}>${icon('chevron-up')}</button>
                 <button title="One step back" ?disabled=${idx === 0}
-                        @click=${() => this._reorder(idx, idx - 1)}>↓</button>
+                        @click=${() => this._reorder(idx, idx - 1)}>${icon('chevron-down')}</button>
                 <button title="All the way to the back" ?disabled=${idx === 0}
-                        @click=${() => this._reorder(idx, 'back')}>⤓</button>
+                        @click=${() => this._reorder(idx, 'back')}>${icon('chevrons-down')}</button>
               </div>`;
           })}
         </div>
@@ -5735,7 +5753,7 @@ class ScCanvasEditor extends LitElement {
                     @click=${() => { this._menu = !this._menu; this._menuKind = null;
                                      this._placing = null; this._placingTemplate = null;
                                      this._placingEntry = null; }}>
-              ＋ Add element
+              ${icon('plus')} Add element
             </button>
             ${this._menu ? this._renderAddMenu() : ''}
           </div>
@@ -5745,8 +5763,9 @@ class ScCanvasEditor extends LitElement {
                   ?disabled=${this._applyState === 'saving'}
                   title="Put the card on the dashboard now and carry on - the dialog stays open"
                   @click=${() => this._apply()}>
-            ${this._applyState === 'saved' ? '✓ Saved'
-              : this._applyState === 'saving' ? '💾 Saving…' : '💾 Apply'}
+            ${this._applyState === 'saved' ? html`${icon('check')} Saved`
+              : this._applyState === 'saving' ? html`${icon('save')} Saving…`
+              : html`${icon('save')} Apply`}
           </button>
           ${this._applyError ? html`<span class="hint apply-error">${this._applyError}</span>` : ''}
           ${this._placing
@@ -5760,12 +5779,12 @@ class ScCanvasEditor extends LitElement {
                       ? 'Undo the last change to the canvas or its elements'
                       : 'Nothing to undo yet'}
                     ?disabled=${!this._undoStack.length}
-                    @click=${() => this._undo()}>↶</button>
+                    @click=${() => this._undo()}>${icon('undo-2')}</button>
             <button title=${this._redoStack.length
                       ? 'Do it again'
                       : 'Nothing to redo'}
                     ?disabled=${!this._redoStack.length}
-                    @click=${() => this._redo()}>↷</button>
+                    @click=${() => this._redo()}>${icon('redo-2')}</button>
           </div>
           <div class="names">
             <button class="toggle ${this._names ? 'on' : ''}"
@@ -5822,7 +5841,7 @@ class ScCanvasEditor extends LitElement {
                                 : `Take this ${inner.k.noun}'s own parts in hand - ${inner.k.holds}`)}
                           ?disabled=${!this._live}
                           @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
-                          @click=${() => this._toggleInner()}>✎</button>` : ''}
+                          @click=${() => this._toggleInner()}>${icon('pencil')}</button>` : ''}
                 ${this._innerOn && this._inner === el.id ? this._renderInner() : ''}
                 ${pinned || selected.length > 1 ? '' : html`
                 <div class="handle" @pointerdown=${e => this._onDown(e, idx, 'resize')}></div>`}
@@ -5844,12 +5863,12 @@ class ScCanvasEditor extends LitElement {
                       ? 'Three selected elements that can move are needed to even out the gaps between them'
                       : 'Even gaps left to right. The outermost two stay where they are.'}
                     ?disabled=${movers < 3}
-                    @click=${() => this._distribute('x')}>⇔</button>
+                    @click=${() => this._distribute('x')}>${icon('align-horizontal-distribute-center')}</button>
             <button title=${movers < 3
                       ? 'Three selected elements that can move are needed to even out the gaps between them'
                       : 'Even gaps top to bottom. The outermost two stay where they are.'}
                     ?disabled=${movers < 3}
-                    @click=${() => this._distribute('y')}>⇕</button>
+                    @click=${() => this._distribute('y')}>${icon('align-vertical-distribute-center')}</button>
           </div>
           <div class="group">${[['left', 'Line up their left edges'],
                                 ['right', 'Line up their right edges'],
@@ -5866,7 +5885,7 @@ class ScCanvasEditor extends LitElement {
                           ? `Let ${selected.length === 1 ? 'it' : 'them'} be dragged again`
                           : 'Lock in place, so a stray drag cannot move it')}
                     ?disabled=${!selected.length}
-                    @click=${() => this._lockSelection()}>${this._allLocked ? '🔒' : '🔓'}</button>
+                    @click=${() => this._lockSelection()}>${icon(this._allLocked ? 'lock' : 'lock-open')}</button>
             <button title=${!selected.length
                       ? 'Select an element to copy it'
                       : (this._copyable === selected.length
@@ -5875,31 +5894,31 @@ class ScCanvasEditor extends LitElement {
                               ? `Copy the ${this._copyable} of them that can be copied`
                               : 'The card has only one of these, so there is nothing to copy'))}
                     ?disabled=${!this._copyable}
-                    @click=${() => this._duplicateSelection()}>⧉</button>
+                    @click=${() => this._duplicateSelection()}>${icon('copy')}</button>
             <button class="danger" title=${!selected.length
                       ? 'Select an element to take it off the canvas'
                       : `Take ${selected.length === 1 ? 'it' : `all ${selected.length}`} off the canvas`}
                     ?disabled=${!selected.length}
-                    @click=${() => this._removeSelection()}>🗑</button>
+                    @click=${() => this._removeSelection()}>${icon('trash-2')}</button>
           </div>
           <div class="group">
             <button title="Zoom out" ?disabled=${this._zoom <= ZOOM_MIN}
-                    @click=${() => this._stepZoom(-1)}>−</button>
+                    @click=${() => this._stepZoom(-1)}>${icon('zoom-out')}</button>
             <span class="hint level">${Math.round(this._zoom * 100)}%</span>
             <button title="Zoom in" ?disabled=${this._zoom >= ZOOM_MAX}
-                    @click=${() => this._stepZoom(1)}>＋</button>
+                    @click=${() => this._stepZoom(1)}>${icon('zoom-in')}</button>
             <button title=${selected.length
                       ? 'Fill the window with what is selected'
                       : 'Select an element to zoom in on it'}
                     ?disabled=${!selected.length}
-                    @click=${() => this._zoomToSelection()}>⊡</button>
+                    @click=${() => this._zoomToSelection()}>${icon('scan')}</button>
             <button class="toggle ${this._zoomBack ? '' : 'on'}"
                     title=${this._zoomBack
                       ? 'Leaving an element takes the canvas back to the zoom it was being arranged at. Press to keep the magnification instead - useful when one element after another is being worked on close up.'
                       : 'The magnification stays when an element is left. Press to have the canvas go back to the zoom it was being arranged at.'}
-                    @click=${() => { zoomBack = this._zoomBack = !this._zoomBack; }}>📌</button>
+                    @click=${() => { zoomBack = this._zoomBack = !this._zoomBack; }}>${icon(this._zoomBack ? 'pin-loose' : 'pin-in')}</button>
             <button title="Back to 100%, the size at which the whole canvas fits. Zoomed in, the middle button or space and the left one move the view; Ctrl or Cmd with the wheel - or two fingers - zooms where the pointer is, and Ctrl or Cmd with +, - and 0 does it from the keyboard."
-                    ?disabled=${this._zoom === 1} @click=${() => this._applyZoom(1)}>⟲</button>
+                    ?disabled=${this._zoom === 1} @click=${() => this._applyZoom(1)}>${icon('rotate-ccw')}</button>
           </div>
         </div>
 
@@ -5929,9 +5948,9 @@ class ScCanvasEditor extends LitElement {
                            this._setEl(idx, k === 'size' ? { w: v, h: v } : { [k]: v });
                          }}>`)}
               ` : ''}
-              ${isPinned(el) ? html`<span class="lock" title="Locked - unlock it with the lock under the canvas">🔒</span>` : ''}
-              <button class="icon-btn" title="Backward" @click=${() => this._move(idx, -1)}>↑</button>
-              <button class="icon-btn" title="Forward" @click=${() => this._move(idx, 1)}>↓</button>
+              ${isPinned(el) ? html`<span class="lock" title="Locked - unlock it with the lock under the canvas">${icon('lock')}</span>` : ''}
+              <button class="icon-btn" title="Backward" @click=${() => this._move(idx, -1)}>${icon('chevron-up')}</button>
+              <button class="icon-btn" title="Forward" @click=${() => this._move(idx, 1)}>${icon('chevron-down')}</button>
             </div>`;
                })}
         </div>

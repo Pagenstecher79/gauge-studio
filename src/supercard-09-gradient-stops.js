@@ -1,4 +1,5 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { icon } from "./icons.js";
 import { normalizeStops, addStop, removeStop, moveStop, withStop,
          distributeStops, stopsToCss } from "./gradient-stops.js";
 
@@ -105,7 +106,7 @@ class ScGradientStops extends LitElement {
                   @click=${e => {
                     e.preventDefault();
                     this._emit(distributeStops(stops, { absolute: this.absolute, blocks: this.blocks }));
-                  }}>⬌ Distribute evenly</button>
+                  }}>${icon('align-horizontal-distribute-center')} Distribute evenly</button>
         </div>
 
         ${stops.map((st, i) => html`
@@ -145,7 +146,7 @@ class ScGradientStops extends LitElement {
                 <button class="bin" title="Remove" @click=${e => {
                   e.preventDefault();
                   this._emit(removeStop(stops, i));
-                }}>🗑</button>
+                }}>${icon('trash-2')}</button>
               </div>
             </summary>
             <div class="inner-content" style="padding-top:4px; gap:8px;">

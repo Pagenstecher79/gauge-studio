@@ -1,4 +1,5 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { icon } from "./icons.js";
 
 const SC = window.SupercardUtils;
 
@@ -102,11 +103,11 @@ function actionFields(prefix, label) {
  */
 function pushFields() {
   return [
-    { type: 'heading', label: '⚡ Home Assistant Actions' },
+    { type: 'heading', icon: icon('zap'), label: 'Home Assistant Actions' },
     actionFields('tap', 'Tap'),
     actionFields('double_tap', 'Double tap'),
     actionFields('hold', 'Hold'),
-    { type: 'heading', label: '🎬 Visual animations (GPU)' },
+    { type: 'heading', icon: icon('clapperboard'), label: 'Visual animations (GPU)' },
     { id: 'scale_depth', label: 'Click depth (scale)', hint: '0 = Off, 100 = Max. press depth',
       type: 'range', min: 0, max: 100, width: '60%', int: true, placeholder: 50 },
     { id: 'rotate_once', label: 'Rotate once', type: 'checkbox',
@@ -183,7 +184,7 @@ class ScPushPanel extends LitElement {
 
     return html`
       <div class="push-switch">
-        <label>${this.label || '👆 Push behaviour'}</label>
+        <label>${icon('pointer')} ${this.label || 'Push behaviour'}</label>
         <ha-switch .checked=${on} @change=${e => this._toggle(e.target.checked)}></ha-switch>
       </div>
       ${on && pat ? html`
@@ -258,7 +259,7 @@ class ScInteractionEditor extends LitElement {
 
     return html`
       <details class="inner-section">
-        <summary>👆 Push behaviour
+        <summary>${icon('pointer')} Push behaviour
           ${SC.tipDot('Gauges, bars, labels and the card itself carry their push behaviour in their own editor. What is left here is the icon, the name and the state, which have none - and anything pointing at an element the card no longer has.')}
           <span style="font-size:10px">▼</span></summary>
         <div class="inner-content">
@@ -266,7 +267,7 @@ class ScInteractionEditor extends LitElement {
             <div class="pattern-card">
               <sc-push-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
                              .target=${id}
-                             .label=${'👆 ' + (targets.find(t => t.id === id)?.label || id)}></sc-push-panel>
+                             .label=${targets.find(t => t.id === id)?.label || id}></sc-push-panel>
             </div>`)}
           ${rows.map(({ pat, idx }) => {
             const isExp = !!this._expanded[pat.id];
@@ -292,7 +293,7 @@ class ScInteractionEditor extends LitElement {
                     <button type="button" title="Delete" @click=${e => {
                       e.preventDefault(); e.stopPropagation();
                       const n = [...patterns]; n.splice(idx, 1); this._commit(n);
-                    }} style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">🗑</button>
+                    }} style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">${icon('trash-2')}</button>
                   </div>
                 </div>
 

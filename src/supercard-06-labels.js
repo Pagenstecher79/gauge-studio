@@ -1,4 +1,5 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
+import { icon } from "./icons.js";
 
 const SC = window.SupercardUtils;
 
@@ -138,7 +139,7 @@ class ScLabelsEditor extends LitElement {
                     @change=${e => { this._set(list, idx, 'enabled', e.target.checked); }}>
                   </ha-switch>
                   <button @click=${e => { e.stopPropagation(); const n = [...list]; n.splice(idx, 1); this._commit(n); }}
-                    style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">🗑</button>
+                    style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">${icon('trash-2')}</button>
                 </div>
               </div>
 
@@ -234,7 +235,7 @@ class ScLabelsEditor extends LitElement {
         fields: [
           { type: 'note', class: 'tip', bare: true,
             style: 'font-size: 11px; color: var(--secondary-text-color); margin-bottom: 12px; font-style: italic;',
-            label: '💡 The indicator automatically uses the data source set above as its trigger.' },
+            icon: icon('lightbulb'), label: 'The indicator automatically uses the data source set above as its trigger.' },
           { type: 'group', class: 'row', style: 'margin-bottom: 8px;', fields: [
             { id: 'indicator_shape', label: 'Background shape', type: 'select', layout: 'col',
               style: 'flex:1; margin-right:8px;', controlStyle: 'width: 100%; height:32px;',
@@ -310,7 +311,7 @@ class ScLabelsEditor extends LitElement {
             <ha-selector style="flex:1;" .hass=${this.hass} .selector=${{ attribute: { entity_id: item.entity || this.slot?.entity } }} .value=${item.attribute || ''}
               @value-changed=${e => ctx.set('attribute', e.detail.value)}>
             </ha-selector>
-            <button title="Clear" class="clear-btn" @click=${() => ctx.set('attribute', '')}>✕</button>
+            <button title="Clear" class="clear-btn" @click=${() => ctx.set('attribute', '')}>${icon('x')}</button>
           </div>
         </div>
       </div>`;
@@ -356,7 +357,7 @@ class ScLabelsEditor extends LitElement {
           <datalist id=${datalistId}>
             ${availableStates.map(st => html`<option value="${st}"></option>`)}
           </datalist>
-          <button title="Clear" class="clear-btn" @click=${() => ctx.set('indicator_state', '')}>✕</button>
+          <button title="Clear" class="clear-btn" @click=${() => ctx.set('indicator_state', '')}>${icon('x')}</button>
         </div>
       </div>`;
   }
@@ -383,7 +384,7 @@ class ScLabelsEditor extends LitElement {
 
     return html`
       <details class="inner-section" ?open=${this._outerOpen} @toggle=${e => this._outerOpen = e.target.open}>
-        <summary>🏷️ Labels &amp; Extra Texts <span style="font-size:10px;">▼</span></summary>
+        <summary>${icon('tag')} Labels &amp; Extra Texts <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
         <div class="inner-content">
           ${list.map((item, idx) => this._renderLabelCard(item, idx, list))}
 

@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
 import { BEND_ROOM, bendsOf, bendClipPath, bendEscapes } from "./canvas-bend.js";
+import { icon } from "./icons.js";
 import { PATTERN_ANIMATIONS, defaultColorPattern, patchPattern, patchPatternStops,
          patternList, patternPreviewCss, solidColorOf,
          solidColorPatch } from "./color-pattern.js";
@@ -133,7 +134,7 @@ class ScColorEditor extends LitElement {
                    label: locked ? t.label + ' (Already in use)' : t.label };
         }) },
 
-      { type: 'details', label: '🎨 Design & Colours', style: 'margin: 4px 0 0 0;', fields: [
+      { type: 'details', icon: icon('palette'), label: 'Design & Colours', style: 'margin: 4px 0 0 0;', fields: [
         { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
           label: 'The corners are on the canvas - drag either grip, at the bottom '
                + 'left or the top right.' },
@@ -164,7 +165,7 @@ class ScColorEditor extends LitElement {
             { value: 'linear', label: 'Gradient (linear)', selected: pat.bg_type === 'linear' },
             { value: 'radial', label: 'Gradient (radial)', selected: pat.bg_type === 'radial' },
           ] },
-        { type: 'note', class: '', bare: true, style: caption, label: '🌊 Fluid mode (dynamic mesh)',
+        { type: 'note', class: '', bare: true, style: caption, icon: icon('waves'), label: 'Fluid mode (dynamic mesh)',
           condition: pat => !waveColors(pat) && fluid(pat) },
         { id: 'fluid_style', label: 'Fluid style (viscosity)', type: 'select', width: '60%',
           hint: 'Generates an endless, organically flowing vector animation.',
@@ -190,7 +191,7 @@ class ScColorEditor extends LitElement {
           placeholder: 100, framedBy: 'paint' },
       ] },
 
-      { type: 'details', label: '📊 Data source for colour calculation',
+      { type: 'details', icon: icon('chart-column'), label: 'Data source for colour calculation',
         condition: pat => pat.bg_type === 'solid_gradient' && !fluid(pat), fields: [
           { id: 'global_id', label: 'Data source', type: 'select', layout: 'col',
             style: 'margin-bottom: 4px;', labelStyle: small,
@@ -208,7 +209,7 @@ class ScColorEditor extends LitElement {
           ] },
         ] },
 
-      { type: 'details', label: '📍 Centre / origin', condition: radialCenter,
+      { type: 'details', icon: icon('crosshair'), label: 'Centre / origin', condition: radialCenter,
         hint: 'Tap or drag inside the box to freely move the origin point.', fields: [
         { type: 'custom', render: ctx => this._originPad(ctx) },
         { type: 'group', class: 'row', fields: [
@@ -221,12 +222,12 @@ class ScColorEditor extends LitElement {
         ] },
       ] },
 
-      { type: 'details', label: '⚙️ Condition: show background',
+      { type: 'details', icon: icon('settings'), label: 'Condition: show background',
         hint: 'Without a condition the background is always visible.', fields: [
         { type: 'custom', render: ctx => this._conditionSelector(ctx, 'bg_condition') },
       ] },
 
-      { type: 'details', label: '🎬 Animation & mode', fields: [
+      { type: 'details', icon: icon('clapperboard'), label: 'Animation & mode', fields: [
         { type: 'note', class: '', bare: true, style: caption, framedWhen: 'paint',
           label: 'The effect is on the canvas while this one is selected - it is the '
                + 'list under its chip.' },
@@ -257,7 +258,7 @@ class ScColorEditor extends LitElement {
         { id: 'wave_invert', label: 'Reverse direction', type: 'checkbox', condition: waveOrRipple },
       ] },
 
-      { type: 'details', label: '⚙️ Condition: run animation', condition: pat => pat.animation !== 'none',
+      { type: 'details', icon: icon('settings'), label: 'Condition: run animation', condition: pat => pat.animation !== 'none',
         hint: 'Without a condition the animation is always active.', fields: [
         { type: 'custom', render: ctx => this._conditionSelector(ctx, 'anim_condition') },
       ] },
@@ -429,7 +430,7 @@ class ScColorEditor extends LitElement {
 
     return html`
       <details class="inner-section">
-        <summary>🎨 Colours, Patterns &amp; Animations <span style="font-size:10px">▼</span></summary>
+        <summary>${icon('palette')} Colours, Patterns &amp; Animations <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
         <div class="inner-content">
           ${rows.map(({ pat, idx }) => {
             const isExp = !!this._expanded[pat.id];
@@ -463,7 +464,7 @@ class ScColorEditor extends LitElement {
                     }} style="background:none;border:none;color:var(--primary-color);cursor:pointer;padding:4px;font-size:14px;">⧉</button>
 
                     <button @click=${e => { e.stopPropagation(); const n = [...patterns]; n.splice(idx, 1); this._commit(n); }}
-                      style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">🗑</button>
+                      style="background:none;border:none;color:#f44;cursor:pointer;padding:4px">${icon('trash-2')}</button>
                   </div>
                 </div>
 
@@ -591,14 +592,14 @@ class ScColorPanel extends ScColorEditor {
     if (this.switchless) {
       return html`
         <details class="panel-fold" open>
-          <summary>${this.label || '🎨 Colour & pattern'} <span style="font-size:10px">▼</span></summary>
+          <summary>${icon('palette')} ${this.label || 'Colour & pattern'} <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
           <div class="panel-body">${body(pat || defaultColorPattern(this.target))}</div>
         </details>`;
     }
 
     return html`
       <div class="panel-switch">
-        <label>${this.label || '🎨 Colour & pattern'}</label>
+        <label>${icon('palette')} ${this.label || 'Colour & pattern'}</label>
         <ha-switch .checked=${on} @change=${e => this._switch(e.target.checked)}></ha-switch>
       </div>
       ${on && pat ? html`<div class="panel-body">${body(pat)}</div>` : ''}

@@ -2,6 +2,7 @@ import { LitElement, html, css, nothing } from "https://cdn.jsdelivr.net/gh/lit/
 import { reportedRows, isHeightPinned, canvasFromGrid, defaultShapeRows } from "./canvas-model.js";
 import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { rowsAsCanvas } from "./rows-compat.js";
+import { icon } from "./icons.js";
 
 // --- CENTRAL LAYER DICTIONARY ---
 export const SC_LAYERS = {
@@ -550,6 +551,9 @@ Object.assign(window.SupercardUtils, (() => {
     // A hint may be a function, for the ones that quote a value back.
     const hint = typeof field.hint === 'function' ? field.hint(ctx.entry, ctx) : field.hint;
     const text = typeof field.label === 'function' ? field.label(ctx.entry, ctx) : field.label;
+    // A heading's icon is beside its label, never inside it: the label stays a
+    // string, which is what a fold is keyed by and what a search finds.
+    const mark = field.icon ? html`<span class="field-icon">${field.icon}</span>` : '';
     // A hint is a balloon on the label's mark, not a line under it: the prose
     // is read once and the line would cost its height for good.
     const label = hint ? html`${text} ${tipDot(hint)}` : text;
@@ -570,7 +574,7 @@ Object.assign(window.SupercardUtils, (() => {
         return field.render(ctx);
 
       case 'heading':
-        return html`<div class="section-title">${text}</div>`;
+        return html`<div class="section-title">${mark}${text}</div>`;
 
       // A section that folds away, with fields of its own.
       // A folded section, drawn the way the gauge and the bar draw theirs, so
@@ -578,7 +582,7 @@ Object.assign(window.SupercardUtils, (() => {
       case 'details':
         return html`
           <details class="inner-section" style=${field.style || 'margin: 0;'}>
-            <summary><span style="flex: 1;">${text} ${tipDot(hint)}</span><span style="font-size:10px;">▼</span></summary>
+            <summary><span style="flex: 1;">${mark}${text} ${tipDot(hint)}</span><span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
             <div class="inner-content" style=${field.contentStyle || nothing}>
               ${(field.fields || []).map(f => renderField(f, ctx))}
             </div>
@@ -589,7 +593,7 @@ Object.assign(window.SupercardUtils, (() => {
       case 'group':
         return html`
           <div class=${field.class || nothing} style=${field.style || nothing}>
-            ${field.label ? html`<label style=${field.labelStyle || nothing}>${text}</label>` : ''}
+            ${field.label ? html`<label style=${field.labelStyle || nothing}>${mark}${text}</label>` : ''}
             ${(field.fields || []).map(f => renderField(f, ctx))}
           </div>`;
 
@@ -600,8 +604,8 @@ Object.assign(window.SupercardUtils, (() => {
         const cls = field.class ?? 'row';
         return html`
           <div class=${cls || nothing} style=${field.style || nothing}>
-            ${field.bare ? text
-              : html`<label style=${field.labelStyle || nothing}>${text}</label>`}
+            ${field.bare ? html`${mark}${text}`
+              : html`<label style=${field.labelStyle || nothing}>${mark}${text}</label>`}
           </div>`;
       }
 
@@ -730,6 +734,11 @@ Object.assign(window.SupercardUtils, (() => {
   }
 
   const editorStyles = css`
+    /* The mark in front of a heading. It is sized by the text it stands
+       beside and takes its colour, so a heading is one thing, not a picture
+       and a word that have to be kept in step. */
+    .field-icon { display: inline-flex; align-items: center; margin-right: 6px;
+                  vertical-align: -.125em; opacity: .85; }
     /* The space below a menu belongs to the menu, not to the list it sits in:
        a module that renders nothing - the glass list on a healthy canvas, say -
        must leave no gap behind, and a gap on the container would leave one. */
@@ -758,6 +767,11 @@ Object.assign(window.SupercardUtils, (() => {
   // Identified by the hand-rolled .toggle switch instead of ha-switch.
   const formStyles = css`
     * { box-sizing: border-box; }
+    /* The mark in front of a heading. It is sized by the text it stands
+       beside and takes its colour, so a heading is one thing, not a picture
+       and a word that have to be kept in step. */
+    .field-icon { display: inline-flex; align-items: center; margin-right: 6px;
+                  vertical-align: -.125em; opacity: .85; }
     label { font-size: 13px; color: var(--primary-text-color); }
     .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .col { display: flex; flex-direction: column; gap: 4px; }
@@ -1295,7 +1309,7 @@ class ScGenericModuleEditor extends LitElement {
     return html`
       <div style="padding: 0 16px;">
         <details class="inner-section" ?open=${this._isOpen} @toggle=${e => this._isOpen = e.target.open}>
-          <summary>── ${this.title} <span style="font-size:10px;">▼</span></summary>
+          <summary>── ${this.title} <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
           <div class="inner-content">
             ${this.fields.map(f => this._renderField(f))}
           </div>
@@ -1524,7 +1538,7 @@ Object.assign(window.SupercardModules['core'], (() => {
       return html`
         <div style="padding:0 16px;">
           <details class="inner-section" ?open=${this._expanded.dim} @toggle=${e => this._expanded = {...this._expanded, dim: e.target.open}}>
-            <summary>📐 Card & Dimensions <span style="font-size:10px;">▼</span></summary>
+            <summary>${icon('proportions')} Card & Dimensions <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
             <div class="inner-content">
               ${onCanvas ? html`
                 <sc-canvas-dimensions .slot=${this.slot} .cardConfig=${this.cardConfig}
@@ -1594,21 +1608,21 @@ Object.assign(window.SupercardModules['core'], (() => {
 
               <div style="margin-top:8px; padding-top:12px; border-top:1px dashed var(--divider-color,#444);">
                 <sc-color-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
-                                .target=${'main'} .label=${'🎨 Colour & pattern (entire card)'}></sc-color-panel>
+                                .target=${'main'} .label=${'Colour & pattern (entire card)'}></sc-color-panel>
               </div>
               <div style="margin-top:8px;">
                 <sc-fx-glass-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
-                                   .target=${'main'} .label=${'✨ Glass FX (entire card)'}></sc-fx-glass-panel>
+                                   .target=${'main'} .label=${'Glass FX (entire card)'}></sc-fx-glass-panel>
               </div>
               <div style="margin-top:8px;">
                 <sc-push-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
-                               .target=${'main'} .label=${'👆 Push behaviour (entire card)'}></sc-push-panel>
+                               .target=${'main'} .label=${'Push behaviour (entire card)'}></sc-push-panel>
               </div>
             </div>
           </details>
 
           <details class="inner-section" ?open=${this._expanded.basis} @toggle=${e => this._expanded = {...this._expanded, basis: e.target.open}}>
-            <summary>⚙️ Basics & Entity(ies) & Aliases <span style="font-size:10px;">▼</span></summary>
+            <summary>${icon('settings')} Basics & Entity(ies) & Aliases <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
             <div class="inner-content">
 
               <div class="col">
@@ -1627,7 +1641,7 @@ Object.assign(window.SupercardModules['core'], (() => {
                   if (!named || !this.hass || this.hass.states[named]) return '';
                   return html`
                     <span style="font-size:11px;color:var(--error-color,#f44336);margin-top:4px;">
-                      ⚠ Home Assistant does not know <code>${named}</code> - renamed or removed.
+                      ${icon('triangle-alert')} Home Assistant does not know <code>${named}</code> - renamed or removed.
                       The card still draws; the Icon, Name and State elements have nothing to show.
                     </span>`;
                 })()}

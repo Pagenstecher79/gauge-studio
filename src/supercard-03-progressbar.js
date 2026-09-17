@@ -5,6 +5,7 @@ import { lightParams, reliefPattern, reliefShadow, reliefLayers } from "./glass-
 import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding } from "./pill-glass.js";
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
+import { icon } from "./icons.js";
 
 const SC = window.SupercardUtils;
 
@@ -1073,7 +1074,7 @@ const isCirc = cfg => String(cfg.orientation).startsWith('circular');
 const isLin = cfg => !String(cfg.orientation).startsWith('circular');
 
 const STYLE_FIELDS = [
-  { id: '_section_shape',      label: '── 📐 Shape & Position',    type: 'section' },
+  { id: '_section_shape',      icon: icon('proportions'), label: '── Shape & Position',    type: 'section' },
   { id: 'orientation',         label: 'Orientation / Layout',  type: 'select', options: [
     { value: 'horizontal', label: '↔ Linear horizontal' },
     { value: 'vertical', label: '↕ Linear vertical' },
@@ -1111,7 +1112,7 @@ const STYLE_FIELDS = [
   { type: 'note', framedWhen: 'corners', label: 'The corners are on the canvas - drag either grip, at the bottom left or the top right.' },
   { id: 'border_radius',       label: 'Corner radius',           type: 'range',  min: 0, max: 50, step: 0.1,   placeholder: '4px', condition: cfg => isLin(cfg), framedBy: 'corners' },
   { id: 'circular_border_radius', label: 'Background corner radius (%)', type: 'range', min: 0, max: 50, step: 1, placeholder: '50', condition: cfg => isCirc(cfg), framedBy: 'corners' },
-  { id: '_section_colors',     label: '── 🎨 Colours, Gradient & Animation',   type: 'section' },
+  { id: '_section_colors',     icon: icon('palette'), label: '── Colours, Gradient & Animation',   type: 'section' },
   { id: 'animation_duration',  label: 'Animation duration (s)',  type: 'range',  min: 0, max: 10, step: 0.1, placeholder: '0.4' },
   { id: 'bounce_intensity', label: 'Bounce intensity (%)', type: 'range', min: 0, max: 30, dynamic_step: true, placeholder: '50' },
   { id: 'bg_color',            label: 'Background colour',      type: 'color',  placeholder: '#ffffff' },
@@ -1128,7 +1129,7 @@ const STYLE_FIELDS = [
   // the renderer names the box it paints.
   { id: '_colour_pattern',     type: 'colour_pattern', condition: (cfg, slot) => !!slot?.canvas },
 
-  { id: '_section_scale',      label: '── 📊 Value Range & Main Ticks', type: 'section' },
+  { id: '_section_scale',      icon: icon('chart-column'), label: '── Value Range & Main Ticks', type: 'section' },
   { id: 'min',                 label: 'Minimum',               type: 'number', placeholder: '0' },
   { id: 'max',                 label: 'Maximum',               type: 'number', placeholder: '100' },
   { id: 'origin',              label: 'Start point (value, e.g. 0)', type: 'number', placeholder: 'Empty = minimum' },
@@ -1145,12 +1146,12 @@ const STYLE_FIELDS = [
   { id: 'tick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'ticks' },
   { id: 'tick_color',          label: 'Manual colour',        type: 'color',  placeholder: 'rgba(255,255,255,0.3)', condition: cfg => isLin(cfg) && cfg.show_ticks && !cfg.tick_color_adaptive },
 
-  { id: '_section_segments',   label: '── 🧩 Segments (circle)',   type: 'section', condition: cfg => isCirc(cfg) },
+  { id: '_section_segments',   icon: icon('puzzle'), label: '── Segments (circle)',   type: 'section', condition: cfg => isCirc(cfg) },
   { id: 'circular_segmented',  label: 'Split circle into pill segments', type: 'checkbox', condition: cfg => isCirc(cfg) },
   { id: 'circular_segment_count', label: 'Number of segments', type: 'range', min: 2, max: 100, step: 1, placeholder: '40', condition: cfg => isCirc(cfg) && cfg.circular_segmented },
   { id: 'circular_segment_thickness', label: 'Pill thickness (%)', type: 'range', min: 0.1, max: 10, step: 0.1, placeholder: '2', condition: cfg => isCirc(cfg) && cfg.circular_segmented },
 
-  { id: '_section_subticks',   label: '── 📏 Subticks',           type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
+  { id: '_section_subticks',   icon: icon('ruler'), label: '── Subticks',           type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
   { type: 'note', framedWhen: 'sub_ticks', label: 'The subticks are on the canvas while this bar is open - their number and where they sit are under the chip.' },
   { id: 'show_subticks',       label: 'Show subticks',     type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'sub_ticks' },
   { id: 'subtick_count',       label: 'Count per interval',  type: 'number', placeholder: '4', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
@@ -1161,10 +1162,10 @@ const STYLE_FIELDS = [
   { id: 'subtick_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', placeholder: 'false', default: false, condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks, framedBy: 'sub_ticks' },
   { id: 'subtick_color',       label: 'Manual colour',        type: 'color', placeholder: 'rgba(255,255,255,0.2)', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_subticks && !cfg.subtick_color_adaptive },
 
-  { id: '_section_custom_ticks', label: '── 📌 Custom Ticks', type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
+  { id: '_section_custom_ticks', icon: icon('pin'), label: '── Custom Ticks', type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
   { id: 'custom_ticks',        label: 'Insert additional / manual ticks', type: 'custom-ticks', condition: cfg => isLin(cfg) && cfg.show_ticks },
 
-  { id: '_section_tick_labels',label: '── 🔤 Tick Labels',        type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
+  { id: '_section_tick_labels',icon: icon('type'), label: '── Tick Labels',        type: 'section', condition: cfg => isLin(cfg) && cfg.show_ticks },
   { type: 'note', framedWhen: 'tick_labels', label: 'The tick labels are on the canvas while this bar is open - how many are numbered and to how many places are under the chip.' },
   { id: 'show_tick_labels',    label: 'Show tick labels (numbers)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks, framedBy: 'tick_labels' },
   { id: 'tick_labeled_extralength', label: 'Extra length at labels', type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
@@ -1187,7 +1188,7 @@ const STYLE_FIELDS = [
   { id: 'tick_labels_tick_gap',label: 'Gap to tick', type: 'text', placeholder: '4', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels && cfg.tick_labels_pos !== 'center' },
   { id: 'tick_labels_center_gap_offset', label: 'Adjust centre gap', type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels && cfg.tick_labels_pos === 'center' },
 
-  { id: '_section_label',      label: '── 🏷️ Label (Name/Label)', type: 'section' },
+  { id: '_section_label',      icon: icon('tag'), label: '── Label (Name/Label)', type: 'section' },
   { type: 'note', framedWhen: 'label', label: 'The label is on the canvas while this bar is open - its type size and which way it reads are under the chip.' },
   { id: 'show_label',          label: 'Show name / label', type: 'checkbox', framedBy: 'label' },
   { id: 'label_font_size',     label: 'Font size (e.g. 12 or 12cqw)', type: 'text', placeholder: '12',  condition: cfg => cfg.show_label, framedBy: 'label' },
@@ -1206,7 +1207,7 @@ const STYLE_FIELDS = [
     { value: '-90', label: '-90°' }
   ], condition: cfg => isLin(cfg) && cfg.show_label, framedBy: 'label' },
 
-  { id: '_section_value',      label: '── 🔢 Value & Label', type: 'section' },
+  { id: '_section_value',      icon: icon('hash'), label: '── Value & Label', type: 'section' },
   { id: 'show_value',          label: 'Show value',         type: 'checkbox' },
   { id: 'value_animated',      label: 'Animate value (follow fill level)', type: 'checkbox', condition: cfg => cfg.show_value },
   { id: 'value_font_size',     label: 'Font size (e.g. 12 or 12cqw)', type: 'text', placeholder: '12', condition: cfg => cfg.show_value },
@@ -1230,7 +1231,7 @@ const STYLE_FIELDS = [
   ], condition: cfg => isLin(cfg) && cfg.show_value },
   { id: 'circular_value_offset_y', label: 'Y offset in circle (%)', type: 'range', min: -100, max: 100, step: 1, placeholder: '0', condition: cfg => isCirc(cfg) && cfg.show_value },
 
-  { id: '_section_indicator',  label: '── 💊 Indicator & Pill',  type: 'section', condition: cfg => isLin(cfg) },
+  { id: '_section_indicator',  icon: icon('pill'), label: '── Indicator & Pill',  type: 'section', condition: cfg => isLin(cfg) },
   { id: 'show_indicator',      label: 'Show indicator line', type: 'checkbox', condition: cfg => isLin(cfg) },
   { id: 'indicator_color',     label: 'Line colour',       type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator },
   { id: 'indicator_thickness', label: 'Line thickness (px/%)',type: 'text', placeholder: '2px', condition: cfg => isLin(cfg) && cfg.show_indicator },
@@ -1363,17 +1364,19 @@ class ScProgressbarEditor extends LitElement {
         content = html`
           <sc-color-panel .hass=${this.hass} .slot=${this.slot} .commitFn=${this.commitFn}
                           .switchless=${true} .noPump=${true}
-                          .label=${'🎨 Background pattern & animation'}
+                          .label=${'Background pattern & animation'}
                           .target=${'elm_progressbar_' + idx}></sc-color-panel>`;
         break;
       case 'section':
-        content = html`<div class="section-title">${field.label}</div>`;
+        content = html`<div class="section-title">${field.icon
+          ? html`<span class="field-icon">${field.icon}</span>` : ''}${field.label}</div>`;
         break;
       // Not a control: the line that stands in for a row the canvas has taken
       // over, so a fold that has lost most of itself does not read as one that
       // is missing something.
       case 'note':
-        return html`<div class="field-note">${field.label}</div>`;
+        return html`<div class="field-note">${field.icon
+          ? html`<span class="field-icon">${field.icon}</span>` : ''}${field.label}</div>`;
       case 'checkbox':
         content = html`
           <div class="row">
@@ -1467,10 +1470,10 @@ class ScProgressbarEditor extends LitElement {
                 ${(t.align === 'start' || t.align === 'end') ? html`
                   <div style="display:flex; align-items:center; gap:2px;" title="Mirror to other side">
                     <input type="checkbox" .checked=${!!t.mirror} @change=${e => updCt(ct.map((x,i) => i===ti ? {...x, mirror: e.target.checked} : x))}>
-                    <span style="font-size:10px; opacity:0.8;">🪞</span>
+                    <span style="font-size:10px; opacity:0.8;">${icon('flip-vertical')}</span>
                   </div>
                 ` : ''}
-                <button class="del-btn" @click=${() => updCt(ct.filter((_,i) => i !== ti))}>🗑</button>
+                <button class="del-btn" @click=${() => updCt(ct.filter((_,i) => i !== ti))}>${icon('trash-2')}</button>
               </div>`)}
             <button type="button" class="add-btn" style="margin-top:4px; padding:6px;"
               @click=${() => updCt([...ct, { value: 50, color: '#ff0000', width: '2px', length: '', align: 'main', mirror: false }])}>＋ Add custom tick</button>
@@ -1512,7 +1515,7 @@ class ScProgressbarEditor extends LitElement {
     const groups = [];
     let cur = null;
     fields.forEach(f => {
-      if (f.type === 'section') { if (cur) groups.push(cur); cur = { id: f.id, label: f.label.replace('── ', ''), fields: [] }; }
+      if (f.type === 'section') { if (cur) groups.push(cur); cur = { id: f.id, icon: f.icon, label: f.label.replace('── ', ''), fields: [] }; }
       else if (cur) cur.fields.push(f);
     });
     if (cur) groups.push(cur);
@@ -1536,7 +1539,8 @@ class ScProgressbarEditor extends LitElement {
             ?open=${this._expanded[sKey] || wanted}
             @toggle=${e => { this._expanded[sKey] = e.target.open; this.requestUpdate(); }}>
             <summary style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="flex: 1;">${g.label}</span>
+              <span style="flex: 1;">${g.icon
+                  ? html`<span class="field-icon">${g.icon}</span>` : ''}${g.label}</span>
               <span style="font-size:10px;">▼</span>
             </summary>
             <div class="inner-content">
@@ -1604,7 +1608,7 @@ class ScProgressbarEditor extends LitElement {
               @click=${e => { e.preventDefault(); if(idx===bars.length-1) return; const n=structuredClone(bars); const t=n[idx+1]; n[idx+1]=n[idx]; n[idx]=t; this.commitFn('progressbars',n); }}>▼</button>
             <button title="Remove"
               style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--error-color,#f44);padding:0;"
-              @click=${e => { e.preventDefault(); this._removeProgressbar(idx, bars); }}>🗑</button>
+              @click=${e => { e.preventDefault(); this._removeProgressbar(idx, bars); }}>${icon('trash-2')}</button>
           </div>
         </summary>
         ${this._renderBarBody(entry, idx, bars)}
@@ -1713,7 +1717,7 @@ class ScProgressbarEditor extends LitElement {
     return html`
       <details class="inner-section" ?open=${this._expanded['_main']}
         @toggle=${e => { this._expanded['_main'] = e.target.open; this.requestUpdate(); }}>
-        <summary>📊 Progressbars
+        <summary>${icon('chart-gantt')} Progressbars
           <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
             <span style="font-size:10px; opacity:.6; font-weight:400;">
               ${bars.length} Bar${bars.length !== 1 ? 's' : ''}

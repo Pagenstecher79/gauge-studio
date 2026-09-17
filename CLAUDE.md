@@ -41,7 +41,9 @@ trust it when identifying a build.
 The project is MIT licensed - `LICENSE` at the root, and `"license": "MIT"` in
 `package.json`. `docker/LICENSE` is a separate notice: the machinery under
 `docker/` is adapted from another MIT project and reproduces its copyright as
-that licence requires.
+that licence requires. `LICENSES/lucide.txt` is a third: the editor's icons
+are Lucide, inlined into `src/icons.js`, and ISC asks for the same. An icon
+added from another set needs its notice added there in the same change.
 
 `npm test` runs vitest. Almost nothing here is unit-tested, and that is not a
 gap to close indiscriminately: the modules register custom elements and read
@@ -310,9 +312,18 @@ works.
 A folded section is `type: 'details'`, drawn the same everywhere - the gauge
 and the bar build theirs from a `'section'` field instead, because their own
 renderers split a flat list into sections, but the fold looks the same. Every
-section heading opens with an emoji, which is what makes a folded list
-readable at a glance; the gauge's and the bar's keep the `── ` prefix in
-front of it, a marker their renderers strip before drawing.
+section heading opens with an icon, which is what makes a folded list readable
+at a glance; the gauge's and the bar's keep the `── ` prefix on the label, a
+marker their renderers strip before drawing.
+
+**Icons are `src/icons.js`, never a character.** `icon('name')` gives back the
+drawing, sized by the font size beside it and coloured by `currentColor`, and
+`field.icon` is where a heading's goes - beside the label, not inside it, so
+the label stays a string for the fold to be keyed by. A `::before` cannot hold
+an element, so the two badges on the canvas use `iconMask` instead. Do not
+reach for a Unicode glyph or an emoji: they were what the set replaced, and
+one of them back in a row of icons is the thing that made the old menus look
+assembled rather than drawn.
 
 ## Performance
 
