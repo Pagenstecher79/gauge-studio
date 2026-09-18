@@ -5913,7 +5913,7 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
-    const hlTip = 'The part in hand pulses on the drawing itself: a shape glows, a text is framed. A colour just changed is shown plain for five seconds first, so the highlight is never what you are looking at.';
+    const hlTip = 'The part in hand blinks on the drawing itself - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
     const liveTip = this._live
       ? "The real gauges and bars. Text sizes are the card's, not this preview's."
       : 'Plain boxes - easier to see and to grab.';

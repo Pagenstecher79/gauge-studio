@@ -734,17 +734,14 @@ Object.assign(window.SupercardUtils, (() => {
   }
 
   /**
-   * The parts whose highlight is a frame round them rather than a glow on
-   * them: a word is read, and a word with a halo is a word that is harder to
-   * read. Everything else a renderer marks - a tick, a mark, a ring, a dot -
-   * is a shape, and a shape says it is in hand by glowing.
+   * Every part a renderer marks, and so every part that can be in hand.
+   * They all say it the same way, because they are all the same thing to the
+   * eye: the mark you are working on, blinking.
    */
-  const HL_FRAMED = ['tick_labels', 'gauge_label', 'value', 'scale_label',
-                     'multiplier', 'label'];
-
-  /** The rest: the shapes, which say they are in hand by glowing. */
-  const HL_GLOWING = ['gauge_ring', 'frame_ring', 'ticks', 'sub_ticks',
-                      'pointer', 'pointer_center', 'pill'];
+  const HL_PARTS = ['gauge_ring', 'frame_ring', 'ticks', 'sub_ticks',
+                    'pointer', 'pointer_center', 'pill', 'tick_labels',
+                    'gauge_label', 'value', 'scale_label', 'multiplier',
+                    'label'];
 
   /**
    * Which part of its drawing an element is showing as the one in hand.
@@ -753,47 +750,52 @@ Object.assign(window.SupercardUtils, (() => {
    * renderer answers for it here, because only the renderer's own stylesheet
    * can reach inside its shadow root. The marks are the ones the editor
    * already presses by - data-sc-part - so nothing new has to be drawn or
-   * named for a part to be able to light up.
+   * named for a part to be able to say so.
    *
-   * A glow rather than a colour: the colour of a tick is the setting being
-   * edited, and a highlight that paints over it hides the very thing the
-   * hand is on. The glow traces the shape, so it works the same on a line in
-   * an SVG and on a row of divs in a bar.
+   * The part blinks, and nothing is drawn around it: no frame, no halo. A
+   * frame is a second shape to read and it lands where the drawing has no
+   * room, and a halo changes what a colour looks like, which is usually the
+   * very setting the hand is on. Fading the mark itself leaves both alone -
+   * it keeps its colour, its weight and its place, and the eye still goes
+   * straight to the one thing that is moving.
+   *
+   * It is a breath, not a flash: a twentieth of its strength given up and
+   * taken back over five seconds. A mark that disappears is a mark you cannot judge
+   * while it is in hand, and anything quicker or deeper is read as an error
+   * rather than as a pointer. Both numbers were set by looking, and every
+   * step was towards slower and shallower: 0.15 over 1.2s, then 0.6 over
+   * 1.8s, then 0.7 over 2s, then 0.85 over 5s, all still too much. Read that
+   * as a rule rather than as four numbers - on a drawing this small, what
+   * makes one mark stand out is that it is the only thing moving at all, not
+   * how far it moves.
+   *
+   * It fades through a filter rather than through opacity, because several
+   * of these marks carry an opacity of their own - a frame ring at 0.4, the
+   * bar's label at 0.8 - and an animation on the property would overrule it
+   * and make the mark jump to full strength before it began. A filter
+   * multiplies instead, so each mark blinks from wherever it already was.
    *
    * Nothing is highlighted while data-sc-hl is absent, which is also how the
    * canvas stands out of the way for a few seconds after a colour is changed.
    */
   const partHighlight = (() => {
-    const one = (/** @type {string} */ p) =>
-      `:host([data-sc-hl="${p}"]) [data-sc-part="${p}"]`;
-    const framed = HL_FRAMED.map(one).join(',\n');
-    const glow = HL_GLOWING.map(one).join(',\n');
+    const all = HL_PARTS
+      .map((/** @type {string} */ p) =>
+        `:host([data-sc-hl="${p}"]) [data-sc-part="${p}"]`)
+      .join(',\n');
     return css`
-      ${unsafeCSS(glow)} {
-        animation: sc-hl-glow 1.6s ease-in-out infinite;
+      ${unsafeCSS(all)} {
+        animation: sc-hl-blink 5s ease-in-out infinite;
       }
-      ${unsafeCSS(framed)} {
-        animation: sc-hl-frame 1.6s ease-in-out infinite;
-        outline: 1.5px solid transparent; outline-offset: 2px;
+      /* A gradient ring is a picture behind a mask, and the arc that names it
+         for the editor is drawn in nothing at all - fading that would fade
+         nothing. The group holds both, so the ring blinks as the group. */
+      :host([data-sc-hl="gauge_ring"]) .g-ring {
+        animation: sc-hl-blink 5s ease-in-out infinite;
       }
-      /* The gradient ring is a picture, so it has nothing to glow with. The
-         arc the editor presses it by is drawn in nothing at all, and while
-         the ring is in hand that arc is what pulses - a ring round the ring. */
-      :host([data-sc-hl="gauge_ring"]) [data-sc-part="gauge_ring"][stroke="transparent"] {
-        animation: sc-hl-ring 1.6s ease-in-out infinite;
-      }
-      @keyframes sc-hl-glow {
-        0%, 100% { filter: drop-shadow(0 0 0 var(--sc-hl, #ffd400)); }
-        50%      { filter: drop-shadow(0 0 3px var(--sc-hl, #ffd400))
-                           drop-shadow(0 0 7px var(--sc-hl, #ffd400)); }
-      }
-      @keyframes sc-hl-frame {
-        0%, 100% { outline-color: transparent; }
-        50%      { outline-color: var(--sc-hl, #ffd400); }
-      }
-      @keyframes sc-hl-ring {
-        0%, 100% { stroke: rgba(0,0,0,0); }
-        50%      { stroke: var(--sc-hl, #ffd400); }
+      @keyframes sc-hl-blink {
+        0%, 100% { filter: opacity(1); }
+        50%      { filter: opacity(0.95); }
       }
     `;
   })();
