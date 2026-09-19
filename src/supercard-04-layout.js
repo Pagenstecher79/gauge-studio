@@ -33,6 +33,16 @@ import { PATTERN_ANIMATIONS, patternList, patternFor, patchPattern,
 const SC = window.SupercardUtils;
 
 /**
+ * How long the highlight stands out of the way after a colour was set.
+ *
+ * Long enough to judge the colour that was just chosen against the rest of
+ * the drawing, short enough that the part is found again without having to
+ * take it in hand a second time. The hold is pushed ahead by every write, so
+ * a picker being dragged never gets its pulse back between two frames.
+ */
+const HL_HOLD_MS = 5000;
+
+/**
  * The cell a template's miniature is drawn into, in CSS pixels.
  *
  * Here rather than in the stylesheet because `_previewBox` has to fit the
@@ -2019,6 +2029,7 @@ class ScCanvasEditor extends LitElement {
     this._innerAlso = [];
     this._hl = true;
     this._hlHold = 0;
+    this._hlTimer = 0;
     this._innerFrame = 0;
     this._innerRects = null;
     this._innerDrag = null;
@@ -2121,6 +2132,7 @@ class ScCanvasEditor extends LitElement {
     if (this._innerFrame) cancelAnimationFrame(this._innerFrame);
     this._innerFrame = 0;
     clearTimeout(this._appliedTimer);
+    clearTimeout(this._hlTimer);
     super.disconnectedCallback();
   }
 
@@ -4520,6 +4532,24 @@ class ScCanvasEditor extends LitElement {
     const back = SC.toRgb(own ?? 'var(--card-background-color)', { resolveVars: true })
               || SC.toRgb('var(--ha-card-background)', { resolveVars: true });
     return `--sc-hl-ink:${highlightInk(back || null)};`;
+  }
+
+  /**
+   * Put the highlight away, because a colour is being chosen.
+   *
+   * The drawing has to answer the colour picker and nothing else while one
+   * is open: a pulse over the very mark being coloured, in an ink that is
+   * not the one being picked, is the worst possible thing to judge a colour
+   * against. So both go, and come back once the hand has moved on.
+   *
+   * Nothing else looks at the clock, so the canvas has to be told when the
+   * hold is over - `_hlHold` is state, and setting it back to zero is what
+   * brings the pulse and the ink with it.
+   */
+  _holdHighlight() {
+    this._hlHold = Date.now() + HL_HOLD_MS;
+    clearTimeout(this._hlTimer);
+    this._hlTimer = setTimeout(() => { this._hlHold = 0; }, HL_HOLD_MS);
   }
 
   _writeInner(patch, quiet) {
