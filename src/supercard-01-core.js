@@ -768,11 +768,18 @@ Object.assign(window.SupercardUtils, (() => {
    * drawings, with a slider on both numbers; that slider has been taken back
    * out, so change them here and nowhere else.
    *
-   * It fades through a filter rather than through opacity, because several
-   * of these marks carry an opacity of their own - a frame ring at 0.4, the
-   * bar's label at 0.8 - and an animation on the property would overrule it
-   * and make the mark jump to full strength before it began. A filter
-   * multiplies instead, so each mark blinks from wherever it already was.
+   * A few of these marks carry an opacity of their own - a gauge's frame
+   * ring, the bar's circular label - and an animation on the property would
+   * overrule it and make the mark jump to full strength the moment it was
+   * taken in hand. So the keyframes multiply instead of setting: whoever
+   * draws a mark with an opacity of its own puts the same number in
+   * --sc-hl-own, and the mark breathes from where it already was.
+   *
+   * This was a filter first - opacity() multiplies by itself, with nothing
+   * to declare. Safari computes such an animation and then does not paint
+   * it: CSS filter reaches the outermost <svg> there and not the <line> and
+   * <text> inside it, so the ticks sat still while the values changed. The
+   * opacity property is painted on an SVG child everywhere.
    *
    * Nothing is highlighted while data-sc-hl is absent, which is also how the
    * canvas stands out of the way for a few seconds after a colour is changed.
@@ -793,8 +800,8 @@ Object.assign(window.SupercardUtils, (() => {
         animation: sc-hl-blink 2.3s ease-in-out infinite;
       }
       @keyframes sc-hl-blink {
-        0%, 100% { filter: opacity(1); }
-        50%      { filter: opacity(0.53); }
+        0%, 100% { opacity: calc(var(--sc-hl-own, 1) * 1); }
+        50%      { opacity: calc(var(--sc-hl-own, 1) * 0.53); }
       }
     `;
   })();
