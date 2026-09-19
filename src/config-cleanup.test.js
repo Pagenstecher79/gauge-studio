@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripDeadConfig, migrateSlotKey, DEAD_ENTRY_KEYS, DEAD_PATTERN_TARGETS } from './config-cleanup.js';
+import { stripDeadConfig, migrateSlotKey, withoutElementConfig, DEAD_ENTRY_KEYS, DEAD_PATTERN_TARGETS } from './config-cleanup.js';
 
 describe('stripDeadConfig', () => {
   it('takes the dead keys out of the entry that carries them', () => {
@@ -213,5 +213,46 @@ describe('stripDeadConfig: the one stop shape', () => {
     const slot = { gauges: [{ manual_stops: [{ value: 0, color: '#fff' }] }] };
     stripDeadConfig(slot);
     expect(slot.gauges[0].manual_stops).toEqual([{ value: 0, color: '#fff' }]);
+  });
+});
+
+describe('withoutElementConfig', () => {
+  const slot = () => ({
+    color_patterns: [{ id: 1, target: 'elm_surface_0' }, { id: 2, target: 'elm_gauge_0' }],
+    fx_glass_patterns: [{ id: 3, target: 'elm_surface_0' }],
+    // The push list writes the bare id, the other two the `elm_` form.
+    interactions: [{ id: 4, target: 'surface_0' }, { id: 5, target: 'surface_1' }],
+    canvas: { elements: [] },
+  });
+
+  it('takes every list entry that acts on the id, in either spelling', () => {
+    expect(withoutElementConfig(slot(), ['surface_0'])).toEqual({
+      color_patterns: [{ id: 2, target: 'elm_gauge_0' }],
+      fx_glass_patterns: [],
+      interactions: [{ id: 5, target: 'surface_1' }],
+    });
+  });
+
+  it('leaves alone the lists that lose nothing', () => {
+    expect(Object.keys(withoutElementConfig(slot(), ['surface_1'])))
+      .toEqual(['interactions']);
+  });
+
+  it('answers null when there is nothing to take', () => {
+    expect(withoutElementConfig(slot(), ['surface_9'])).toBe(null);
+    expect(withoutElementConfig(slot(), [])).toBe(null);
+    expect(withoutElementConfig(null, ['surface_0'])).toBe(null);
+  });
+
+  it('does not touch the slot it is given', () => {
+    const before = slot();
+    const copy = JSON.parse(JSON.stringify(before));
+    withoutElementConfig(before, ['surface_0']);
+    expect(before).toEqual(copy);
+  });
+
+  it('takes several ids at once', () => {
+    const out = withoutElementConfig(slot(), ['surface_0', 'surface_1']);
+    expect(out.interactions).toEqual([]);
   });
 });

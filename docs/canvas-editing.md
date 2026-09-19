@@ -465,11 +465,18 @@ The rest of the arithmetic is worth stating because it is not obvious:
 
 ### Bending the sides
 
-Each side has a grip on its middle that bows it out into a barrel or in into a
-waist. Four of them rather than one, because one control could not say a waist
-on the left and a barrel on the right, and that is a shape people actually
-want. The same rule as the corners: the grip stands on the middle of the *bent*
-side, so it is always on the thing it moves.
+Each side has a grip that bows it out into a barrel or in into a waist. Four
+of them rather than one, because one control could not say a waist on the left
+and a barrel on the right, and that is a shape people actually want. The same
+rule as the corners: the grip stands on the crest of the *bent* side, so it is
+always on the thing it moves.
+
+It is the one handle here that travels on both axes. **Across** the side it
+sets how deep the bow is; **along** it, where the crest of that bow sits
+(`bend_<side>_at`, per cent in the direction the side runs, the middle by
+default). A crest pushed towards a corner turns a barrel into a wave, a fin, a
+leaf - and the cursor is `move`, because a one-axis cursor on a two-axis
+handle is a lie.
 
 - The outline is a **`clip-path: polygon()` of per cents**, not an SVG path.
   Per cents are read per axis against the box being clipped, so one string is
@@ -480,8 +487,40 @@ side, so it is always on the thing it moves.
 - **The corners are left where they are.** They are shared with the
   neighbouring side, and a corner that moved would tear the outline apart
   wherever two bends disagreed. So the bow is a parabola: nothing at either
-  end, the full bend in the middle - which is also why reading a bend back
+  end, the full bend at the crest - which is also why reading a bend back
   off the grip needs no factor, and is an exact inverse.
+- **The crest is a warp, not a second curve.** The same parabola is read
+  through `u = t ** k`, with `k` chosen so `u` is a half where `t` is the
+  crest. Two half-curves joined at the crest meet at an angle and the eye
+  finds the join at once; a warp cannot. A crest in the middle gives `k = 1`
+  and the plain parabola back, to the last digit - the clip path of every
+  card written before sides could be dragged along is byte for byte what it
+  was. What the warp does cost is sampling: eight even steps leave the steep
+  short flank to two points, and eight even steps *up the bow* crowd them all
+  into that flank and cut the long one off with a chord, so the points are
+  the union of both sets.
+- **Flat snaps, and it snaps in pixels.** A side that is straight and one
+  bowed by a third of a per cent are different drawings and only one of them
+  was meant, but a grip sitting on the side it sets gives no way of telling
+  you are on it. Two pixels catch a hand that is already flat - in pixels
+  because a hand is in pixels: read as a per cent of the box, the same rule
+  gave a wide surface a six-pixel window on its sides and a two-pixel one on
+  its top, so one box snapped differently depending on which edge you took
+  hold of. The crest gets the same window round the middle, and a side let go
+  flat has its crest put back there, because a bow of nothing has no crest.
+- **The dashed frame follows the bow.** A clip path cannot be stroked, so a
+  bent surface used to keep a straight dashed rectangle round it while its
+  paint bowed out past it - and the rectangle is what the eye reads as the
+  edge. The same polygon goes into an SVG over the same grown layer, and the
+  box's own border is taken away while it is there. The SVG needs its width
+  and height spelled out as well as its inset: it is a replaced element, so
+  four offsets alone leave it at its intrinsic 1:1 size, which on a wide
+  surface is a square outline hanging a long way below the thing it is meant
+  to be drawn round.
+- **A bow outward is the surface's edge**, so the editing zoom fits what the
+  element *reaches* (`bentBox`) rather than what its box says - the bow being
+  the very thing somebody zooming in on a bent surface has come to look at.
+  Everything else - dragging, resizing, aligning - still works on the box.
 - **A clip can only take paint away.** A side bowing outward has to have paint
   out there to keep, so the layer is grown by the room a bow may need and the
   path hands back all of it but the shape. Growing it is free because the path

@@ -23,9 +23,12 @@ import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
 import { highlightInk } from "./highlight-ink.js";
+import { withoutElementConfig, TARGET_LISTS } from "./config-cleanup.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
-import { BEND_SIDES, BEND_ROOM, bendKey, bendsOf, bendEscapes,
-         bendClipPath, bendGripHome, bendFromGrip } from "./canvas-bend.js";
+import { BEND_SIDES, BEND_ROOM, bendKey, bendAtKey, BEND_AT_MID,
+         bendsOf, bendEscapes, isBent,
+         bendClipPath, bendOutlineSvg, bentBox,
+         bendGripHome, bendFromGrip } from "./canvas-bend.js";
 import { PATTERN_ANIMATIONS, patternList, patternFor, patchPattern,
          defaultColorPattern, patternPreviewCss, patternRadiusCss,
          solidColorOf, solidColorPatch } from "./color-pattern.js";
@@ -501,6 +504,16 @@ const HISTORY_DEPTH = 30;
  * of "the last thing I did on the canvas".
  */
 const HISTORY_KEYS = Object.freeze(['canvas', 'gauges', 'progressbars', 'labels_list']);
+
+/**
+ * What the one step that deletes a surface has to answer for.
+ *
+ * A surface is nothing but its box, so deleting the box takes its paint, its
+ * glass and its push with it - and a step that removes those has to be able
+ * to hand them back, or its undo puts back a surface nobody had. Only that
+ * step: see `_snapshot`.
+ */
+const SNAPSHOT_KEYS = Object.freeze([...HISTORY_KEYS, ...TARGET_LISTS]);
 
 /**
  * Whether a commit changes anything an undo snapshot holds - the slot keys
@@ -2435,6 +2448,14 @@ class ScCanvasEditor extends LitElement {
          contents the rest of the time, which is what keeps a chip inside the
          element it belongs to. */
       .el.bent { overflow: visible; }
+      /* The box's own border goes while the outline has it: two edges round
+         one shape, one of them wrong, is worse than the wrong one alone. */
+      .el.outlined, .el.outlined.sel { border-color: transparent; }
+      .el-outline { position: absolute; z-index: 1; pointer-events: none;
+        overflow: visible; }
+      .el-outline polygon { fill: none; stroke: #ffc107; stroke-width: 1;
+        stroke-dasharray: 3 3; }
+      .el.sel .el-outline polygon { stroke-width: 2; stroke-dasharray: none; }
       .el.sel { background: rgba(3,169,244,0.55); border-width: 2px; z-index: 3; }
       /* A pinned element says so twice: the cursor, which answers before the
          press, and the badge, which answers from across the canvas. The border
@@ -2848,8 +2869,9 @@ class ScCanvasEditor extends LitElement {
         border-radius: 50%; z-index: 9; background: var(--sc-part-sel);
         touch-action: none; transform: translate(-50%, -50%);
         box-shadow: 0 0 0 1.5px rgba(0,0,0,0.7), 0 0 0 2.5px rgba(255,255,255,0.85); }
-      .side-grip[data-side="top"], .side-grip[data-side="bottom"] { cursor: ns-resize; }
-      .side-grip[data-side="left"], .side-grip[data-side="right"] { cursor: ew-resize; }
+      /* Both axes, because the handle does both: across the side is the
+         depth of the bow, along it is where the crest of that bow sits. */
+      .side-grip { cursor: move; }
       .side-grip::after { content: ''; position: absolute; inset: -7px; }
       .corner-grip[data-corner="bl"] { transform: translate(-50%, -100%);
         cursor: ew-resize; }
@@ -3018,7 +3040,7 @@ class ScCanvasEditor extends LitElement {
    * because `this.slot` still holds the old config then - Home Assistant
    * hands the new one back asynchronously, a render later.
    */
-  _send(key, value) {
+  _send(key, value, keys = HISTORY_KEYS) {
     if (!this.commitFn) return;
     // A write that touches nothing the snapshot holds cannot be undone by
     // putting one back - a push, a colour or a glass pattern from an element's
@@ -3026,26 +3048,38 @@ class ScCanvasEditor extends LitElement {
     // the stack whose restore changes nothing, so the arrow would be enabled
     // and do nothing when pressed.
     if (!this._travelling && touchesHistory(key, value)) {
-      this._undoStack = [...this._undoStack, this._snapshot()].slice(-HISTORY_DEPTH);
+      this._undoStack = [...this._undoStack, this._snapshot(keys)].slice(-HISTORY_DEPTH);
       // A new change is a new future, so whatever was undone is not it.
       this._redoStack = [];
     }
     this.commitFn(key, value);
   }
 
-  /** What this editor's undo is responsible for putting back. */
-  _snapshot() {
+  /**
+   * What this editor's undo is responsible for putting back.
+   *
+   * A step carries the keys it is answerable for, because that is not the
+   * same set every time: almost every step is the canvas', but one that
+   * deletes a surface also takes the paint, the glass and the push off it,
+   * and putting the surface back without them puts back a different surface.
+   * Restoring those lists on every step instead would quietly undo a colour
+   * set between two moves - an edit that made no step of its own, and that
+   * nobody asked to have taken back.
+   *
+   * @param {readonly string[]} [keys]
+   */
+  _snapshot(keys = HISTORY_KEYS) {
     /** @type {Record<string, any>} */
     const slot = {};
-    for (const key of HISTORY_KEYS) {
+    for (const key of keys) {
       if (this.slot?.[key] !== undefined) slot[key] = structuredClone(this.slot[key]);
     }
-    return { slot, grid: structuredClone(this.cardConfig?.grid_options ?? null) };
+    return { slot, keys, grid: structuredClone(this.cardConfig?.grid_options ?? null) };
   }
 
   /** Put one snapshot back, as one commit. */
   _restore(snap) {
-    const patch = restorePatch(this.slot || {}, snap.slot, HISTORY_KEYS);
+    const patch = restorePatch(this.slot || {}, snap.slot, snap.keys || HISTORY_KEYS);
     const gridNow = this.cardConfig?.grid_options ?? null;
     const gridDiffers = JSON.stringify(gridNow) !== JSON.stringify(snap.grid);
     if (!patch && !gridDiffers) return false;
@@ -3065,7 +3099,7 @@ class ScCanvasEditor extends LitElement {
   _undo() {
     const snap = this._undoStack[this._undoStack.length - 1];
     if (!snap) return;
-    const now = this._snapshot();
+    const now = this._snapshot(snap.keys);
     this._undoStack = this._undoStack.slice(0, -1);
     if (this._restore(snap)) this._redoStack = [...this._redoStack, now].slice(-HISTORY_DEPTH);
   }
@@ -3073,7 +3107,7 @@ class ScCanvasEditor extends LitElement {
   _redo() {
     const snap = this._redoStack[this._redoStack.length - 1];
     if (!snap) return;
-    const now = this._snapshot();
+    const now = this._snapshot(snap.keys);
     this._redoStack = this._redoStack.slice(0, -1);
     if (this._restore(snap)) this._undoStack = [...this._undoStack, now].slice(-HISTORY_DEPTH);
   }
@@ -3408,13 +3442,25 @@ class ScCanvasEditor extends LitElement {
     const selected = new Set(this._selection);
     if (!selected.size) return;
     const c = structuredClone(this._canvas);
+    const going = this._canvas.elements.filter(el => selected.has(el.id));
     c.elements = c.elements.filter(el => !selected.has(el.id));
     if (c.elements.length === this._canvas.elements.length) return;
     // The list below the canvas follows the selection, so ids that no longer
     // exist would leave it empty with nothing left to click.
     this._sel = null;
     this._extra = [];
-    this._commit(c);
+    // A surface is nothing but its box, and the next surface drawn takes the
+    // lowest free number - so paint left behind under `elm_surface_0` is
+    // paint the next `surface_0` comes up wearing. Only a surface: everything
+    // else keeps its own config in a list of its own, where taking the box
+    // off the canvas is not the same as deleting the thing.
+    const dead = withoutElementConfig(this.slot,
+      going.filter(el => el.surface).map(el => el.id));
+    if (!dead) { this._commit(c); return; }
+    // One commit, not two: `_commit` clones the config it was handed, and
+    // Home Assistant writes that back a render later, so the second of two
+    // commits in a tick is written over the first.
+    this._send('__merge__', { canvas: c, ...dead }, SNAPSHOT_KEYS);
   }
 
   /**
@@ -3824,7 +3870,10 @@ class ScCanvasEditor extends LitElement {
    */
   _zoomToSelection({ atLeast = 0, margin = FIT_MARGIN } = {}) {
     const c = this._canvas;
-    const boxes = c.elements.filter(el => this._isSel(el.id));
+    // What each one reaches, not what its box says: a surface with a side
+    // bowed outward is drawn past its box, and the bow is the very thing
+    // somebody zooming in on it has come to look at.
+    const boxes = c.elements.filter(el => this._isSel(el.id)).map(el => this._elReach(el));
     if (!boxes.length) return;
     const x0 = Math.min(...boxes.map(b => b.x));
     const y0 = Math.min(...boxes.map(b => b.y));
@@ -4309,7 +4358,9 @@ class ScCanvasEditor extends LitElement {
       return;
     }
     if (d.mode === 'side') {
-      this._writeInner({ [bendKey(d.end)]: bendFromGrip(p, d.box, d.end) }, d.started);
+      const bend = bendFromGrip(p, d.box, d.end);
+      this._writeInner({ [bendKey(d.end)]: bend.bow, [bendAtKey(d.end)]: bend.at },
+                       d.started);
       d.started = true;
       return;
     }
@@ -4473,7 +4524,51 @@ class ScCanvasEditor extends LitElement {
    */
   _bentEl(el) {
     if (!el?.surface) return false;
-    return bendEscapes(bendsOf(patternFor(patternList(this.slot), 'elm_' + el.id)));
+    return bendEscapes(this._bendsOf(el));
+  }
+
+  /** How the sides of an element are bowed, flat for everything but a surface. */
+  _bendsOf(el) {
+    return bendsOf(el?.surface
+      ? patternFor(patternList(this.slot), 'elm_' + el.id) : null);
+  }
+
+  /**
+   * The canvas box an element actually reaches, bow and all.
+   *
+   * The box is still the box - it is what is dragged, what is resized and
+   * what everything lines up on. This is only for the two questions that ask
+   * where the drawing *ends*: what the editing zoom has to fit, and where the
+   * outline goes.
+   */
+  _elReach(el) {
+    return bentBox(el, this._bendsOf(el));
+  }
+
+  /**
+   * The outline of a bent surface, drawn on the edge the paint actually has.
+   *
+   * A clip path cannot be stroked, so the box's own dashed rectangle stayed
+   * straight while the paint bowed out past it - and a straight line round a
+   * bent shape is read as the shape. The polygon is laid over the same grown
+   * layer the clip works in, at a `0 0 100 100` viewBox with no aspect ratio
+   * to preserve, so one set of per cents describes both. The stroke does not
+   * scale with it, or a wide box would draw a dash four times the length of
+   * the one above it.
+   */
+  _bentOutline(el) {
+    const bends = this._bendsOf(el);
+    if (!isBent(bends)) return '';
+    const pts = bendOutlineSvg(bends);
+    // The width and the height as well as the inset, and both of them
+    // spelled out: an `svg` is a replaced element, so four offsets alone
+    // over-constrain it and the browser keeps its intrinsic 1:1 box instead
+    // - which on a wide surface is a square outline hanging a long way below
+    // the thing it is meant to be drawn round.
+    const grown = 100 + 2 * BEND_ROOM;
+    return html`<svg class="el-outline" viewBox="0 0 100 100" preserveAspectRatio="none"
+      style="inset:-${BEND_ROOM}%; width:${grown}%; height:${grown}%;"><polygon points=${pts}
+      vector-effect="non-scaling-stroke"></polygon></svg>`;
   }
 
   /** The box of the element being edited, on the screen. */
@@ -5067,9 +5162,12 @@ class ScCanvasEditor extends LitElement {
       return html`
         <div class="side-grip" data-side=${side}
              style="left:${home.l}%; top:${home.t}%;"
-             title=${`Drag to bow ${s.what} out or in - ${
-               now ? (now > 0 ? now + '% out' : -now + '% in') : 'straight'} now`}
-             @dblclick=${() => this._writeInner({ [bendKey(side)]: 0 })}
+             title=${`Drag across ${s.what} to bow it out or in, along it to move the crest - ${
+               now.bow ? (now.bow > 0 ? now.bow + '% out' : -now.bow + '% in')
+                       : 'straight'} now${
+               now.bow && now.at !== BEND_AT_MID ? `, crest at ${now.at}%` : ''}`}
+             @dblclick=${() => this._writeInner({ [bendKey(side)]: 0,
+                                                  [bendAtKey(side)]: BEND_AT_MID })}
              @pointerdown=${(/** @type {any} */ e) =>
                this._innerDown(e, null, 'side', side)}></div>`;
     })}`;
@@ -6521,11 +6619,12 @@ class ScCanvasEditor extends LitElement {
               const live = this._live ? this._liveContent(el) : null;
               const pinned = isPinned(el);
               return html`
-              <div class="el ${el.surface ? 'surface' : ''} ${this._bentEl(el) ? 'bent' : ''} ${this._inner === el.id ? 'inner' : ''} ${live ? 'live' : ''} ${this._isSel(el.id) ? 'sel' : ''} ${pinned ? 'pinned' : ''} ${this._pushed(el.id) ? 'pushed' : ''}"
+              <div class="el ${el.surface ? 'surface' : ''} ${this._bentEl(el) ? 'bent' : ''} ${isBent(this._bendsOf(el)) ? 'outlined' : ''} ${this._inner === el.id ? 'inner' : ''} ${live ? 'live' : ''} ${this._isSel(el.id) ? 'sel' : ''} ${pinned ? 'pinned' : ''} ${this._pushed(el.id) ? 'pushed' : ''}"
                    style="left:${pct(el.x, c.w)}; top:${pct(el.y, c.h)}; width:${pct(el.w, c.w)}; height:${pct(el.h, c.h)};"
                    data-item-id=${el.id} title=${this._title(el, pinned)}
                    @pointerdown=${e => this._onDown(e, idx, 'move')}>
                 ${this._surfaceSkin(el)}
+                ${this._bentOutline(el)}
                 ${live ?? el.id}
                 ${inner?.id === el.id ? html`
                   <button class="inner-open ${this._innerOn ? 'on' : ''}"

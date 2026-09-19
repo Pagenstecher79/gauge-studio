@@ -4,6 +4,7 @@ import { lightParams, bevelShadow, px, isRoundTarget, isReliefTarget, boxRingMas
 import { lensScaleFraction, lensFilterMarkup, applyLensGeometry } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
+import { patternList, patternFor, patternRadiusCss } from "./color-pattern.js";
 
 const SC = window.SupercardUtils;
 
@@ -686,7 +687,13 @@ function update({ hass, config }) {
       let padVal = 0, padUnit = 'px';
       let brValue = '', brUnit = 'px';
 
-      if (!isDirectElement) {
+      // An element's glass fits itself, so the two sliders are off by default
+      // and `manual_override` is the switch that asks for them - the switch
+      // the editor has always drawn. Nothing read them: the values went into
+      // the config and the glass went on fitting itself, so the edge distance
+      // did nothing and the radius did nothing, on every element there is.
+      const manual = !isDirectElement || !!pat.manual_override;
+      if (manual) {
           padVal = pat.padding ?? 0;
           padUnit = pat.padding_unit ?? 'px';
           brValue = pat.border_radius ?? '';
@@ -694,7 +701,10 @@ function update({ hass, config }) {
       }
 
       let autoRadiusFallback = 'inherit';
-      let computedForceSquare = pat.force_square ?? false;
+      // Same switch for the shape lock: its control is drawn under the same
+      // condition, and a setting that goes on working while its control is
+      // hidden is a setting nobody can turn off.
+      let computedForceSquare = manual && (pat.force_square ?? false);
       let scaleFactor = 100;
 
       let isGaugeResponsive = false;
@@ -744,6 +754,14 @@ function update({ hass, config }) {
           }
         } else if (pat.target === 'elm_icon') {
           isGaugeResponsive = true;
+        } else if (pat.target.startsWith('elm_surface_')) {
+          // A surface's own div is a square box; what anybody sees of it is
+          // the paint, and the paint carries the corner. So the glass takes
+          // the shape the colour pattern rounds it to - the same reading the
+          // circular bar's plate gets, and for the same reason: `inherit`
+          // asks the wrong box and answers square every time.
+          autoRadiusFallback =
+            patternRadiusCss(patternFor(patternList(config), pat.target)) || 'inherit';
         }
       }
 
