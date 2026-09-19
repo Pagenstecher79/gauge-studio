@@ -744,6 +744,25 @@ Object.assign(window.SupercardUtils, (() => {
                     'label'];
 
   /**
+   * How each part is painted, and so which property the highlight ink has to
+   * take over. A pulse says something is in hand; the ink says which. A tick
+   * two pixels wide among twenty of its kind is not found by dimming it by
+   * half - it is found by it being the orange one.
+   *
+   * The lists are by drawing technique, not by kind: a gauge draws its ticks
+   * as SVG lines and the bar draws its as divs, and both are `ticks` here.
+   *
+   * `pill` and `pointer` are in neither list. The pill is a filled surface
+   * and the value stands on it, so inking it would hide the thing being set;
+   * the pointer carries no mark of its own. Both still breathe.
+   */
+  const INK_STROKE = ['gauge_ring', 'frame_ring', 'ticks', 'sub_ticks'];
+  const INK_FILL = ['tick_labels', 'gauge_label', 'value', 'scale_label',
+                    'multiplier', 'pointer_center'];
+  const INK_TEXT = ['label', 'tick_labels'];
+  const INK_PAINT = ['ticks', 'sub_ticks'];
+
+  /**
    * Which part of its drawing an element is showing as the one in hand.
    *
    * The canvas puts the part's name on the renderer as data-sc-hl, and the
@@ -785,13 +804,36 @@ Object.assign(window.SupercardUtils, (() => {
    * canvas stands out of the way for a few seconds after a colour is changed.
    */
   const partHighlight = (() => {
-    const all = HL_PARTS
-      .map((/** @type {string} */ p) =>
-        `:host([data-sc-hl="${p}"]) [data-sc-part="${p}"]`)
-      .join(',\n');
+    const mark = (/** @type {string} */ p) =>
+      `:host([data-sc-hl="${p}"]) [data-sc-part="${p}"]`;
+    const group = (/** @type {string[]} */ ps, /** @type {string} */ suffix = '') =>
+      unsafeCSS(ps.map(p => mark(p) + suffix).join(',\n      '));
+    const all = unsafeCSS(HL_PARTS.map(mark).join(',\n'));
     return css`
-      ${unsafeCSS(all)} {
+      ${all} {
         animation: sc-hl-blink 2.3s ease-in-out infinite;
+      }
+      /* The ink the part in hand is lent. A default here and not only on the
+         host, so a renderer that is told the part but not the colour still
+         draws something rather than losing the property altogether - an
+         unresolvable var() takes a stroke or a fill with it. The canvas
+         overrules it on the host, where an inline style outranks :host. */
+      :host { --sc-hl-ink: #ff9100; }
+      ${group(INK_STROKE)} { stroke: var(--sc-hl-ink) !important; }
+      ${group(INK_FILL)} { fill: var(--sc-hl-ink) !important; }
+      /* The bar draws the same three parts in HTML: a tick is a div with a
+         background and a tick label a span with a colour, both written
+         inline. The properties do not overlap with the SVG ones above, so
+         one rule each covers both drawings - a <line> has no children to
+         reach, and a div ignores a stroke. */
+      ${group(INK_TEXT)}, ${group(INK_TEXT, ' *')} { color: var(--sc-hl-ink) !important; }
+      ${group(INK_PAINT, ' > *')} { background: var(--sc-hl-ink) !important; }
+      /* A gradient ring is painted by a masked picture, and the arc that
+         data-sc-part names is drawn in nothing at all so a press can find
+         it. Inking that arc would cover the gradient with a solid band, so
+         here the ring stays its own picture and only breathes. */
+      :host([data-sc-hl="gauge_ring"]) .g-ring [data-sc-part="gauge_ring"] {
+        stroke: transparent !important;
       }
       /* A gradient ring is a picture behind a mask, and the arc that names it
          for the editor is drawn in nothing at all - fading that would fade
@@ -993,9 +1035,11 @@ class SupercardCore extends LitElement {
    * Assistant's layout gives it a different box.
    *
    * The full width of the section, and the row count a card that wide starts
-   * at - `defaultShapeRows`, a third of the columns, which is 2:1 at every
-   * width. `full` rather than the twelve that equals it today, so a section
-   * made wider later takes the card with it.
+   * at - `defaultShapeRows`, which is as near a square as whole rows allow at
+   * any width. Square because the first thing put on an empty canvas is a
+   * gauge or a ring, and a strip is the one shape that cannot hold one.
+   * `full` rather than the twelve that equals it today, so a section made
+   * wider later takes the card with it.
    *
    * Home Assistant's own default box is three columns by three rows, and empty
    * that is a tall blank rectangle in a quarter-width column.

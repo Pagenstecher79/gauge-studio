@@ -2292,19 +2292,19 @@ describe('restorePatch', () => {
 });
 
 describe('defaultShapeRows', () => {
-  it('is a third of the columns, which holds the shape at 2:1', () => {
-    expect(defaultShapeRows('full')).toBe(4);
-    expect(defaultShapeRows(12)).toBe(4);
-    expect(defaultShapeRows(9)).toBe(3);
-    expect(defaultShapeRows(6)).toBe(2);
-    expect(defaultShapeRows(3)).toBe(1);
+  it('is the row count that comes nearest a square', () => {
+    expect(defaultShapeRows('full')).toBe(8);
+    expect(defaultShapeRows(12)).toBe(8);
+    expect(defaultShapeRows(9)).toBe(6);
+    expect(defaultShapeRows(6)).toBe(4);
+    expect(defaultShapeRows(3)).toBe(2);
   });
 
-  it('rounds a width that is not a multiple of three up', () => {
-    expect(defaultShapeRows(4)).toBe(2);
-    expect(defaultShapeRows(5)).toBe(2);
-    expect(defaultShapeRows(7)).toBe(3);
-    expect(defaultShapeRows(11)).toBe(4);
+  it('rounds to the nearer whole row', () => {
+    expect(defaultShapeRows(4)).toBe(3);
+    expect(defaultShapeRows(5)).toBe(3);
+    expect(defaultShapeRows(7)).toBe(4);
+    expect(defaultShapeRows(11)).toBe(7);
   });
 
   it('never returns less than one row, however narrow the card', () => {
@@ -2314,15 +2314,16 @@ describe('defaultShapeRows', () => {
   });
 
   it('reads `full` against the section it is given, not against twelve', () => {
-    expect(defaultShapeRows('full', 24)).toBe(8);
+    expect(defaultShapeRows('full', 24)).toBe(15);
   });
 
-  // The point of the rule: the same shape at any width.
-  it('produces a ratio within a few per cent of 2:1 at every multiple of three', () => {
+  // The point of the rule: near enough a square to hold a gauge, at any width
+  // wide enough for the rows to land on one.
+  it('comes within a few per cent of square at every multiple of three', () => {
     for (const columns of [3, 6, 9, 12]) {
       const shape = canvasFromGrid({ grid_options: { columns, rows: defaultShapeRows(columns) } }, {});
-      expect(shape.w / shape.h).toBeGreaterThan(1.85);
-      expect(shape.w / shape.h).toBeLessThan(2.1);
+      expect(shape.w / shape.h).toBeGreaterThan(0.93);
+      expect(shape.w / shape.h).toBeLessThan(1.07);
     }
   });
 });

@@ -3,8 +3,8 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
          elementsInRect, duplicateElements,
          isSquareLocked, isPinned, DEFAULT_CANVAS, DEFAULT_GRID,
          gridRowsToPx, gridColumnsToPx, gridSize, canvasFromGrid, canvasFromCard,
-         pinnedToShape, rescaleCanvas, rowsForShape, defaultShapeRows,
-         sectionColumns, sectionWidthPx,
+         pinnedToShape, rescaleCanvas, rowsForShape,
+         sectionColumns, sectionWidthPx, HA_COLUMN_COUNT,
          canDuplicate, reorderElement, overlappingElements,
          alignElements, restorePatch,
          NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview,
@@ -22,6 +22,7 @@ import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
+import { highlightInk } from "./highlight-ink.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
 import { BEND_SIDES, BEND_ROOM, bendKey, bendsOf, bendEscapes,
          bendClipPath, bendGripHome, bendFromGrip } from "./canvas-bend.js";
@@ -30,6 +31,16 @@ import { PATTERN_ANIMATIONS, patternList, patternFor, patchPattern,
          solidColorOf, solidColorPatch } from "./color-pattern.js";
 
 const SC = window.SupercardUtils;
+
+/**
+ * How long the highlight stands out of the way after a colour was set.
+ *
+ * Long enough to judge the colour that was just chosen against the rest of
+ * the drawing, short enough that the part is found again without having to
+ * take it in hand a second time. The hold is pushed ahead by every write, so
+ * a picker being dragged never gets its pulse back between two frames.
+ */
+const HL_HOLD_MS = 5000;
 
 /**
  * The cell a template's miniature is drawn into, in CSS pixels.
@@ -2018,6 +2029,7 @@ class ScCanvasEditor extends LitElement {
     this._innerAlso = [];
     this._hl = true;
     this._hlHold = 0;
+    this._hlTimer = 0;
     this._innerFrame = 0;
     this._innerRects = null;
     this._innerDrag = null;
@@ -2120,6 +2132,7 @@ class ScCanvasEditor extends LitElement {
     if (this._innerFrame) cancelAnimationFrame(this._innerFrame);
     this._innerFrame = 0;
     clearTimeout(this._appliedTimer);
+    clearTimeout(this._hlTimer);
     super.disconnectedCallback();
   }
 
@@ -2151,6 +2164,11 @@ class ScCanvasEditor extends LitElement {
 
   updated(changed) {
     super.updated(changed);
+    // Reading the section while this editor is in the document is what fills
+    // the memory the detached case lives on - see `_maxColumns`. It cannot
+    // wait for something to ask: the controls that read them sit in a fold,
+    // and the Layout tab is often the first thing opened.
+    if (this.isConnected) { void this._maxColumns; void this._sectionPx; }
     // However a gauge's parts were left - the button, or a different element
     // selected - the canvas goes back to the zoom it was being arranged at,
     // and the gauge is properly let go of. Letting go matters: `_inner` holds
@@ -2204,6 +2222,18 @@ class ScCanvasEditor extends LitElement {
     // restored and put a step on the stack the user never took - so the press
     // after it would walk back through a change of ours instead of theirs.
     if (this._restoredGrid) { this._restoredGrid = false; return; }
+    // Home Assistant's Layout tab has no way of asking a card what it is
+    // worth, so switching auto height off pins `min_rows ?? 1` - one row,
+    // a 56 pixel strip, which is never what anyone switching a canvas card
+    // to a fixed height means. This card's own switch pins the height the
+    // card has at that moment (see `_setAutoHeight`), and that is what the
+    // tab's switch gets to mean as well. Only the fallback itself is caught:
+    // a row count that was already a number is somebody's choice, and one
+    // set deliberately to a single row survives the next edit.
+    if (grid.rows === 1 && typeof before.rows !== 'number') {
+      const worth = rowsForShape(this._canvas, this._columns, this._maxColumns, this._sectionPx);
+      if (worth > 1) { this._setShapeRows(worth); return; }
+    }
     // `was` is the config before Home Assistant's own tab changed it, so this
     // is the row count the canvas was worth under the old column span.
     const shaped = this._reshapedFor();
@@ -2970,15 +3000,38 @@ class ScCanvasEditor extends LitElement {
    * The widest the card can be here. Read from the section being edited on
    * every use rather than kept: the same editor instance stays mounted while
    * the section's width is changed in the tab next to it.
+   *
+   * Remembered all the same, because "every use" includes the uses where this
+   * editor is not in the document. Home Assistant's dialog renders one tab at
+   * a time, so opening Layout takes this element out of the tree - and the
+   * only reason it is still updated is that the dialog goes on setting its
+   * properties. Both readers walk *up* from here to find the section being
+   * edited, and a detached element has nothing above it, so a size set in the
+   * Layout tab was being measured against the reference section rather than
+   * the real one: a card made square came back as a canvas shaped for a
+   * 480-pixel section it is not in. The last answer from while it was mounted
+   * is that same section, moments earlier.
    */
-  get _maxColumns() { return sectionColumns(this); }
+  get _maxColumns() {
+    if (this.isConnected) this._sectionCols = sectionColumns(this);
+    return this._sectionCols || HA_COLUMN_COUNT;
+  }
 
   /**
    * How wide the card's section really is, read the same way and for the same
    * reason: the dashboard behind the dialog is where the number lives, and it
-   * changes while this editor stays mounted.
+   * changes while this editor stays mounted. Remembered while detached, as
+   * above - and only ever a width that was actually measured, since zero is
+   * how this says "no section here" and is a perfectly good answer in a
+   * masonry view.
    */
-  get _sectionPx() { return sectionWidthPx(this); }
+  get _sectionPx() {
+    if (this.isConnected) {
+      const px = sectionWidthPx(this);
+      if (px > 0) this._sectionW = px;
+    }
+    return this._sectionW || 0;
+  }
 
   /**
    * Writes HA's own `grid_options` rather than fields of our own, so these
@@ -3036,17 +3089,22 @@ class ScCanvasEditor extends LitElement {
   /**
    * The canvas as a card box wants it, or null when it is already that.
    *
-   * Two readings of the same arithmetic, and the difference is whether the row
-   * count is the card's *height* or the canvas' *shape*.
+   * Two readings of the same box, and the difference is whether the card's
+   * height is somebody else's decision or the canvas' own.
    *
-   * Pinned - a number in `grid_options.rows` - it is the height, and the shape
-   * is made to match the box so the canvas does not letterbox inside it. The
-   * shape it had before is remembered, because the pin is a state to come back
-   * from.
+   * Pinned - a number in `grid_options.rows` - the height is given, and the
+   * shape is made to match the box so the canvas does not letterbox inside
+   * it. The shape it had before is remembered, because a pin is a state to
+   * come back from. The section's measured width is what that box is read
+   * against: a real height in pixels has to be met by a real width.
    *
-   * With auto height the shape *is* the width: a third of the columns, rounded
-   * up, which is the same proportion at every card width. There is nothing to
-   * come back from, so the canvas is rescaled and any remembered shape dropped.
+   * Under auto height the canvas' shape *is* the card's height, so a change
+   * of width says nothing about it - a card made wider gets taller in
+   * proportion and the arrangement is untouched. This used to impose a
+   * default shape here, a third of the columns, which quietly flattened a
+   * canvas somebody had drawn square the moment they touched the width. The
+   * one thing to do is to go back to the shape a row count was pinned over,
+   * which is the only shape this knows was theirs.
    *
    * Null when there is nothing to do, which is what stops the commit this
    * causes from causing another.
@@ -3056,21 +3114,15 @@ class ScCanvasEditor extends LitElement {
   _reshapedFor(cardConfig = this.cardConfig) {
     const c = structuredClone(this._canvas);
     const rows = cardConfig?.grid_options?.rows;
-    // The measured section width belongs to the pinned case alone, where a real
-    // height in pixels has to be met by a real width. Under auto height the row
-    // count is a *shape*, and a shape read off this viewport would be a
-    // different one on the next: there the reference width is the whole point.
-    const shape = canvasFromGrid({ ...cardConfig, grid_options: {
-      ...(cardConfig?.grid_options || {}),
-      rows: typeof rows === 'number' ? rows
-        : defaultShapeRows(gridSize(cardConfig, this.slot).columns, this._maxColumns),
-    } }, this.slot, 400, this._maxColumns, typeof rows === 'number' ? this._sectionPx : 0);
 
-    if (typeof rows === 'number') return pinnedToShape(c, shape);
+    if (typeof rows === 'number') {
+      const shape = canvasFromGrid(cardConfig, this.slot, 400, this._maxColumns, this._sectionPx);
+      return pinnedToShape(c, shape);
+    }
 
     const { free, ...rest } = c;
-    if (rest.w === shape.w && rest.h === shape.h) return free ? rest : null;
-    return rescaleCanvas(rest, shape);
+    if (!free) return null;
+    return (rest.w === free.w && rest.h === free.h) ? rest : rescaleCanvas(rest, free);
   }
 
   /** Reshape the canvas to the card's grid box, carrying the layout with it. */
@@ -4457,6 +4509,49 @@ class ScCanvasEditor extends LitElement {
     return this._innerSel || nothing;
   }
 
+  /**
+   * The ink that part is lent while it is in hand.
+   *
+   * Contrast against what the part is drawn *on*: a yellow tick is
+   * unmissable on a dark dial and gone on a pale one. A gauge that paints
+   * its own background is read from that, everything else from the card's,
+   * because that is what is behind the drawing.
+   *
+   * Handed over as a custom property, which is the one thing that does cross
+   * into a shadow root, and only while the part is actually in hand - the
+   * same answer as `_hlPart`, so the ink and the pulse arrive and leave
+   * together and a colour just chosen is shown plain.
+   *
+   * @param {string} id
+   * @param {any} [cfg] the element's own config, where it has a background
+   */
+  _hlStyle(id, cfg) {
+    if (this._hlPart(id) === nothing) return nothing;
+    const mode = cfg && cfg.bg_mode;
+    const own = mode && mode !== 'none' ? cfg.bg_color1 : null;
+    const back = SC.toRgb(own ?? 'var(--card-background-color)', { resolveVars: true })
+              || SC.toRgb('var(--ha-card-background)', { resolveVars: true });
+    return `--sc-hl-ink:${highlightInk(back || null)};`;
+  }
+
+  /**
+   * Put the highlight away, because a colour is being chosen.
+   *
+   * The drawing has to answer the colour picker and nothing else while one
+   * is open: a pulse over the very mark being coloured, in an ink that is
+   * not the one being picked, is the worst possible thing to judge a colour
+   * against. So both go, and come back once the hand has moved on.
+   *
+   * Nothing else looks at the clock, so the canvas has to be told when the
+   * hold is over - `_hlHold` is state, and setting it back to zero is what
+   * brings the pulse and the ink with it.
+   */
+  _holdHighlight() {
+    this._hlHold = Date.now() + HL_HOLD_MS;
+    clearTimeout(this._hlTimer);
+    this._hlTimer = setTimeout(() => { this._hlHold = 0; }, HL_HOLD_MS);
+  }
+
   _writeInner(patch, quiet) {
     // A colour being chosen is the one thing the highlight must not sit on
     // top of, so writing one puts it away for a while.
@@ -5050,6 +5145,17 @@ class ScCanvasEditor extends LitElement {
     if (!spec?.steps?.length || !target) return '';
     const cfg = target.cfg;
     const swallow = (/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); };
+    /**
+     * The same, for a control the browser has to be left to open itself.
+     *
+     * A prevented `pointerdown` fires no compatibility `mousedown` and gives
+     * no focus, and those are what Chromium opens a colour picker and a
+     * select's list on - the `click` still arrives, and nothing happens. So
+     * the swatch was a coloured box that could not be pressed. Keeping the
+     * press off the canvas is all these need; the drag listens on an
+     * ancestor, which `stopPropagation` alone already puts out of reach.
+     */
+    const keep = (/** @type {any} */ e) => e.stopPropagation();
     const now = (/** @type {any} */ st) =>
       (st.read ? st.read(cfg)
        : st.unit ? splitUnit(cfg[st.key], st.dflt).n
@@ -5066,7 +5172,7 @@ class ScCanvasEditor extends LitElement {
       if (st.paint) return html`
         <span class="ring-group">${stepIcon(st)}
           <label class="ring-wide ring-swatch" style="background:${now(st)}"
-                 title=${`Set the ${st.what}`} @pointerdown=${swallow}>
+                 title=${`Set the ${st.what}`} @pointerdown=${keep}>
             <input type="color" .value=${now(st)}
                    @input=${(/** @type {any} */ e) =>
                      this._writeInner(st.patch(cfg, e.target.value), false)}>
@@ -5108,7 +5214,7 @@ class ScCanvasEditor extends LitElement {
       if (st.picks) return html`
         <span class="ring-group">${stepIcon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
-                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
+                  @pointerdown=${keep}
                   @change=${(/** @type {any} */ e) => {
                     // A row that sets one key names it; one that drops a whole
                     // design on the part - a ramp of colours - hands back the
@@ -5408,6 +5514,7 @@ class ScCanvasEditor extends LitElement {
                      && FROZEN_WHILE_HELD.has(this._innerSel || '');
       return html`<sc-gauge .config=${cfg} .hass=${this.hass} .frozen=${frozen}
                             data-sc-hl=${this._hlPart(el.id)}
+                            style=${this._hlStyle(el.id, cfg)}
                             .globalEntities=${slot.global_entities} .onCanvas=${true}></sc-gauge>`;
     }
 
@@ -5417,6 +5524,7 @@ class ScCanvasEditor extends LitElement {
     if (!cfg || cfg.active === false) return null;
     return html`<sc-progressbar .config=${cfg} .hass=${this.hass} .rootConfig=${slot}
                                 data-sc-hl=${this._hlPart(el.id)}
+                                style=${this._hlStyle(el.id)}
                                 .globalEntities=${slot.global_entities}></sc-progressbar>`;
   }
 
@@ -5899,7 +6007,7 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
-    const hlTip = 'The part in hand blinks on the drawing itself - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
+    const hlTip = 'The part in hand blinks on the drawing itself and is lent a colour that stands out against what it is drawn on - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
     const liveTip = this._live
       ? "The real gauges and bars. Text sizes are the card's, not this preview's."
       : 'Plain boxes - easier to see and to grab.';

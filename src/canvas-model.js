@@ -1120,25 +1120,25 @@ export function canvasFromGrid(cardConfig, slot, scale = 400, total = HA_COLUMN_
 /**
  * The row count a card of this many columns starts at.
  *
- * A third of the columns, because a column is about 40px wide with its gap and
- * a row 64px with its own: three columns to two rows lands within a couple of
- * percent of 2:1 at every width - 12x4 is 1.94, 9x3 is 1.95, 6x2 is 1.97,
- * 3x1 is 2.04. So the rule is not a shape pulled out of the air, it is the one
- * that keeps a new card the same shape whatever width it is given.
+ * As near a square as whole rows allow, at whatever width the card has. A
+ * card starts out empty, and what is put on it first is a gauge or a ring -
+ * both square - so a wide band is the one shape a new canvas cannot hold a
+ * single object in. The rule used to be a third of the columns, which is 2:1
+ * at every width and reads as a strip.
  *
- * Column counts that are not multiples of three round, and wobble as rounding
- * does. It is a starting point, not a constraint.
+ * Square *here* means square against the reference width, so the same card is
+ * the same shape on every viewport - the rest of this file makes that trade
+ * everywhere, see `gridColumnsToPx`.
+ *
+ * It is a starting point, not a constraint: the shape is the user's from the
+ * first drag onwards.
  *
  * @param {number|'full'} columns
  * @param {number} [total] the section's column count, from `sectionColumns`
  * @returns {number}
  */
 export function defaultShapeRows(columns, total = HA_COLUMN_COUNT) {
-  const max = Math.round(Number(total)) > 0 ? Math.round(Number(total)) : HA_COLUMN_COUNT;
-  const n = columns === 'full' ? max : Math.max(1, Math.min(max, Math.round(Number(columns) || 0)));
-  // A width that is not a multiple of three rounds *up*: the spare is height,
-  // which a card can use, where the missing row would crop it.
-  return Math.max(1, Math.ceil(n / 3));
+  return rowsForShape({ w: 1, h: 1 }, columns, total);
 }
 
 /**

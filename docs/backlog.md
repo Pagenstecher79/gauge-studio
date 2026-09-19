@@ -32,12 +32,13 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Highlight
 
-- **1** - ~~2.3s and 47% dim, and the test slider and field come back out.~~
-  Done. What remains of 1: the element in hand should also take on a colour
-  that stands out against the background - unless the setting being edited is
-  that element's own solid colour, in which case the new colour is shown
-  plain for five seconds, with no dim and no pulse, before the highlight
-  colour and the pulse come back.
+- **1** - ~~2.3s and 47% dim, the test slider and field back out, and the
+  element in hand lent a colour that stands out against what it is drawn on -
+  away for five seconds while its own colour is being chosen.~~ Done. The ink
+  is picked by contrast (`highlight-ink.js`) against the gauge's own
+  background where it paints one and the card's otherwise, and handed to the
+  renderer as `--sc-hl-ink`. A pill keeps its own colour and only breathes:
+  the value stands on it, so inking it would hide the thing being set.
 - **2** - The dim pulse works in Chrome and not in Safari. Needs a real
   Safari to say why; the suspicion is `filter` on SVG elements. Whatever
   replaces it has to keep an element's own opacity intact (a frame ring at
@@ -143,20 +144,32 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   "<name> settings are on the canvas ...". Where only part of a menu has
   moved: "Parts of the <name> settings are in the canvas options box, ...",
   and the canvas options box in question says that more settings are below.
-- **36** - A card made almost square through the layout tab keeps a
+- **36** - ~~A card made almost square through the layout tab keeps a
   rectangular canvas in the editor, so an object cannot be drawn out to the
   full card. *Match the card* should fire automatically after a size change
-  in the layout tab.
-- **37** - Setting card height to *auto* collapses the layout tab's height to
-  one row, and *Match the card* switches back to fixed rows. Expected: *auto*
-  stays on and the canvas follows the layout tab.
-- **38** - A new card on a sections dashboard is one row high. It should try
-  to come up roughly square.
+  in the layout tab.~~ Done. It did fire; it matched the card against the
+  480-pixel reference section, because the Layout tab takes the editor out of
+  the document and the measurement is read by walking up out of it. The last
+  measurement taken while it was mounted is kept now.
+- **37** - ~~Setting card height to *auto* collapses the layout tab's height
+  to one row, and *Match the card* switches back to fixed rows. Expected:
+  *auto* stays on and the canvas follows the layout tab.~~ Done, as far as it
+  can be: the one row is Home Assistant's, which pins `min_rows ?? 1` when
+  auto height goes off because it has no way to ask a card what it is worth.
+  That fallback is now caught and the height the card actually has is pinned
+  instead - the same thing this card's own switch does.
+- **38** - ~~A new card on a sections dashboard is one row high. It should try
+  to come up roughly square.~~ Done: a new card starts as near a square as
+  whole rows allow, at any width (`defaultShapeRows`).
 - **41** - The `+ add` button of *Global entities (alias)* should look like the
   canvas's `+ add object` button.
-- **43** - After a card size change in the layout tab, the frames of a gauge
+- **43** - ~~After a card size change in the layout tab, the frames of a gauge
   and a circular bar are no longer square on the way back to the canvas - the
-  circular bar is even re-rendered oval.
+  circular bar is even re-rendered oval.~~ Done, same two causes as 36: the
+  canvas was reshaped to a section it is not in, and under auto height a
+  width change imposed the old 2:1 default shape on a canvas someone had
+  drawn square. Neither happens now; worth a second look if a ring still
+  comes back oval.
 - **44** - The automatic conversion is still wrong. Cards 10 and 11 in the
   showcase 2 section are where to see it.
 - **45** - On some cards HA does not return to the dashboard when the

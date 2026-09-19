@@ -738,14 +738,19 @@ three columns until that switch is on; a width typed here is one column, which
 is the same thing as having it on — so the field says so and the state stays
 HA's to hold.
 
-With auto height on, the shape *is* the width: **a third of the columns,
-rounded up**. That ratio is the same at every card width — 12 × 4 is 1.94, 9 ×
-3 is 1.95, 6 × 2 is 1.97 — so a card keeps its proportions wherever it is put,
-which is the whole reason the row count is not a free number there. The card
-still reports `rows: "auto"`, so its height follows its real width on every
-viewport and nothing letterboxes. `defaultShapeRows` is that rule, and it is
-read against the *reference* section width, never the measured one: a shape
-read off this viewport would be a different shape on the next.
+With auto height on, the shape is whatever was drawn, and the card's height
+follows from it: the card reports `rows: "auto"`, so its height is its real
+width times that ratio on every viewport and nothing letterboxes. A change of
+width therefore changes nothing about the canvas — it used to impose a
+default shape here, which quietly flattened a canvas somebody had drawn
+square the moment they touched the width control.
+
+A shape from nowhere is needed exactly once, for a card nobody has drawn on
+yet. `defaultShapeRows` is that one: **as near a square as whole rows allow**,
+because the first thing put on an empty canvas is a gauge or a ring and a
+strip is the one shape that cannot hold one. It is read against the
+*reference* section width, never the measured one: a shape read off this
+viewport would be a different shape on the next.
 
 Fixed rows is the other half. There the row count is a height in pixels, the
 canvas is reshaped to the box that height really makes here — measured width,
@@ -754,8 +759,19 @@ not reference — and `pinnedToShape` writes the shape it is leaving into
 height there is nothing to remember: the columns say what the shape is, and the
 key is dropped.
 
-A columns change reshapes the canvas in both modes, via `rescaleCanvas`, which
-scales the element coordinates by the same two factors.
+A columns change reshapes the canvas only where it changes the box: with a row
+count pinned, via `rescaleCanvas`, which scales the element coordinates by the
+same two factors. Under auto height there is no box to match, so the canvas is
+left alone.
+
+The measured width behind all of this is read by walking up out of the editor
+until the section being edited turns up, which only works while the editor is
+in the document — and the Layout tab is the one place where it is not, because
+Home Assistant's dialog renders one tab at a time and keeps setting the
+detached editor's properties. So the last measurement taken while it was
+mounted is kept, and used when the walk finds nothing. Without that, a size
+set in the Layout tab was matched against the 480-pixel reference and a card
+made square came back as a canvas shaped for a section it is not in.
 
 Nothing is re-squared there, and that is deliberate. A gauge is drawn as
 `100cqmin` inside its box — already the largest square that fits, sitting
