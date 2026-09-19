@@ -111,16 +111,40 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 - **11** - Put every colour option in the chip menu, as a trial: two-colour
   gradient and multi-colour with the gradient editor.
-- **12** - A surface deleted from the canvas must not come back configured
+- **12** - ~~A surface deleted from the canvas must not come back configured
   when a new one is created under the same id - `surface0` deleted and
-  recreated should be a fresh surface.
-- **13** - The curvature grips should snap gently at their zero position, the
-  way the pointer's do.
-- **14** - A side curved outwards should become the surface's new outer edge
-  on the canvas, and be taken into account by the automatic editing zoom.
-- **17** - Glass FX ignores the surface corner radius. *Dimensions & Shape*
+  recreated should be a fresh surface.~~ Done. A surface *is* its box, so
+  deleting it left its paint, its glass and its push behind under
+  `elm_surface_0`, and the next `surface_0` drawn came up wearing them.
+  `withoutElementConfig` takes those three lists with it, in the same commit
+  as the canvas - and the undo step remembers the lists it cleared rather
+  than all of them, so undoing a deletion brings the paint back without
+  reverting a colour edit made in between.
+- **13** - ~~The curvature grips should snap gently at their zero position,
+  the way the pointer's do.~~ Done, and then loosened: the window is two
+  *pixels*, not a per cent of the box. Read as a per cent it gave a
+  400-wide surface six pixels on its sides and two on its top, so one box
+  snapped differently depending on which edge you took hold of and the wide
+  sides lost the first of their travel. The crest gets the same window round
+  the middle of its side.
+- **14** - ~~A side curved outwards should become the surface's new outer edge
+  on the canvas, and be taken into account by the automatic editing zoom.~~
+  Done. A clip path cannot be stroked, so the dashed frame stayed a straight
+  rectangle while the paint bowed past it; the same polygon is now drawn as
+  an SVG over the same grown layer and the box's own border steps aside. The
+  editing zoom fits `bentBox` - what the element reaches - rather than the
+  box. Dragging, resizing and aligning still work on the box, which is the
+  thing being placed.
+- **17** - ~~Glass FX ignores the surface corner radius. *Dimensions & Shape*
   needs checking (the automatic mode is wrong), and every *Manual adjustment*
-  with it - they do not work, or are partly pointless.
+  with it - they do not work, or are partly pointless.~~ Done; two separate
+  faults. The manual edge distance and radius were never read for an element
+  target at all - the values went into the config and the glass went on
+  fitting itself - so `manual_override`, the switch the editor has always
+  drawn, now actually gates them, and the shape lock with them. And a
+  surface's corner does not live on its box but on its colour pattern, so
+  `inherit` asked the wrong box and answered square every time; the glass
+  reads `patternRadiusCss` instead.
 
 ## Canvas
 

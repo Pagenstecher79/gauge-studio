@@ -286,3 +286,48 @@ export function migrateSlotKey(config) {
   const { supercard, ...rest } = config;
   return { ...rest, gauge_studio: supercard };
 }
+
+/**
+ * The lists whose entries name the thing they act on, and are nothing without
+ * it: the paint, the glass and the push.
+ *
+ * All three say `target`. The paint and the glass write an element's id as
+ * `elm_<id>`; the push writes it bare, because its own list never held
+ * anything but elements. Both spellings are the same element, so both go.
+ *
+ * @type {readonly string[]}
+ */
+export const TARGET_LISTS = Object.freeze(['color_patterns', 'fx_glass_patterns', 'interactions']);
+
+/**
+ * The lists that lose an entry acting on one of `ids`, as a patch to merge,
+ * or null when there was none.
+ *
+ * For a surface, and only for a surface. Everything else a canvas holds keeps
+ * its own config somewhere else - a gauge taken off the canvas is still in
+ * `gauges`, and its paint is still the paint of that gauge - but a surface
+ * *is* its box: there is no list it lives in and nothing about it survives
+ * the box being deleted except, until now, what was painted on it. So the
+ * next `surface_0` drawn on the canvas came up wearing the last one's
+ * colours, its glass and its push, which is not a new surface at all.
+ *
+ * Pure: the slot it is given is not touched, and only the lists that actually
+ * lose an entry are rebuilt.
+ *
+ * @param {any} slot the card's `config.gauge_studio`
+ * @param {readonly string[]} ids element ids, as the canvas writes them
+ * @returns {Record<string, any[]> | null}
+ */
+export function withoutElementConfig(slot, ids) {
+  if (!slot || typeof slot !== 'object' || !ids?.length) return null;
+  const gone = new Set(ids.flatMap(id => [id, 'elm_' + id]));
+  /** @type {Record<string, any[]>} */
+  const lists = {};
+  for (const key of TARGET_LISTS) {
+    const list = slot[key];
+    if (!Array.isArray(list)) continue;
+    const next = list.filter(entry => !gone.has(entry?.target));
+    if (next.length !== list.length) lists[key] = next;
+  }
+  return Object.keys(lists).length ? lists : null;
+}
