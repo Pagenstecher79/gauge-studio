@@ -2743,6 +2743,10 @@ class ScCanvasEditor extends LitElement {
                    scale(var(--sc-steps-zoom, 1));
         transform-origin: top center;
         overflow-y: auto; overscroll-behavior: contain;
+        /* So the cap the fitting works out is the height the panel is drawn
+           at: on content-box the padding is added to it and the panel stands
+           six pixels taller than the canvas it was measured against. */
+        box-sizing: border-box;
         z-index: 8;
         /* Kept for the case no chip can get out of the way: behind the panel
            is better than across it. */
@@ -2761,6 +2765,15 @@ class ScCanvasEditor extends LitElement {
          stand in rather than all of it. A group is four cells wide however
          many columns there are, so the rows simply pair up. */
       .ring-steps.wide { grid-template-columns: repeat(8, auto); }
+      /* A line where the second menu begins, so eight cells in a row read as
+         two rows of four rather than one row of eight. A group is always four
+         columns wide, so every second one starts the fifth column - which is
+         the only way to name that column at all, the widths being the
+         contents'. Drawn on the cell and stretched to the row, so what breaks
+         it is the gap between rows and nothing else. */
+      .ring-steps.wide > .ring-group:nth-child(even) > *:first-child {
+        align-self: stretch; margin-left: 4px; padding-left: 5px;
+        border-left: 1px solid rgba(255,255,255,0.16); }
       /* Sticky, so it stays in the corner of a panel that is scrolling its
          own rows rather than sliding away with them. Its own row, because a
          grid cell that hangs outside the grid is a cell the rows have to
@@ -2772,7 +2785,12 @@ class ScCanvasEditor extends LitElement {
                     var(--sc-part-sel) 52%, var(--sc-part-sel) 68%,
                     transparent 68%, transparent 78%,
                     var(--sc-part-sel) 78%, var(--sc-part-sel) 94%, transparent 94%); }
-      .steps-grip::after { content: ''; position: absolute; inset: -6px; }
+      /* Inwards and not all round: the panel is a scroll container, and six
+         pixels of invisible hit pad hanging past its bottom right corner is
+         six pixels of content to scroll to - both bars appeared on a menu
+         that fitted, and the horizontal one then took the height that made
+         the vertical one true. */
+      .steps-grip::after { content: ''; position: absolute; inset: -6px 0 0 -6px; }
       /* The group is what a number is made of, not a box of its own: its four
          parts are cells of the one grid, which is what lines the columns up. */
       .ring-group { display: contents; }
