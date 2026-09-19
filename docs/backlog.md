@@ -32,12 +32,13 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Highlight
 
-- **1** - ~~2.3s and 47% dim, and the test slider and field come back out.~~
-  Done. What remains of 1: the element in hand should also take on a colour
-  that stands out against the background - unless the setting being edited is
-  that element's own solid colour, in which case the new colour is shown
-  plain for five seconds, with no dim and no pulse, before the highlight
-  colour and the pulse come back.
+- **1** - ~~2.3s and 47% dim, the test slider and field back out, and the
+  element in hand lent a colour that stands out against what it is drawn on -
+  away for five seconds while its own colour is being chosen.~~ Done. The ink
+  is picked by contrast (`highlight-ink.js`) against the gauge's own
+  background where it paints one and the card's otherwise, and handed to the
+  renderer as `--sc-hl-ink`. A pill keeps its own colour and only breathes:
+  the value stands on it, so inking it would hide the thing being set.
 - **2** - The dim pulse works in Chrome and not in Safari. Needs a real
   Safari to say why; the suspicion is `filter` on SVG elements. Whatever
   replaces it has to keep an element's own opacity intact (a frame ring at

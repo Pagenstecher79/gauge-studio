@@ -22,6 +22,7 @@ import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { applyCardConfig } from "./card-apply.js";
+import { highlightInk } from "./highlight-ink.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
 import { BEND_SIDES, BEND_ROOM, bendKey, bendsOf, bendEscapes,
          bendClipPath, bendGripHome, bendFromGrip } from "./canvas-bend.js";
@@ -4496,6 +4497,31 @@ class ScCanvasEditor extends LitElement {
     return this._innerSel || nothing;
   }
 
+  /**
+   * The ink that part is lent while it is in hand.
+   *
+   * Contrast against what the part is drawn *on*: a yellow tick is
+   * unmissable on a dark dial and gone on a pale one. A gauge that paints
+   * its own background is read from that, everything else from the card's,
+   * because that is what is behind the drawing.
+   *
+   * Handed over as a custom property, which is the one thing that does cross
+   * into a shadow root, and only while the part is actually in hand - the
+   * same answer as `_hlPart`, so the ink and the pulse arrive and leave
+   * together and a colour just chosen is shown plain.
+   *
+   * @param {string} id
+   * @param {any} [cfg] the element's own config, where it has a background
+   */
+  _hlStyle(id, cfg) {
+    if (this._hlPart(id) === nothing) return nothing;
+    const mode = cfg && cfg.bg_mode;
+    const own = mode && mode !== 'none' ? cfg.bg_color1 : null;
+    const back = SC.toRgb(own ?? 'var(--card-background-color)', { resolveVars: true })
+              || SC.toRgb('var(--ha-card-background)', { resolveVars: true });
+    return `--sc-hl-ink:${highlightInk(back || null)};`;
+  }
+
   _writeInner(patch, quiet) {
     // A colour being chosen is the one thing the highlight must not sit on
     // top of, so writing one puts it away for a while.
@@ -5447,6 +5473,7 @@ class ScCanvasEditor extends LitElement {
                      && FROZEN_WHILE_HELD.has(this._innerSel || '');
       return html`<sc-gauge .config=${cfg} .hass=${this.hass} .frozen=${frozen}
                             data-sc-hl=${this._hlPart(el.id)}
+                            style=${this._hlStyle(el.id, cfg)}
                             .globalEntities=${slot.global_entities} .onCanvas=${true}></sc-gauge>`;
     }
 
@@ -5456,6 +5483,7 @@ class ScCanvasEditor extends LitElement {
     if (!cfg || cfg.active === false) return null;
     return html`<sc-progressbar .config=${cfg} .hass=${this.hass} .rootConfig=${slot}
                                 data-sc-hl=${this._hlPart(el.id)}
+                                style=${this._hlStyle(el.id)}
                                 .globalEntities=${slot.global_entities}></sc-progressbar>`;
   }
 
@@ -5938,7 +5966,7 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
-    const hlTip = 'The part in hand blinks on the drawing itself - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
+    const hlTip = 'The part in hand blinks on the drawing itself and is lent a colour that stands out against what it is drawn on - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
     const liveTip = this._live
       ? "The real gauges and bars. Text sizes are the card's, not this preview's."
       : 'Plain boxes - easier to see and to grab.';
