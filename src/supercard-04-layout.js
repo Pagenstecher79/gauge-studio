@@ -5115,6 +5115,17 @@ class ScCanvasEditor extends LitElement {
     if (!spec?.steps?.length || !target) return '';
     const cfg = target.cfg;
     const swallow = (/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); };
+    /**
+     * The same, for a control the browser has to be left to open itself.
+     *
+     * A prevented `pointerdown` fires no compatibility `mousedown` and gives
+     * no focus, and those are what Chromium opens a colour picker and a
+     * select's list on - the `click` still arrives, and nothing happens. So
+     * the swatch was a coloured box that could not be pressed. Keeping the
+     * press off the canvas is all these need; the drag listens on an
+     * ancestor, which `stopPropagation` alone already puts out of reach.
+     */
+    const keep = (/** @type {any} */ e) => e.stopPropagation();
     const now = (/** @type {any} */ st) =>
       (st.read ? st.read(cfg)
        : st.unit ? splitUnit(cfg[st.key], st.dflt).n
@@ -5131,7 +5142,7 @@ class ScCanvasEditor extends LitElement {
       if (st.paint) return html`
         <span class="ring-group">${stepIcon(st)}
           <label class="ring-wide ring-swatch" style="background:${now(st)}"
-                 title=${`Set the ${st.what}`} @pointerdown=${swallow}>
+                 title=${`Set the ${st.what}`} @pointerdown=${keep}>
             <input type="color" .value=${now(st)}
                    @input=${(/** @type {any} */ e) =>
                      this._writeInner(st.patch(cfg, e.target.value), false)}>
@@ -5173,7 +5184,7 @@ class ScCanvasEditor extends LitElement {
       if (st.picks) return html`
         <span class="ring-group">${stepIcon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
-                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
+                  @pointerdown=${keep}
                   @change=${(/** @type {any} */ e) => {
                     // A row that sets one key names it; one that drops a whole
                     // design on the part - a ramp of colours - hands back the
