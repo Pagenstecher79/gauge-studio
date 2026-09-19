@@ -143,20 +143,32 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   "<name> settings are on the canvas ...". Where only part of a menu has
   moved: "Parts of the <name> settings are in the canvas options box, ...",
   and the canvas options box in question says that more settings are below.
-- **36** - A card made almost square through the layout tab keeps a
+- **36** - ~~A card made almost square through the layout tab keeps a
   rectangular canvas in the editor, so an object cannot be drawn out to the
   full card. *Match the card* should fire automatically after a size change
-  in the layout tab.
-- **37** - Setting card height to *auto* collapses the layout tab's height to
-  one row, and *Match the card* switches back to fixed rows. Expected: *auto*
-  stays on and the canvas follows the layout tab.
-- **38** - A new card on a sections dashboard is one row high. It should try
-  to come up roughly square.
+  in the layout tab.~~ Done. It did fire; it matched the card against the
+  480-pixel reference section, because the Layout tab takes the editor out of
+  the document and the measurement is read by walking up out of it. The last
+  measurement taken while it was mounted is kept now.
+- **37** - ~~Setting card height to *auto* collapses the layout tab's height
+  to one row, and *Match the card* switches back to fixed rows. Expected:
+  *auto* stays on and the canvas follows the layout tab.~~ Done, as far as it
+  can be: the one row is Home Assistant's, which pins `min_rows ?? 1` when
+  auto height goes off because it has no way to ask a card what it is worth.
+  That fallback is now caught and the height the card actually has is pinned
+  instead - the same thing this card's own switch does.
+- **38** - ~~A new card on a sections dashboard is one row high. It should try
+  to come up roughly square.~~ Done: a new card starts as near a square as
+  whole rows allow, at any width (`defaultShapeRows`).
 - **41** - The `+ add` button of *Global entities (alias)* should look like the
   canvas's `+ add object` button.
-- **43** - After a card size change in the layout tab, the frames of a gauge
+- **43** - ~~After a card size change in the layout tab, the frames of a gauge
   and a circular bar are no longer square on the way back to the canvas - the
-  circular bar is even re-rendered oval.
+  circular bar is even re-rendered oval.~~ Done, same two causes as 36: the
+  canvas was reshaped to a section it is not in, and under auto height a
+  width change imposed the old 2:1 default shape on a canvas someone had
+  drawn square. Neither happens now; worth a second look if a ring still
+  comes back oval.
 - **44** - The automatic conversion is still wrong. Cards 10 and 11 in the
   showcase 2 section are where to see it.
 - **45** - On some cards HA does not return to the dashboard when the

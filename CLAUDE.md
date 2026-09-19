@@ -185,13 +185,18 @@ can offer. The canvas editor sets columns and rows itself and reshapes the
 canvas with `rescaleCanvas` when they change - but only on a user's edit,
 never on render.
 
-With auto height the shape is not a free number: it is the columns and a third
-of them, rounded up (`defaultShapeRows`), read against the reference width so
-the same card is the same shape on every viewport. A row count of the user's
-own means fixed rows, which is a height in pixels and is matched against the
-*measured* width instead. The snap grid is stored as a per cent of the canvas
-for the same reason - a grid in units does not survive the next reshape. See
-§7.
+With auto height the shape is the user's: the canvas decides how tall the card
+is, so a change of width says nothing about it and nothing is reshaped. Only a
+card that has never been drawn on needs a shape from nowhere, and
+`defaultShapeRows` is it - as near a square as whole rows allow, read against
+the reference width so the same card is the same shape on every viewport. A
+row count of the user's own means fixed rows, which is a height in pixels and
+is matched against the *measured* width instead. That measurement is taken by
+walking up out of the editor to the section being edited, so it has to be
+*remembered*: Home Assistant's dialog renders one tab at a time, and a size
+set in its Layout tab reaches an editor that is no longer in the document.
+The snap grid is stored as a per cent of the canvas for the same reason - a
+grid in units does not survive the next reshape. See §7.
 
 **One gradient shape, one gradient editor.** A colour stop is
 `{pos, color}` - `pos` in per cent, or on the entity's scale where a gauge

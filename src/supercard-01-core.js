@@ -993,9 +993,11 @@ class SupercardCore extends LitElement {
    * Assistant's layout gives it a different box.
    *
    * The full width of the section, and the row count a card that wide starts
-   * at - `defaultShapeRows`, a third of the columns, which is 2:1 at every
-   * width. `full` rather than the twelve that equals it today, so a section
-   * made wider later takes the card with it.
+   * at - `defaultShapeRows`, which is as near a square as whole rows allow at
+   * any width. Square because the first thing put on an empty canvas is a
+   * gauge or a ring, and a strip is the one shape that cannot hold one.
+   * `full` rather than the twelve that equals it today, so a section made
+   * wider later takes the card with it.
    *
    * Home Assistant's own default box is three columns by three rows, and empty
    * that is a tall blank rectangle in a quarter-width column.
