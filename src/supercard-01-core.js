@@ -759,15 +759,14 @@ Object.assign(window.SupercardUtils, (() => {
    * it keeps its colour, its weight and its place, and the eye still goes
    * straight to the one thing that is moving.
    *
-   * It is a breath, not a flash: a twentieth of its strength given up and
-   * taken back over five seconds. A mark that disappears is a mark you cannot judge
+   * It is a breath, not a flash: 47 per cent of its strength given up and
+   * taken back over 2.3 seconds. A mark that disappears is a mark you cannot judge
    * while it is in hand, and anything quicker or deeper is read as an error
-   * rather than as a pointer. Both numbers were set by looking, and every
-   * step was towards slower and shallower: 0.15 over 1.2s, then 0.6 over
-   * 1.8s, then 0.7 over 2s, then 0.85 over 5s, all still too much. Read that
-   * as a rule rather than as four numbers - on a drawing this small, what
+   * rather than as a pointer. What
    * makes one mark stand out is that it is the only thing moving at all, not
-   * how far it moves.
+   * how far it moves. The pair here was chosen at the canvas, against real
+   * drawings, with a slider on both numbers; that slider has been taken back
+   * out, so change them here and nowhere else.
    *
    * It fades through a filter rather than through opacity, because several
    * of these marks carry an opacity of their own - a frame ring at 0.4, the
@@ -785,17 +784,17 @@ Object.assign(window.SupercardUtils, (() => {
       .join(',\n');
     return css`
       ${unsafeCSS(all)} {
-        animation: sc-hl-blink 5s ease-in-out infinite;
+        animation: sc-hl-blink 2.3s ease-in-out infinite;
       }
       /* A gradient ring is a picture behind a mask, and the arc that names it
          for the editor is drawn in nothing at all - fading that would fade
          nothing. The group holds both, so the ring blinks as the group. */
       :host([data-sc-hl="gauge_ring"]) .g-ring {
-        animation: sc-hl-blink 5s ease-in-out infinite;
+        animation: sc-hl-blink 2.3s ease-in-out infinite;
       }
       @keyframes sc-hl-blink {
         0%, 100% { filter: opacity(1); }
-        50%      { filter: opacity(0.95); }
+        50%      { filter: opacity(0.53); }
       }
     `;
   })();

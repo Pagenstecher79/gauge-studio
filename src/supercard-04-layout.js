@@ -4457,20 +4457,6 @@ class ScCanvasEditor extends LitElement {
     return this._innerSel || nothing;
   }
 
-  /**
-   * Hold the highlight off for five seconds, and put it back afterwards.
-   *
-   * The timer is the only thing that can bring it back - nothing else is
-   * going to re-render at the right moment - and a later colour change
-   * simply moves the deadline, so the wait is always five seconds from the
-   * last one rather than from the first.
-   */
-  _holdHighlight() {
-    this._hlHold = Date.now() + 5000;
-    clearTimeout(this.__hlTimer);
-    this.__hlTimer = setTimeout(() => { this._hlHold = 0; }, 5100);
-  }
-
   _writeInner(patch, quiet) {
     // A colour being chosen is the one thing the highlight must not sit on
     // top of, so writing one puts it away for a while.
