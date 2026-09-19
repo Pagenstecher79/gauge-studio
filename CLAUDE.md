@@ -136,6 +136,16 @@ gradient sampling). Resolving early freezes the current theme into the markup.
 
 ## Conventions
 
+**Objects and elements.** A thing on the canvas is an **object** - a gauge, a
+bar, a surface, the main icon. The pieces an object is drawn from are its
+**elements** - a pointer, a centre point, a tick, a tick label, a pill. Both
+used to be called elements, so "element" in the older code means two things a
+line apart. Every word a user reads says object or element in the sense above,
+and so do the docs; internal identifiers follow where they are touched anyway,
+not as a sweep. The config key stays `elements` - it is written into people's
+dashboards, and renaming it buys tidiness at the price of a migration carried
+for years. See `docs/backlog.md`.
+
 **Config reads.** `this._get(key, default)` in components that define it.
 Never read `this.config[key]` directly when `_get` exists.
 

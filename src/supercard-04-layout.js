@@ -4457,20 +4457,6 @@ class ScCanvasEditor extends LitElement {
     return this._innerSel || nothing;
   }
 
-  /**
-   * Hold the highlight off for five seconds, and put it back afterwards.
-   *
-   * The timer is the only thing that can bring it back - nothing else is
-   * going to re-render at the right moment - and a later colour change
-   * simply moves the deadline, so the wait is always five seconds from the
-   * last one rather than from the first.
-   */
-  _holdHighlight() {
-    this._hlHold = Date.now() + 5000;
-    clearTimeout(this.__hlTimer);
-    this.__hlTimer = setTimeout(() => { this._hlHold = 0; }, 5100);
-  }
-
   _writeInner(patch, quiet) {
     // A colour being chosen is the one thing the highlight must not sit on
     // top of, so writing one puts it away for a while.
@@ -5913,7 +5899,7 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
-    const hlTip = 'The part in hand pulses on the drawing itself: a shape glows, a text is framed. A colour just changed is shown plain for five seconds first, so the highlight is never what you are looking at.';
+    const hlTip = 'The part in hand blinks on the drawing itself - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
     const liveTip = this._live
       ? "The real gauges and bars. Text sizes are the card's, not this preview's."
       : 'Plain boxes - easier to see and to grab.';

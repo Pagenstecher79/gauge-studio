@@ -697,12 +697,12 @@ class ScGauge extends LitElement {
       const pulseFrameStroke = pulseFrameClass ? `stroke: ${animCol};` : `stroke: ${fCol};`;
       
       if (fClosed || totalAngle >= 360) {
-        frameNode = svg`<circle class="layer-elm-base ${pulseFrameClass}" data-sc-part="frame_ring" cx="${this.CENTER}" cy="${this.CENTER}" r="${fRadius}" stroke-width="${fStroke}" fill="none" opacity="${fOpacity}" style="${pulseFrameStroke} transition: stroke 0.4s ease;"/>`;
+        frameNode = svg`<circle class="layer-elm-base ${pulseFrameClass}" data-sc-part="frame_ring" cx="${this.CENTER}" cy="${this.CENTER}" r="${fRadius}" stroke-width="${fStroke}" fill="none" opacity="${fOpacity}" style="${pulseFrameStroke} --sc-hl-own:${fOpacity}; transition: stroke 0.4s ease;"/>`;
       } else {
         const c1f=polarToCart(this.CENTER,this.CENTER,fRadius,startAngle);
         const c2f=polarToCart(this.CENTER,this.CENTER,fRadius,startAngle+totalAngle-0.01);
         const la=totalAngle>180?1:0;
-        frameNode = svg`<path class="layer-elm-base ${pulseFrameClass}" data-sc-part="frame_ring" d="M${c1f.x.toFixed(3)},${c1f.y.toFixed(3)} A${fRadius},${fRadius},0,${la},1,${c2f.x.toFixed(3)},${c2f.y.toFixed(3)}" stroke-width="${fStroke}" fill="none" stroke-linecap="round" opacity="${fOpacity}" style="${pulseFrameStroke} transition: stroke 0.4s ease;"/>`;
+        frameNode = svg`<path class="layer-elm-base ${pulseFrameClass}" data-sc-part="frame_ring" d="M${c1f.x.toFixed(3)},${c1f.y.toFixed(3)} A${fRadius},${fRadius},0,${la},1,${c2f.x.toFixed(3)},${c2f.y.toFixed(3)}" stroke-width="${fStroke}" fill="none" stroke-linecap="round" opacity="${fOpacity}" style="${pulseFrameStroke} --sc-hl-own:${fOpacity}; transition: stroke 0.4s ease;"/>`;
       }
     }
 
