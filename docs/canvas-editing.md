@@ -316,6 +316,17 @@ two rules finish the job:
   away from the tip. Half a gauge is not tall enough for eight rows of one, so
   that panel is drawn in two columns - a row is four cells of the grid
   whatever the grid's width, so twice the columns simply pairs the rows up.
+- **A held needle handle draws a crosshair, and takes the arrow away.** Two
+  lines, one each way, crossing where the handle is - dashed and thin,
+  because they are drawn across the very ticks they are there to line the
+  handle up against, and a solid pair hid them. One handle at a time: a
+  crosshair on both ends says nothing about either. While it is up the
+  browser's own pointer goes, on the host and on every descendant - nearly
+  everything under it sets a cursor of its own, so inheritance alone would
+  not reach - because two pointers for one hand, one of them drawn over the
+  crossing point the other is there to show, is one too many. The lines are
+  moved between renders the same way the handles are, each only along the
+  axis it is not drawn on.
 - **The grip in the bottom corner sets how big the menus are drawn.** A scale
   and not a width and a height: the rows are a grid whose column widths the
   contents decide, so there is nothing for a width to give. It is one setting

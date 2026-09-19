@@ -58,8 +58,11 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   round element is set.
 - **23** - The up/down cursor over a gauge's dashed circle should point at the
   gauge's centre - an arrow head that turns with the pointer's position.
-- **25** - The pointer's grips become crosshairs while held - only the one
-  actually held.
+- **25** - ~~The pointer's grips become crosshairs while held - only the one
+  actually held.~~ Done, and a real one: a vertical and a horizontal line
+  crossing at the handle, dashed so they do not hide the marks they are being
+  read against. Only while a handle is held, only for the handle actually
+  held, and the browser's own arrow is taken away for as long as it is up.
 - **27** - ~~The pointer's chip menu must never sit over the needle: where it
   would, show it in two columns above or below the horizontal centre line.
   The point grip takes the size of the label box's grip.~~ Done. The needle

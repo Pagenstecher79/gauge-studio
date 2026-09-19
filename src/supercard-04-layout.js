@@ -1994,6 +1994,10 @@ class ScCanvasEditor extends LitElement {
       // card being drawn.
       _hl: { type: Boolean, state: true },
       _hlHold: { type: Number, state: true },
+      // Which of the needle's two handles is being held, and so which one is
+      // drawing a crosshair. One at a time: the pair of lines is there to say
+      // where *this* end is going.
+      _crossEnd: { type: String, state: true },
       // The one part the highlight is narrowed to while a row that names it
       // is being held - a chip can set more than one mark.
       _hlNarrow: { type: String, state: true },
@@ -2059,6 +2063,7 @@ class ScCanvasEditor extends LitElement {
     this._innerFrame = 0;
     this._innerRects = null;
     this._innerDrag = null;
+    this._crossEnd = null;
     this._pinch = null;
     // The last pointer position, in client pixels. The edge scroll works from
     // it: the pointer can stand still while the view keeps moving under it.
@@ -2213,6 +2218,10 @@ class ScCanvasEditor extends LitElement {
     // clicked next to it is the opposite of what a click next to something
     // means, and the way back is one press on the reset button.
     if (!this._innerOn && this._zoomBefore != null) this._zoomBefore = null;
+    // On the host, because the cursor has to go from everything the hand
+    // can be over while a handle is held, and a shadow root's rules cannot
+    // reach the host from inside a child.
+    this.toggleAttribute('cross', !!this._crossEnd);
     this._measureInner();
     this._placeNeedle();
     this._followInner();
@@ -2642,6 +2651,21 @@ class ScCanvasEditor extends LitElement {
       .ring-grip { fill: var(--sc-part); stroke: rgba(0,0,0,0.9); stroke-width: 0.2;
         opacity: 0.6; }
       .ring-grip.sel { fill: var(--sc-part-sel); opacity: 1; }
+      /* The arrow goes away while a crosshair is up: two pointers for one
+         hand, one of them drawn by the browser over the very crossing point
+         the other one is there to show, is one too many. Every descendant
+         and not just the host, because nearly everything under it sets a
+         cursor of its own - a band is ew-resize, a grip nwse-resize - and
+         inheritance would not reach past any of them. */
+      :host([cross]), :host([cross]) * { cursor: none !important; }
+      /* A real crosshair: one line each way, crossing where the handle is.
+         Dashed and thin, because it is drawn across the very marks it is
+         there to line the handle up against - a solid pair hid the ticks it
+         was being read off. Only while a handle is held, and only for the
+         handle actually held: two crosshairs on one needle say nothing about
+         either end. */
+      .grip-cross { stroke: var(--sc-part-sel); stroke-dasharray: 1 0.7;
+        opacity: 0.85; pointer-events: none; }
       .ring-grip-hit { fill: transparent; stroke: none; pointer-events: all;
         cursor: move; touch-action: none; }
       .ring-tag { position: absolute;
@@ -4113,6 +4137,9 @@ class ScCanvasEditor extends LitElement {
         ? this._needleRadius({ x: e.clientX, y: e.clientY }, geo) : 0;
       this._innerDrag = { part, mode, end, from, at0, ...geo,
                           startX: e.clientX, startY: e.clientY, started: false };
+      // An end handle, not the line: the crosshair says where one point is
+      // being put, and the line is dragged as a whole.
+      this._crossEnd = (mode === 'needle' && end !== 'line') ? end : null;
       this._ptr = { x: e.clientX, y: e.clientY };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
@@ -4207,6 +4234,18 @@ class ScCanvasEditor extends LitElement {
     root.querySelectorAll('.grip-layer [data-end]').forEach((/** @type {any} */ n) => {
       const p = at[n.dataset.end];
       if (!p) return;
+      // The crosshair's two lines are moved the same way the handle they
+      // cross at is, and each only along the axis it is not drawn on.
+      if (n.dataset.axis) {
+        if (n.dataset.axis === 'x') {
+          n.setAttribute('x1', String(p.x));
+          n.setAttribute('x2', String(p.x));
+        } else {
+          n.setAttribute('y1', String(p.y));
+          n.setAttribute('y2', String(p.y));
+        }
+        return;
+      }
       n.setAttribute('cx', String(p.x));
       n.setAttribute('cy', String(p.y));
     });
@@ -4865,6 +4904,13 @@ class ScCanvasEditor extends LitElement {
                        + ' in or out, or either end to set its length'}</title>
             </line>
             ${Object.entries(NEEDLE_ENDS).map(([end, e2]) => svg`
+              ${this._crossEnd !== end ? '' : svg`
+              <line class="grip-cross" data-end=${end} data-axis="y"
+                    x1="0" y1=${n[end].y} x2=${GAUGE_VIEW} y2=${n[end].y}
+                    stroke-width=${1 / (unit || 1)}></line>
+              <line class="grip-cross" data-end=${end} data-axis="x"
+                    x1=${n[end].x} y1="0" x2=${n[end].x} y2=${GAUGE_VIEW}
+                    stroke-width=${1 / (unit || 1)}></line>`}
               <circle class="ring-grip ${sel ? 'sel' : ''}" data-end=${end}
                       cx=${n[end].x} cy=${n[end].y} r=${gripR}></circle>
               <circle class="ring-grip-hit" data-end=${end}
@@ -5649,6 +5695,7 @@ class ScCanvasEditor extends LitElement {
     if (this._innerDrag) {
       const d = this._innerDrag;
       this._innerDrag = null;
+      this._crossEnd = null;
       if (d.mode === 'chip' && d.held && !d.started && this._innerSel === d.part) {
         this._innerSel = null;
       }
