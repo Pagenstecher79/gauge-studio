@@ -555,7 +555,11 @@ class ScProgressbar extends LitElement {
          }
       }
       
-      indicatorTopHtml = html`<div class="sc-pb-indicator-line" data-sc-part="pill" style="${lineStyle}"></div>${realPillHtml}`;
+      // Two names: the line is switched on and off with the pill and shares
+      // its chip, so it breathes whenever the pill is in hand - but its own
+      // colour and thickness are set on that chip too, and while one of those
+      // is being held the line answers alone.
+      indicatorTopHtml = html`<div class="sc-pb-indicator-line" data-sc-part="pill indicator_line" style="${lineStyle}"></div>${realPillHtml}`;
     }
 
     let circularHtml = ''; 

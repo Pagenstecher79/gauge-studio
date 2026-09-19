@@ -1006,7 +1006,7 @@ class ScGauge extends LitElement {
               <stop offset="100%" stop-color="black" stop-opacity="0.6"/>
             </linearGradient>
           </defs>` : ''}
-          <g transform="translate(${pivot.toFixed(2)}, ${pivot.toFixed(2)})">${shape(pCol, is3d ? 'sc-3d-pointer-grad' : null)}</g>`, true)}`;
+          <g data-sc-part="pointer" transform="translate(${pivot.toFixed(2)}, ${pivot.toFixed(2)})">${shape(pCol, is3d ? 'sc-3d-pointer-grad' : null)}</g>`, true)}`;
 
     return html`
       <div class="sc-gauge-wrap" @touchstart=${this._handleTouch} style="${wrapStyle}">

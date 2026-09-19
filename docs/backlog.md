@@ -58,11 +58,19 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   round element is set.
 - **23** - The up/down cursor over a gauge's dashed circle should point at the
   gauge's centre - an arrow head that turns with the pointer's position.
-- **25** - The pointer's grips become crosshairs while held - only the one
-  actually held.
-- **27** - The pointer's chip menu must never sit over the needle: where it
+- **25** - ~~The pointer's grips become crosshairs while held - only the one
+  actually held.~~ Done, and a real one: a vertical and a horizontal line
+  crossing at the handle, dashed so they do not hide the marks they are being
+  read against. Only while a handle is held, only for the handle actually
+  held, and the browser's own arrow is taken away for as long as it is up.
+- **27** - ~~The pointer's chip menu must never sit over the needle: where it
   would, show it in two columns above or below the horizontal centre line.
-  The point grip takes the size of the label box's grip.
+  The point grip takes the size of the label box's grip.~~ Done. The needle
+  turns about the centre, so the half of the gauge its tip is not in is the
+  half with nothing in it: the menu stands on the centre line and grows away
+  from the tip, in two columns because half a gauge is not tall enough for
+  eight rows of one. The needle's two handles are now ten pixels across
+  whatever the gauge's size, which is what the label box's grip is.
 - **28** - Scale label: repair or rework.
 - **30 / 48** - Gauge background options reachable from the gauge editor's
   canvas, as a dropdown - the top edge is probably the right place for one.
@@ -80,12 +88,17 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **4** - The gauge's colour presets for the bar too, and templates under
   `+ add object`: first the bar type, then a second menu offering default or
   a colour template.
-- **5** - A selected, zoomed bar should put its chips and their menus in the
+- **5** - ~~A selected, zoomed bar should put its chips and their menus in the
   free space beside the bar where there is any - today the chip menu covers
   the pill it is meant to be setting. That means the canvas zoom must stop
   resetting on a click beside the canvas: reset only through the edit and
   reset buttons. And while the indicator-line slider is held, only the
-  indicator line should dim-pulse.
+  indicator line should dim-pulse.~~ Done, in three parts. A chip menu now
+  steps off the mark it is setting, one move along one axis, measured off the
+  drawing itself through `data-sc-part` (`_partBox`); the zoom is given back
+  only by the edit button that brought it and by the reset button; and the
+  indicator line carries its own name beside the pill's, so a row that holds
+  the line's colour or thickness pulses the line alone.
 - **19** - The bar label has no weight in its chip menu; neither do the bar's
   tick labels.
 - **20** - The bar label cannot be dragged out and placed by hand.
@@ -125,10 +138,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **22** - Inside an object editor, clicking to select should behave as it
   does on the main canvas: clicking the same spot cycles through elements
   that lie over one another.
-- **24** - Make the chip menus resizable, with a grip in one of the lower
-  corners, bounded so they can be neither too large nor too small.
-- **29** - Scale label, label, multiplier and value: their option boxes must
-  not cover the element they belong to.
+- **24** - ~~Make the chip menus resizable, with a grip in one of the lower
+  corners, bounded so they can be neither too large nor too small.~~ Done. A
+  grip in the bottom right corner scales the whole menu between three
+  quarters and double; the size is one setting for all the menus and outlives
+  the dialog.
+- **29** - ~~Scale label, label, multiplier and value: their option boxes must
+  not cover the element they belong to.~~ Done with 5: the same rule covers
+  every part, because it is read off the drawing rather than off a list of
+  parts. The scale label has no menu to place yet - see 28.
 - **31** - New feature: an interactive glass FX editor for the canvas.
 - **32** - "Layers (3) - the top of the list is drawn on top" - the list seems
   to work the other way round.

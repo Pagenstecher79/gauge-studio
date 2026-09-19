@@ -297,6 +297,55 @@ two rules finish the job:
   already applied is read back off the element rather than remembered, because
   lit rewrites the whole style attribute whenever the chip moves and takes the
   property with it.
+- **And it steps off the mark it is setting.** A menu lying across the very
+  thing it changes is a menu you have to move to see what you did: the pill's
+  numbers sat squarely on the pill, and a gauge's value on the value. Which
+  pixels to keep clear is read off the drawing and not off the measured rects,
+  because those cover only the texts a frame can be put round: every renderer
+  already names each mark with `data-sc-part` for the highlight, so
+  `_partBox` asks the same attribute and takes the box around every piece it
+  finds. The way out is one step along one axis past the nearest edge of the
+  mark, clamped back inside the canvas and then checked again - and a mark
+  that fills the view has no beside, so nowhere clear leaves the panel where
+  it was rather than shoving it off the edge to honour the rule.
+- **The needle's menu is placed by geometry, not by dodging.** Its chip rides
+  the middle of the line, so a panel hanging under that chip hangs straight
+  down the needle, and the needle moves. The needle turns about the centre,
+  which makes the half of the gauge its tip is *not* in the half with nothing
+  in it but the hub: the panel stands on the horizontal centre line and grows
+  away from the tip. Half a gauge is not tall enough for eight rows of one, so
+  that panel is drawn in two columns - a row is four cells of the grid
+  whatever the grid's width, so twice the columns simply pairs the rows up.
+- **A held needle handle draws a crosshair, and takes the arrow away.** Two
+  lines, one each way, crossing where the handle is - dashed and thin,
+  because they are drawn across the very ticks they are there to line the
+  handle up against, and a solid pair hid them. One handle at a time: a
+  crosshair on both ends says nothing about either. While it is up the
+  browser's own pointer goes, on the host and on every descendant - nearly
+  everything under it sets a cursor of its own, so inheritance alone would
+  not reach - because two pointers for one hand, one of them drawn over the
+  crossing point the other is there to show, is one too many. The lines are
+  moved between renders the same way the handles are, each only along the
+  axis it is not drawn on.
+- **The grip in the bottom corner sets how big the menus are drawn.** A scale
+  and not a width and a height: the rows are a grid whose column widths the
+  contents decide, so there is nothing for a width to give. It is one setting
+  for every menu, because how big a menu has to be to be hit is a question
+  about the person and not about the part, and it is written straight onto the
+  box rather than through state - a re-render would rewrite the style
+  attribute the fitting has just put its nudge into, and the panel would jump
+  once per frame of the drag. The scale is last in the transform, so the nudge
+  in front of it stays in plain window pixels and the fitting can go on
+  measuring in them. The panel scrolls when it is taller than the canvas, so
+  nothing may hang outside it that is not meant to be scrolled to: the grip's
+  invisible hit pad grows inwards and upwards only, because six pixels of it
+  past the bottom right corner put a scrollbar on a menu that fitted, and the
+  height that bar took made the vertical one true as well.
+- **A two-column menu draws a line where the second column begins.** A group
+  is always four columns wide, so in the eight-column form every second one
+  starts the fifth column - which is the only way to name that column at all,
+  the widths being the contents'. The line is drawn on that cell and stretched
+  to the row, so the only thing that breaks it is the gap between rows.
 - **The other chips step aside, and they step aside from each other too.** The
   panel is placed from where its own chip belongs and never moves for anything;
   every chip is then walked once, the selected one first, and each takes the

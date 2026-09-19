@@ -597,6 +597,23 @@ const chipPlace = new Map();
 
 const chipKey = (/** @type {string} */ id, /** @type {string} */ part) => id + '\u0000' + part;
 
+/**
+ * How big the chip menus are drawn, and how far the grip may take them.
+ *
+ * One number for all of them rather than one per chip: the size is a
+ * question about the person reading, not about the part - a menu that has to
+ * be bigger to be hit is a menu that has to be bigger everywhere. Module
+ * scope for the same reason `zoomBack` is: it outlives the dialog, so the
+ * setting does not have to be made again the next time a card is opened.
+ *
+ * The bounds are what stays usable: below three quarters the icons stop
+ * being readable, above double the menu is most of the canvas it is drawn
+ * over.
+ */
+const STEPS_MIN = 0.75;
+const STEPS_MAX = 2;
+let stepsZoom = 1;
+
 /** How much of the window a "zoom to the selection" leaves around it. */
 const FIT_MARGIN = 0.85;
 
@@ -1388,11 +1405,15 @@ const BAR_PARTS = Object.freeze({
     turnOn: { show_indicator: true, indicator_value: true },
     turnOff: { indicator_value: false },
     steps: [
-      { icon: icon('paintbrush'), what: 'line colour', paint: true,
+      // `hl`: the pill's chip holds the line's settings as well as the
+      // pill's own, and a pulse over both while the line's thickness is being
+      // set is a pulse over the wrong thing. A row that names a part narrows
+      // the highlight to it for as long as it is held.
+      { icon: icon('paintbrush'), what: 'line colour', paint: true, hl: 'indicator_line',
         read: (/** @type {any} */ cfg) => markHex(cfg.indicator_color, '#ffffff'),
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ indicator_color: v }) },
       barSlide('indicator_thickness', '2px', 'line thickness',
-               { icon: THICK, by: 0.5, min: 0, max: 10 }),
+               { icon: THICK, by: 0.5, min: 0, max: 10, hl: 'indicator_line' }),
       { key: 'indicator_value_rotation', icon: icon('rotate-cw'), what: 'rotation',
         read: (/** @type {any} */ cfg) => String(cfg.indicator_value_rotation ?? 'auto'),
         picks: [{ value: 'auto', label: 'Crossed with the bar', short: 'Auto' },
@@ -1973,6 +1994,13 @@ class ScCanvasEditor extends LitElement {
       // card being drawn.
       _hl: { type: Boolean, state: true },
       _hlHold: { type: Number, state: true },
+      // Which of the needle's two handles is being held, and so which one is
+      // drawing a crosshair. One at a time: the pair of lines is there to say
+      // where *this* end is going.
+      _crossEnd: { type: String, state: true },
+      // The one part the highlight is narrowed to while a row that names it
+      // is being held - a chip can set more than one mark.
+      _hlNarrow: { type: String, state: true },
       // The parts held *besides* the one in hand. A plain array rather than a
       // Set, because lit's change detection is identity on both and an array
       // is what the render walks.
@@ -2030,9 +2058,12 @@ class ScCanvasEditor extends LitElement {
     this._hl = true;
     this._hlHold = 0;
     this._hlTimer = 0;
+    this._hlNarrow = null;
+    this._hlNarrowOff = null;
     this._innerFrame = 0;
     this._innerRects = null;
     this._innerDrag = null;
+    this._crossEnd = null;
     this._pinch = null;
     // The last pointer position, in client pixels. The edge scroll works from
     // it: the pointer can stand still while the view keeps moving under it.
@@ -2133,6 +2164,7 @@ class ScCanvasEditor extends LitElement {
     this._innerFrame = 0;
     clearTimeout(this._appliedTimer);
     clearTimeout(this._hlTimer);
+    this._hlNarrowOff?.();
     super.disconnectedCallback();
   }
 
@@ -2180,15 +2212,16 @@ class ScCanvasEditor extends LitElement {
       this._innerRects = null;
       this._innerSel = null;
     }
-    // Separately, because the button clears `_inner` on its own way out and
-    // would otherwise never reach this.
-    if (!this._innerOn && this._zoomBefore != null) {
-      const back = this._zoomBefore;
-      this._zoomBefore = null;
-      // Read here rather than on the way in, so the switch can be thrown while
-      // an element is open and mean it.
-      if (this._zoomBack && back !== this._zoom) this._applyZoom(back);
-    }
+    // An element left any other way - a click beside the canvas, a different
+    // element taken up - keeps the zoom where it is and only forgets where it
+    // came from. Being thrown back out to the whole canvas because you
+    // clicked next to it is the opposite of what a click next to something
+    // means, and the way back is one press on the reset button.
+    if (!this._innerOn && this._zoomBefore != null) this._zoomBefore = null;
+    // On the host, because the cursor has to go from everything the hand
+    // can be over while a handle is held, and a shadow root's rules cannot
+    // reach the host from inside a child.
+    this.toggleAttribute('cross', !!this._crossEnd);
     this._measureInner();
     this._placeNeedle();
     this._followInner();
@@ -2618,6 +2651,21 @@ class ScCanvasEditor extends LitElement {
       .ring-grip { fill: var(--sc-part); stroke: rgba(0,0,0,0.9); stroke-width: 0.2;
         opacity: 0.6; }
       .ring-grip.sel { fill: var(--sc-part-sel); opacity: 1; }
+      /* The arrow goes away while a crosshair is up: two pointers for one
+         hand, one of them drawn by the browser over the very crossing point
+         the other one is there to show, is one too many. Every descendant
+         and not just the host, because nearly everything under it sets a
+         cursor of its own - a band is ew-resize, a grip nwse-resize - and
+         inheritance would not reach past any of them. */
+      :host([cross]), :host([cross]) * { cursor: none !important; }
+      /* A real crosshair: one line each way, crossing where the handle is.
+         Dashed and thin, because it is drawn across the very marks it is
+         there to line the handle up against - a solid pair hid the ticks it
+         was being read off. Only while a handle is held, and only for the
+         handle actually held: two crosshairs on one needle say nothing about
+         either end. */
+      .grip-cross { stroke: var(--sc-part-sel); stroke-dasharray: 1 0.7;
+        opacity: 0.85; pointer-events: none; }
       .ring-grip-hit { fill: transparent; stroke: none; pointer-events: all;
         cursor: move; touch-action: none; }
       .ring-tag { position: absolute;
@@ -2684,10 +2732,21 @@ class ScCanvasEditor extends LitElement {
          measures the box once it is drawn and says how far it has to come
          back, because how tall eight rows are is a layout result and not
          something the chip's position can know. */
+      /* The scale is the grip's, and it is last in the transform so the
+         nudge in front of it stays in plain pixels - a translate that is
+         leftmost is not scaled by what follows it, which is what lets the
+         fitting keep measuring in window pixels. The origin is the anchor
+         the panel hangs from, so growing it does not move it off its chip. */
       .ring-steps { position: absolute;
         transform: translate(calc(-50% + var(--sc-steps-dx, 0px)),
-                             calc(12px + var(--sc-steps-dy, 0px)));
+                             calc(12px + var(--sc-steps-dy, 0px)))
+                   scale(var(--sc-steps-zoom, 1));
+        transform-origin: top center;
         overflow-y: auto; overscroll-behavior: contain;
+        /* So the cap the fitting works out is the height the panel is drawn
+           at: on content-box the padding is added to it and the panel stands
+           six pixels taller than the canvas it was measured against. */
+        box-sizing: border-box;
         z-index: 8;
         /* Kept for the case no chip can get out of the way: behind the panel
            is better than across it. */
@@ -2696,6 +2755,42 @@ class ScCanvasEditor extends LitElement {
         width: max-content; gap: 3px; padding: 3px 5px;
         border-radius: 5px; background: rgba(0,0,0,0.62);
         box-shadow: 0 0 0 1px rgba(242,181,68,0.6); }
+      /* Hanging upwards from its anchor instead of downwards, for a panel
+         placed on a line it has to stay on one side of. */
+      .ring-steps.up { transform: translate(calc(-50% + var(--sc-steps-dx, 0px)),
+                                            calc(-100% - 12px + var(--sc-steps-dy, 0px)))
+                                  scale(var(--sc-steps-zoom, 1));
+        transform-origin: bottom center; }
+      /* Two menus' worth of columns, for a panel that has half a drawing to
+         stand in rather than all of it. A group is four cells wide however
+         many columns there are, so the rows simply pair up. */
+      .ring-steps.wide { grid-template-columns: repeat(8, auto); }
+      /* A line where the second menu begins, so eight cells in a row read as
+         two rows of four rather than one row of eight. A group is always four
+         columns wide, so every second one starts the fifth column - which is
+         the only way to name that column at all, the widths being the
+         contents'. Drawn on the cell and stretched to the row, so what breaks
+         it is the gap between rows and nothing else. */
+      .ring-steps.wide > .ring-group:nth-child(even) > *:first-child {
+        align-self: stretch; margin-left: 4px; padding-left: 5px;
+        border-left: 1px solid rgba(255,255,255,0.16); }
+      /* Sticky, so it stays in the corner of a panel that is scrolling its
+         own rows rather than sliding away with them. Its own row, because a
+         grid cell that hangs outside the grid is a cell the rows have to
+         leave room for. */
+      .steps-grip { grid-column: 1 / -1; justify-self: end; position: sticky;
+        bottom: 0; width: 10px; height: 10px; margin: -1px -2px -1px 0;
+        cursor: nwse-resize; touch-action: none;
+        background: linear-gradient(135deg, transparent 52%,
+                    var(--sc-part-sel) 52%, var(--sc-part-sel) 68%,
+                    transparent 68%, transparent 78%,
+                    var(--sc-part-sel) 78%, var(--sc-part-sel) 94%, transparent 94%); }
+      /* Inwards and not all round: the panel is a scroll container, and six
+         pixels of invisible hit pad hanging past its bottom right corner is
+         six pixels of content to scroll to - both bars appeared on a menu
+         that fitted, and the horizontal one then took the height that made
+         the vertical one true. */
+      .steps-grip::after { content: ''; position: absolute; inset: -6px 0 0 -6px; }
       /* The group is what a number is made of, not a box of its own: its four
          parts are cells of the one grid, which is what lines the columns up. */
       .ring-group { display: contents; }
@@ -3806,6 +3901,15 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     if (!target) return;
     const opening = !this._innerOn;
+    // The button is the way out that means "take me back to where I was":
+    // the zoom it brought is given back here, and nowhere else.
+    if (!opening && this._zoomBefore != null) {
+      const back = this._zoomBefore;
+      this._zoomBefore = null;
+      // Read here rather than on the way in, so the switch can be thrown while
+      // an element is open and mean it.
+      if (this._zoomBack && back !== this._zoom) this._applyZoom(back);
+    }
     this._inner = this._innerOn ? null : target.id;
     this._innerRects = null;
     this._innerSel = null;
@@ -4051,6 +4155,9 @@ class ScCanvasEditor extends LitElement {
         ? this._needleRadius({ x: e.clientX, y: e.clientY }, geo) : 0;
       this._innerDrag = { part, mode, end, from, at0, ...geo,
                           startX: e.clientX, startY: e.clientY, started: false };
+      // An end handle, not the line: the crosshair says where one point is
+      // being put, and the line is dragged as a whole.
+      this._crossEnd = (mode === 'needle' && end !== 'line') ? end : null;
       this._ptr = { x: e.clientX, y: e.clientY };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
@@ -4145,10 +4252,25 @@ class ScCanvasEditor extends LitElement {
     root.querySelectorAll('.grip-layer [data-end]').forEach((/** @type {any} */ n) => {
       const p = at[n.dataset.end];
       if (!p) return;
+      // The crosshair's two lines are moved the same way the handle they
+      // cross at is, and each only along the axis it is not drawn on.
+      if (n.dataset.axis) {
+        if (n.dataset.axis === 'x') {
+          n.setAttribute('x1', String(p.x));
+          n.setAttribute('x2', String(p.x));
+        } else {
+          n.setAttribute('y1', String(p.y));
+          n.setAttribute('y2', String(p.y));
+        }
+        return;
+      }
       n.setAttribute('cx', String(p.x));
       n.setAttribute('cy', String(p.y));
     });
-    // The chip rides beside the line's middle, so it moves with it.
+    // The chip rides beside the line's middle, so it moves with it. Its panel
+    // does not: the panel is placed against the centre line, on the side the
+    // needle is not, and following the needle is exactly what would put it
+    // back on top of it.
     const mid = { x: (at.tail.x + at.tip.x) / 2 - 4 * Math.sin(a),
                   y: (at.tail.y + at.tip.y) / 2 + 4 * Math.cos(a) };
     const l = Math.max(2, Math.min(98, svgBox.l + svgBox.w * mid.x / GAUGE_VIEW));
@@ -4157,7 +4279,7 @@ class ScCanvasEditor extends LitElement {
     // stays - a chip moved out of the way is no use if the needle keeps
     // fetching it back.
     if (!chipPlace.has(chipKey(this._inner, 'pointer'))) {
-      root.querySelectorAll('.ring-tag[data-part="pointer"], .ring-steps[data-part="pointer"]')
+      root.querySelectorAll('.ring-tag[data-part="pointer"]')
         .forEach((/** @type {any} */ n) => { n.style.left = l + '%'; n.style.top = t + '%'; });
     }
     return a;
@@ -4506,7 +4628,36 @@ class ScCanvasEditor extends LitElement {
   _hlPart(id) {
     if (!this._hl || !this._innerOn || this._inner !== id) return nothing;
     if (this._hlHold > Date.now()) return nothing;
-    return this._innerSel || nothing;
+    return this._hlNarrow || this._innerSel || nothing;
+  }
+
+  /**
+   * Show one mark rather than the chip's whole part, while a row is held.
+   *
+   * A chip stands for a part, and for most parts that is one mark. The
+   * bar's pill is not one of them: the line under it is switched on with it
+   * and set from the same menu, so setting the line's thickness pulsed the
+   * pill as well - the one thing on the drawing that was not changing. A row
+   * that names a mark takes the pulse for itself until the hand lets go.
+   *
+   * On the window rather than the control: a slider let go of outside its
+   * own thumb - which is most of them - fires nothing the control hears.
+   *
+   * @param {string|undefined} part
+   */
+  _narrowHl(part) {
+    if (!part) return;
+    this._hlNarrowOff?.();
+    this._hlNarrow = part;
+    const off = () => {
+      this._hlNarrow = null;
+      this._hlNarrowOff = null;
+      window.removeEventListener('pointerup', off);
+      window.removeEventListener('pointercancel', off);
+    };
+    this._hlNarrowOff = off;
+    window.addEventListener('pointerup', off);
+    window.addEventListener('pointercancel', off);
   }
 
   /**
@@ -4746,7 +4897,15 @@ class ScCanvasEditor extends LitElement {
             </circle>`;
         })}`)}
       </svg>`}
-      ${!needles.length ? '' : html`
+      ${!needles.length ? '' : (() => {
+      // The needle's two handles are drawn in the gauge's own units, which
+      // made them one size on a big gauge and another on a small one. The
+      // label box's grip is ten pixels wherever it is, and a handle that is
+      // dragged the same way should be the same thing to reach for - so the
+      // radius is worked back out of the pixels it has to come to.
+      const unit = (this._innerRects?.px?.width || 0) * svgBox.w / 100 / GAUGE_VIEW;
+      const gripR = unit > 0 ? 5 / unit : 1.1;
+      return html`
       <svg class="ring-layer grip-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
            style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;">
         ${needles.map(([part, spec]) => {
@@ -4763,15 +4922,23 @@ class ScCanvasEditor extends LitElement {
                        + ' in or out, or either end to set its length'}</title>
             </line>
             ${Object.entries(NEEDLE_ENDS).map(([end, e2]) => svg`
+              ${this._crossEnd !== end ? '' : svg`
+              <line class="grip-cross" data-end=${end} data-axis="y"
+                    x1="0" y1=${n[end].y} x2=${GAUGE_VIEW} y2=${n[end].y}
+                    stroke-width=${1 / (unit || 1)}></line>
+              <line class="grip-cross" data-end=${end} data-axis="x"
+                    x1=${n[end].x} y1="0" x2=${n[end].x} y2=${GAUGE_VIEW}
+                    stroke-width=${1 / (unit || 1)}></line>`}
               <circle class="ring-grip ${sel ? 'sel' : ''}" data-end=${end}
-                      cx=${n[end].x} cy=${n[end].y} r="1.1"></circle>
+                      cx=${n[end].x} cy=${n[end].y} r=${gripR}></circle>
               <circle class="ring-grip-hit" data-end=${end}
-                      cx=${n[end].x} cy=${n[end].y} r="2.4"
+                      cx=${n[end].x} cy=${n[end].y} r=${gripR * 2.2}
                       @pointerdown=${(/** @type {any} */ ev) => this._innerDown(ev, part, 'needle', end)}>
                 <title>${'Drag the needle\'s ' + e2.what + ' to set its length'}</title>
               </circle>`)}`;
         })}
-      </svg>`}
+      </svg>`;
+      })()}
       ${live.map(([part, spec]) => {
         const c = cen;
         const clampPc = (/** @type {number} */ v) => Math.max(2, Math.min(98, v));
@@ -4801,7 +4968,18 @@ class ScCanvasEditor extends LitElement {
         const l = svgBox.l + svgBox.w * spot.x / GAUGE_VIEW;
         const t = svgBox.t + svgBox.h * spot.y / GAUGE_VIEW;
         if (!spec.needle && (l < 0 || l > 100 || t < 0 || t > 100)) return '';
-        return this._renderChip(part, spec, clampPc(l), clampPc(t), swallow);
+        // The needle's panel is the one that cannot be placed beside its own
+        // chip: the chip rides the middle of the line, so the panel under it
+        // hangs straight down the needle. The needle turns about the centre,
+        // which makes the half of the gauge its tip is *not* in the half with
+        // nothing in it but the hub - so the panel stands on the centre line
+        // and grows away from the tip, in two columns, because half a gauge
+        // is not tall enough for eight rows of one.
+        const steps = spec.needle
+          ? { l: svgBox.l + svgBox.w / 2, t: svgBox.t + svgBox.h / 2,
+              up: needleAt(spec).tip.y > c.y, wide: true }
+          : null;
+        return this._renderChip(part, spec, clampPc(l), clampPc(t), swallow, steps);
       })}`;
   }
 
@@ -4814,7 +4992,7 @@ class ScCanvasEditor extends LitElement {
    * goes from the ring itself, a part with a `spot` is told, and from here on
    * the two are the same thing.
    */
-  _renderChip(part, spec, l, t, swallow) {
+  _renderChip(part, spec, l, t, swallow, steps = null) {
     const target = this._innerTarget;
     if (!target) return '';
     const sel = this._innerSel === part;
@@ -4834,7 +5012,7 @@ class ScCanvasEditor extends LitElement {
                   @pointerdown=${swallow}
                   @click=${() => this._setInnerRing(part, false)}>−</button>` : ''}
       </span>
-      ${sel ? this._renderSteppers(at.l, at.t) : ''}`;
+      ${sel ? this._renderSteppers(steps?.l ?? at.l, steps?.t ?? at.t, steps) : ''}`;
   }
 
   /** Put a chip back where the part it names says it should stand. */
@@ -5019,6 +5197,11 @@ class ScCanvasEditor extends LitElement {
     const box = /** @type {any} */ (root?.querySelector('.ring-steps'));
     const canvas = this._safeRect();
     if (!box || !canvas) return false;
+    // A panel drawn afresh knows nothing of the grip, and the grip writes
+    // straight onto the box - so this is where the remembered size is put
+    // back on, before anything is measured against it.
+    if (box.style.getPropertyValue('--sc-steps-zoom') !== String(stepsZoom))
+      box.style.setProperty('--sc-steps-zoom', String(stepsZoom));
     const was = {
       x: parseFloat(box.style.getPropertyValue('--sc-steps-dx')) || 0,
       y: parseFloat(box.style.getPropertyValue('--sc-steps-dy')) || 0,
@@ -5027,8 +5210,10 @@ class ScCanvasEditor extends LitElement {
     if (!c.height) return false;
     // A per cent would be read against the element the panel hangs on, which
     // is the gauge and not the canvas, so how tall it may be is measured here
-    // too. Set before the box is, because it is what the box will be.
-    const room = Math.round(c.height);
+    // too. Set before the box is, because it is what the box will be. Against
+    // the unscaled box, because the cap is applied before the grip's scale
+    // and what has to fit in the canvas is what is finally drawn.
+    const room = Math.round(c.height / stepsZoom);
     const cap = room > 0 ? room + 'px' : 'none';
     if (box.style.maxHeight !== cap) box.style.maxHeight = cap;
     const b = box.getBoundingClientRect();
@@ -5039,14 +5224,70 @@ class ScCanvasEditor extends LitElement {
     // Pushed off the far edge first and the near one second, so a panel too
     // big for the canvas is pinned at the top left of the frame and scrolls
     // rather than hiding its first row.
-    let dx = Math.min(0, c.right - (l + b.width));
-    let dy = Math.min(0, c.bottom - (t + b.height));
-    dx = Math.max(dx, c.left - l);
-    dy = Math.max(dy, c.top - t);
-    if (Math.abs(dx - was.x) < 0.5 && Math.abs(dy - was.y) < 0.5) return false;
-    box.style.setProperty('--sc-steps-dx', dx + 'px');
-    box.style.setProperty('--sc-steps-dy', dy + 'px');
+    const held = (/** @type {any} */ w) => ({
+      x: Math.max(Math.min(w.x, c.right - (l + b.width)), c.left - l),
+      y: Math.max(Math.min(w.y, c.bottom - (t + b.height)), c.top - t),
+    });
+    // And off the very thing it is setting. A menu that covers the mark it is
+    // there to change is a menu you have to move to see what you did: the
+    // pill's own numbers sat squarely on the pill, and a gauge's value on the
+    // value. The way out is one step along one axis, past the nearest edge of
+    // the mark - a panel that goes round a corner reads as one that has come
+    // loose from its chip.
+    const keep = this._partBox(this._innerSel);
+    const M = 6;
+    const clear = (/** @type {any} */ w) => !keep
+      || l + w.x >= keep.right - 0.5 || l + w.x + b.width <= keep.left + 0.5
+      || t + w.y >= keep.bottom - 0.5 || t + w.y + b.height <= keep.top + 0.5;
+    let best = held({ x: 0, y: 0 });
+    if (!clear(best)) {
+      const ways = [
+        { x: 0, y: keep.bottom + M - t },
+        { x: 0, y: keep.top - M - (t + b.height) },
+        { x: keep.right + M - l, y: 0 },
+        { x: keep.left - M - (l + b.width), y: 0 },
+      ].map(held).filter(clear)
+        .sort((/** @type {any} */ p, /** @type {any} */ q) =>
+          (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
+      // Nowhere clear inside the canvas leaves it where it was: a mark that
+      // fills the view has no beside, and a panel shoved off the edge to
+      // honour the rule would be worse than one lying over it.
+      if (ways.length) best = ways[0];
+    }
+    if (Math.abs(best.x - was.x) < 0.5 && Math.abs(best.y - was.y) < 0.5) return false;
+    box.style.setProperty('--sc-steps-dx', best.x + 'px');
+    box.style.setProperty('--sc-steps-dy', best.y + 'px');
     return true;
+  }
+
+  /**
+   * Where the mark a part names is actually drawn, in window pixels.
+   *
+   * Off the drawing rather than off the measured rects: `_innerRects` covers
+   * the texts a frame can be put round and nothing else, and what has to be
+   * kept clear is every mark a chip sets - a pill, a ring, the needle. The
+   * renderers already name each of them for the highlight, so the same
+   * attribute answers this, and a mark drawn in several pieces - a tick row,
+   * a line and the pill above it - is the box round all of them.
+   *
+   * @param {string|null} part
+   * @returns {{left: number, top: number, right: number, bottom: number}|null}
+   */
+  _partBox(part) {
+    const root = this.shadowRoot;
+    const el = part && this._inner
+      ? root?.querySelector(`.el[data-item-id="${this._inner}"]`) : null;
+    const host = /** @type {any} */ (el?.querySelector('sc-gauge, sc-progressbar'));
+    const marks = host?.shadowRoot?.querySelectorAll(`[data-sc-part~="${part}"]`);
+    if (!marks?.length) return null;
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const mark of marks) {
+      const q = mark.getBoundingClientRect();
+      if (!q.width && !q.height) continue;
+      left = Math.min(left, q.left); top = Math.min(top, q.top);
+      right = Math.max(right, q.right); bottom = Math.max(bottom, q.bottom);
+    }
+    return right > left ? { left, top, right, bottom } : null;
   }
 
   /**
@@ -5136,7 +5377,7 @@ class ScCanvasEditor extends LitElement {
     }
   }
 
-  _renderSteppers(left, top) {
+  _renderSteppers(left, top, opts = null) {
     const target = this._innerTarget;
     const spec = this._selSpec;
     // Not every part has something worth a row - a gauge's hub is one size and
@@ -5199,7 +5440,10 @@ class ScCanvasEditor extends LitElement {
         <span class="ring-group">${stepIcon(st)}
           <input type="range" class="ring-slide" title=${`Set the ${st.what}`}
                  min=${st.min} max=${st.max} step=${st.by} .value=${String(now(st))}
-                 @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
+                 @pointerdown=${(/** @type {any} */ e) => {
+                   e.stopPropagation();
+                   this._narrowHl(st.hl);
+                 }}
                  @input=${(/** @type {any} */ e) => {
                    // Same escape hatch the select below has: most sliders set
                    // the number they show, but one whose stored unit is not
@@ -5245,10 +5489,54 @@ class ScCanvasEditor extends LitElement {
         </span>`;
     };
     return html`
-      <div class="ring-steps" data-part=${this._innerSel}
+      <div class="ring-steps ${opts?.up ? 'up' : ''} ${opts?.wide ? 'wide' : ''}"
+           data-part=${this._innerSel}
            style="left:${left}%; top:${top}%;">
         ${spec.steps.map(group)}
+        <div class="steps-grip" title="Drag to make this menu bigger or smaller"
+             @pointerdown=${(/** @type {any} */ e) => this._stepsResize(e)}></div>
       </div>`;
+  }
+
+  /**
+   * The grip that sets how big the chip menus are drawn.
+   *
+   * A whole scale rather than a width and a height: the rows are a grid of
+   * four columns whose widths the contents decide, so there is nothing for a
+   * width to give and nothing for a height to do but show more of what is
+   * already there. What a menu on a drawing is actually too small for is
+   * hitting and reading, and both of those are the scale.
+   *
+   * Written straight onto the box and not through state: a re-render would
+   * rewrite the style attribute the fitting has just put its nudge into, and
+   * the panel would jump once per frame of the drag.
+   */
+  _stepsResize(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    const grip = e.currentTarget;
+    const box = grip.parentElement;
+    const from = { x: e.clientX, y: e.clientY, z: stepsZoom };
+    grip.setPointerCapture?.(e.pointerId);
+    const move = (/** @type {any} */ ev) => {
+      // Both axes, because the grip is in a corner and either way out of it
+      // reads as "bigger".
+      const by = ((ev.clientX - from.x) + (ev.clientY - from.y)) / 240;
+      const next = Math.min(STEPS_MAX, Math.max(STEPS_MIN,
+        Math.round(from.z * (1 + by) * 100) / 100));
+      if (next === stepsZoom) return;
+      stepsZoom = next;
+      box?.style.setProperty('--sc-steps-zoom', String(stepsZoom));
+      this._settleFloating();
+    };
+    const up = () => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointercancel', up);
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
   }
 
   /**
@@ -5425,6 +5713,7 @@ class ScCanvasEditor extends LitElement {
     if (this._innerDrag) {
       const d = this._innerDrag;
       this._innerDrag = null;
+      this._crossEnd = null;
       if (d.mode === 'chip' && d.held && !d.started && this._innerSel === d.part) {
         this._innerSel = null;
       }

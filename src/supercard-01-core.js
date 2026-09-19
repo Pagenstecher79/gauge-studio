@@ -739,9 +739,9 @@ Object.assign(window.SupercardUtils, (() => {
    * eye: the mark you are working on, blinking.
    */
   const HL_PARTS = ['gauge_ring', 'frame_ring', 'ticks', 'sub_ticks',
-                    'pointer', 'pointer_center', 'pill', 'tick_labels',
-                    'gauge_label', 'value', 'scale_label', 'multiplier',
-                    'label'];
+                    'pointer', 'pointer_center', 'pill', 'indicator_line',
+                    'tick_labels', 'gauge_label', 'value', 'scale_label',
+                    'multiplier', 'label'];
 
   /**
    * How each part is painted, and so which property the highlight ink has to
@@ -761,6 +761,7 @@ Object.assign(window.SupercardUtils, (() => {
                     'multiplier', 'pointer_center'];
   const INK_TEXT = ['label', 'tick_labels'];
   const INK_PAINT = ['ticks', 'sub_ticks'];
+  const INK_BG = ['indicator_line'];
 
   /**
    * Which part of its drawing an element is showing as the one in hand.
@@ -804,8 +805,14 @@ Object.assign(window.SupercardUtils, (() => {
    * canvas stands out of the way for a few seconds after a colour is changed.
    */
   const partHighlight = (() => {
+    // `~=` and not `=`: a mark can belong to two parts at once. The bar's
+    // indicator line is drawn under the pill and is switched on with it, so
+    // the pill's chip sets both - but the line has settings of its own, and
+    // while one of those is being held it is the line alone that should
+    // answer. So the line carries `pill indicator_line`, and a token match
+    // lets either name find it.
     const mark = (/** @type {string} */ p) =>
-      `:host([data-sc-hl="${p}"]) [data-sc-part="${p}"]`;
+      `:host([data-sc-hl="${p}"]) [data-sc-part~="${p}"]`;
     const group = (/** @type {string[]} */ ps, /** @type {string} */ suffix = '') =>
       unsafeCSS(ps.map(p => mark(p) + suffix).join(',\n      '));
     const all = unsafeCSS(HL_PARTS.map(mark).join(',\n'));
@@ -828,6 +835,9 @@ Object.assign(window.SupercardUtils, (() => {
          reach, and a div ignores a stroke. */
       ${group(INK_TEXT)}, ${group(INK_TEXT, ' *')} { color: var(--sc-hl-ink) !important; }
       ${group(INK_PAINT, ' > *')} { background: var(--sc-hl-ink) !important; }
+      /* A mark that is nothing but its own fill - the bar's indicator line is
+         a div with a background and no children to reach. */
+      ${group(INK_BG)} { background: var(--sc-hl-ink) !important; }
       /* A gradient ring is painted by a masked picture, and the arc that
          data-sc-part names is drawn in nothing at all so a press can find
          it. Inking that arc would cover the gradient with a solid band, so
