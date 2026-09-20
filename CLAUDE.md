@@ -477,6 +477,28 @@ a GitHub release - live, immediately, to everyone who has the card installed.
 Never commit, push, or tag on your own initiative. Build locally, report what
 you found, and wait for an explicit go-ahead.
 
+### The beta channel is a tag, not a branch
+
+Merging into `main` publishes nothing: HACS installs from tags, so until one is
+pushed no installed card changes. There is therefore one line of development
+and no `beta` branch to keep in step with it.
+
+What the channel is instead: **a tag whose name carries a suffix** -
+`v2.5.0-beta.1` - which the release workflow marks a **pre-release**, on the
+sole ground that the name contains a `-`. HACS offers a pre-release only to
+someone who has ticked *show beta versions* on this repository, and goes on
+offering everyone else the newest release without a suffix. So a version that
+is worth trying out first is tagged twice off the same branch: `v2.5.0-beta.1`
+for the testers, then `v2.5.0` once it holds up.
+
+Both tags are annotated and both messages are written for users; the beta's
+says what is being tried and what to look at.
+
+The one thing this does not buy is a hotfix for the released version while
+unfinished work sits on `main` - a tag would take that work with it. Keep
+`main` releasable, and if that ever stops being true, a branch is the answer
+and this section is what changes.
+
 The release body is the **annotated tag's message**, with GitHub's generated
 notes appended under a rule. So write the tag message for users:
 `git tag -a vX.Y.Z -m "..."`. A lightweight tag yields no intro - the workflow

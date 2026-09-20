@@ -70,3 +70,15 @@ jobs:
           # Prepended to the generated notes by the action.
           body_path: release-intro.md
           generate_release_notes: true
+          # A tag with a suffix - `v2.5.0-beta.1` - is a pre-release, and that
+          # word is the whole of the beta channel: HACS offers a pre-release
+          # only to someone who has ticked "show beta versions" on this
+          # repository, and goes on offering everyone else the newest release
+          # without one. There is no branch behind it - a pre-release is tagged
+          # off `main` like any other, because merging into `main` publishes
+          # nothing and only a tag does.
+          #
+          # Said explicitly rather than left to the action to guess, because
+          # what it guesses is what decides whether a test build lands on every
+          # installed dashboard.
+          prerelease: ${{ contains(github.ref_name, '-') }}
