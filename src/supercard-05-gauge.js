@@ -3,6 +3,7 @@ import { normalizeStops } from "./gradient-stops.js";
 import { autoStep, staggerRows, ROW_GAP, rowBox, boxReach } from "./tick-labels.js";
 import { gaugeScale, NO_TIER_STATE, tickMultiplier, multiplierParts } from "./gauge-scale.js";
 import { ringRadius, ringPartRadius, gaugeOuter, frameBand, gaugeScaleOf } from "./gauge-inner-boxes.js";
+import { adaptiveInk } from "./adaptive-ink.js";
 
 const SC = window.SupercardUtils;
 
@@ -15,8 +16,17 @@ const interpolateColor = (c1, c2, f) => {
   const a = toRgbArray(c1) || [128,128,128]; const b = toRgbArray(c2) || [128,128,128];
   return [Math.round(a[0]+f*(b[0]-a[0])), Math.round(a[1]+f*(b[1]-a[1])), Math.round(a[2]+f*(b[2]-a[2]))];
 };
-const resolveColor = (type, arr) => {
-  if (type === 'adaptive') return 'var(--primary-text-color)';
+/**
+ * A part's colour.
+ *
+ * `adaptive` means "whatever can be read here". Where the gauge paints a
+ * background of its own, `ink` is the answer to that and comes from
+ * `adaptive-ink.js`; where it paints nothing, the mark stands on the card and
+ * the dashboard's own text colour is still the best answer - which is why
+ * that is the fallback rather than a colour of ours.
+ */
+const resolveColor = (type, arr, ink) => {
+  if (type === 'adaptive') return ink || 'var(--primary-text-color)';
   const rgb = toRgbArray(arr); if (rgb) return `rgb(${rgb.join(',')})`;
   if (typeof arr === 'string' && arr.startsWith('rgb')) return arr;
   return arr || 'var(--primary-text-color)';
@@ -685,14 +695,45 @@ class ScGauge extends LitElement {
       }
     }
 
+    // What an adaptive mark is actually drawn on. Read from the same values
+    // the background above is painted from, so the two cannot drift apart. A
+    // wave animation covers the background entirely, so its own colour is the
+    // field then; `null` back means the card shows through and the theme's
+    // text colour stays the answer.
+    const bgStops = bgMode === 'linear' || bgMode === 'radial'
+      ? (this._get('bg_gradient_preset', 'classic') === 'manual'
+          ? (this._getParsedManualStops(this._get('bg_manual_stops', []), data.min, data.max,
+                                        this._get('bg_threshold_unit', 'percent')) || []).map(st => st.c)
+          : [bgC1, bgC2])
+      : (bgMode === 'solid' ? [bgC1] : []);
+    const markInk = adaptiveInk({
+      fill: toRgbArray(hideSvgBg ? animCol : bgFill) || null,
+      mode: bgMode,
+      stops: bgStops.map(c => toRgbArray(c)).filter(Boolean),
+      opacity: bgOpacity,
+    });
+    /**
+     * The ink for a mark at this distance from the centre.
+     *
+     * A mark is only standing on the dial while it is drawn inside the
+     * background circle. A tick label sent out past it - the default sends it
+     * a good third further out than `bgR` - is standing on the card, and
+     * writing the dial's ink there is the same bug mirrored: white on a light
+     * dashboard. Outside the circle the theme's own colour is still the
+     * answer, so the ink is simply withheld and `resolveColor` falls back.
+     */
+    const inkAt = (r) => (markInk && r <= bgR ? markInk : undefined);
+    /** The same question for a text, which is placed by its offsets. */
+    const inkAtXY = (dx, dy) => inkAt(Math.hypot(dx, dy));
+
     const frameActive = this._get('frame_ring_active',false) === true;
     let frameNode = '';
     if (frameActive) {
       const fStroke  = safeFloat(this._get('frame_ring_width',  1.5),1.5) * scale;
       const fGap     = safeFloat(this._get('frame_ring_gap',    1.5),1.5) * scale;
       const fOpacity = safeFloat(this._get('frame_ring_opacity',1.0),1.0);
-      const fCol     = resolveColor(this._get('frame_ring_color_type','fixed'), this._get('frame_ring_color',[80,80,80]));
       const fRadius  = gaugeOuter(scale) - fStroke/2;
+      const fCol     = resolveColor(this._get('frame_ring_color_type','fixed'), this._get('frame_ring_color',[80,80,80]), inkAt(fRadius));
       const fClosed  = this._get('frame_ring_closed',false) === true;
       const pulseFrameStroke = pulseFrameClass ? `stroke: ${animCol};` : `stroke: ${fCol};`;
       
@@ -714,10 +755,15 @@ class ScGauge extends LitElement {
     if (tCount > 0) {
       const tLen=safeFloat(this._get('tick_length',3),3)*scale, tWid=safeFloat(this._get('tick_width',1),1)*scale;
       const rOut=ringPartRadius(radius, safeFloat(this._get('tick_offset',0),0), scale), rIn=rOut-tLen;
-      const tCol=resolveColor(this._get('tick_color_type','fixed'),this._get('tick_color',[128,128,128]));
-      const tlCol=resolveColor(this._get('tick_label_color_type','adaptive'),this._get('tick_label_color',null));
-      const labelTickCol=this._get('tick_label_tick_color',null)?resolveColor('fixed',this._get('tick_label_tick_color',null)):tlCol;
+      const tCol=resolveColor(this._get('tick_color_type','fixed'),this._get('tick_color',[128,128,128]),inkAt(rOut));
       const tlSize=safeFloat(this._get('tick_label_font_size',7),7)*scale, tlOff=safeFloat(this._get('tick_label_offset',10),10)*scale;
+      const tlCol=resolveColor(this._get('tick_label_color_type','adaptive'),this._get('tick_label_color',null),inkAt(radius+tlOff));
+      // The tick under a label borrows the label's setting where it has no
+      // colour of its own - but it is drawn at the tick's radius, not the
+      // label's, so it asks for the ink standing there.
+      const labelTickCol=this._get('tick_label_tick_color',null)
+        ? resolveColor('fixed',this._get('tick_label_tick_color',null))
+        : resolveColor(this._get('tick_label_color_type','adaptive'),this._get('tick_label_color',null),inkAt(rOut));
       const tlSpread=safeFloat(this._get('tick_label_spread',0),0)*scale;
 
       // What each tick would say, needed before any of them is drawn: how
@@ -773,8 +819,8 @@ class ScGauge extends LitElement {
       if (subTickCount > 0 && tCount > 1) {
         const stLen = safeFloat(this._get('sub_tick_length',1.5),1.5)*scale;
         const stWid = safeFloat(this._get('sub_tick_width',0.5),0.5)*scale;
-        const stCol = resolveColor(this._get('sub_tick_color_type','fixed'), this._get('sub_tick_color',[100,100,100]));
         const stROut = ringPartRadius(radius, safeFloat(this._get('sub_tick_offset',0),0), scale), stRIn = stROut - stLen;
+        const stCol = resolveColor(this._get('sub_tick_color_type','fixed'), this._get('sub_tick_color',[100,100,100]), inkAt(stROut));
 
         for (let i = 0; i < tCount - 1; i++) {
           const angStart = startAngle + (i/div)*totalAngle;
@@ -870,7 +916,8 @@ class ScGauge extends LitElement {
     const extraLabels = [];
     if (this._get('show_scale_label',false)) {
       const lTxt = data.unitPrefix+(this._get('scale_label_show_raw_unit',false)?this._get('scale_label_custom_unit',stateObj?.attributes?.unit_of_measurement||''):'');
-      const lCol = resolveColor(this._get('scale_label_color_type','adaptive'),this._get('scale_label_color',null));
+      const lCol = resolveColor(this._get('scale_label_color_type','adaptive'),this._get('scale_label_color',null),
+        inkAtXY(safeFloat(this._get('scale_label_offset_x',0),0)*scale, safeFloat(this._get('scale_label_offset_y',-18),-18)*scale));
       extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
     }
     if (this._get('show_multiplier_label',false) && tCount > 1) {
@@ -889,20 +936,21 @@ class ScGauge extends LitElement {
       // the setting; a fraction is drawn at the places it needs.
       const mNum = parseFloat(mValDisp.toFixed(mDec)) || parseFloat(mValDisp.toPrecision(2));
       const mStr=`${this._get('multiplier_prepend','x')}${mNum}${mPrefix}`;
-      const mCol=resolveColor(this._get('multiplier_color_type','adaptive'),this._get('multiplier_color',null));
+      const mCol=resolveColor(this._get('multiplier_color_type','adaptive'),this._get('multiplier_color',null),
+        inkAtXY(safeFloat(this._get('multiplier_offset_x',0),0)*scale, safeFloat(this._get('multiplier_offset_y',-30),-30)*scale));
       extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="multiplier" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${mStr}</text>`);
     }
     if (this._get('gauge_label_text','') && this._get('gauge_label_active',true)) {
       const glTxt=this._get('gauge_label_text',''), glSize=safeFloat(this._get('gauge_label_font_size',8),8)*scale;
       const glW=this._get('gauge_label_font_weight',600);
       const glX=this.CENTER+safeFloat(this._get('gauge_label_offset_x',0),0)*scale, glY=this.CENTER+safeFloat(this._get('gauge_label_offset_y',-8),-8)*scale;
-      const glCol=resolveColor(this._get('gauge_label_color_type','adaptive'),this._get('gauge_label_color',null));
+      const glCol=resolveColor(this._get('gauge_label_color_type','adaptive'),this._get('gauge_label_color',null),inkAtXY(glX-this.CENTER, glY-this.CENTER));
       extraLabels.push(svg`<text class="layer-elm-static" data-sc-part="gauge_label" x="${glX.toFixed(2)}" y="${glY.toFixed(2)}" fill="${glCol}" font-size="${glSize}px" font-weight="${glW}" text-anchor="middle" dominant-baseline="middle" style="pointer-events:none">${glTxt}</text>`);
     }
 
-    const pCol  = resolveColor(this._get('pointer_color_type','fixed'), this._get('pointer_color', [255,255,255]));
     const pW    = safeFloat(this._get('pointer_width',2),2)*scale, pLlen=safeFloat(this._get('pointer_length',10),10)*scale;
     const rTip  = radius-(safeFloat(this._get('pointer_offset',2),2)*scale), xBase=rTip-pLlen;
+    const pCol  = resolveColor(this._get('pointer_color_type','fixed'), this._get('pointer_color', [255,255,255]), inkAt(rTip));
     
     let shadowDef = '';
     let filterAttr = '';
@@ -995,7 +1043,7 @@ class ScGauge extends LitElement {
 
     const pointerLayers = html`
       ${filterAttr ? shadowAt(svg`<circle cx="0" cy="0" r="${dotR}" fill="${sCol}"/>${is3d ? '' : shape(sCol, null)}`) : ''}
-      ${layer(pivot, pivot, false, svg`<circle data-sc-part="pointer_center" cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${resolveColor(this._get('pointer_dot_color_type','fixed'), this._get('pointer_dot_color',[255,255,255]))}"/>`)}
+      ${layer(pivot, pivot, false, svg`<circle data-sc-part="pointer_center" cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${resolveColor(this._get('pointer_dot_color_type','fixed'), this._get('pointer_dot_color',[255,255,255]), inkAt(dotR))}"/>`)}
       ${(filterAttr && is3d) ? shadowAt(shape(sCol, null)) : ''}
       ${layer(pivot, pivot, true, svg`
           ${is3d ? svg`<defs>
@@ -1100,7 +1148,8 @@ class ScGauge extends LitElement {
             <text class="layer-elm-dynamic" data-sc-part="value"
                   x="${this.CENTER + safeFloat(this._get('value_offset_x',0),0)*scale}"
                   y="${this.CENTER + safeFloat(this._get('value_offset_y',15),15)*scale}"
-                  fill="${resolveColor(this._get('value_color_type','adaptive'),this._get('value_color',null))}"
+                  fill="${resolveColor(this._get('value_color_type','adaptive'),this._get('value_color',null),
+                    inkAtXY(safeFloat(this._get('value_offset_x',0),0)*scale, safeFloat(this._get('value_offset_y',15),15)*scale))}"
                   font-size="${safeFloat(this._get('value_font_size',12),12)*scale}px"
                   text-anchor="middle" font-weight="${this._get('value_font_weight',700)}">
               ${data.val.toFixed(parseInt(this._get('value_decimals',0)))}${data.unitPrefix}${this._get('value_show_raw_unit',false)

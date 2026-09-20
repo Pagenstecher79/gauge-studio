@@ -84,9 +84,20 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   for ticks and texts.
 - **40** - On a very thin frame it is hard to tell whether the inner or the
   outer radius is being grabbed.
-- **46** - Ticks, sub-ticks and every text should answer the gauge background
-  adaptively. Visible on a light dashboard theme when the big gauge's
-  background goes red: the marks become unreadable.
+- **46** - ~~Ticks, sub-ticks and every text should answer the gauge
+  background adaptively. Visible on a light dashboard theme when the big
+  gauge's background goes red: the marks become unreadable.~~ Done.
+  "Adaptive" meant `var(--primary-text-color)`, which is the right answer for
+  a mark standing on the card and the wrong one the moment the gauge paints a
+  field of its own. `adaptive-ink.js` answers the two questions separately:
+  what the mark is drawn on - a threshold's or a pulse's fill first, else the
+  background's own colour, a gradient averaged, and nothing at all once the
+  opacity lets the card through - and then black or white against it. By
+  seen lightness, not the WCAG ratio: against `#ff3232` the ratio prefers
+  near-black, which is the very colour the complaint is about. Each mark asks
+  at its own radius, because a tick label sent out past the background circle
+  - where the default puts it - is standing on the card again, and the dial's
+  ink there would be the same bug mirrored.
 
 ## Bar
 
