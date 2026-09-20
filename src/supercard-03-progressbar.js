@@ -2,10 +2,12 @@ import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
 import { squareBarOnCanvas } from "./canvas-model.js";
 import { lightParams, reliefPattern, reliefShadow, reliefLayers } from "./glass-light.js";
-import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding } from "./pill-glass.js";
+import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, pillFontSize,
+         pillCrossExtent } from "./pill-glass.js";
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
+import { adaptiveInk } from "./adaptive-ink.js";
 
 const SC = window.SupercardUtils;
 
@@ -456,14 +458,40 @@ class ScProgressbar extends LitElement {
     // backdrop to bend when the pill's own background is opaque. The flag is
     // set where that is known, in the pill itself.
     let lensFraction = 0;
+    // A rule, not a value: whether a pill turned on its end fits depends on
+    // how tall the bar is drawn, which is a layout result. See `pillAt`.
+    let pillUprightCSS = '';
 
     if (showInd) {
       const indColor = this._get('indicator_color', '#ffffff');
       const indThick = parseDim(this._get('indicator_thickness', 2), `2${u}`, u);
-      
-      const lineStyle = isHoriz 
-        ? `position:absolute; top:0; bottom:0; width:${indThick}; background:${indColor}; left:calc(${targetPct} * 100%); transform:translateX(-50%) translateZ(0); z-index:${ELM_FLOAT};`
-        : `position:absolute; left:0; right:0; height:${indThick}; background:${indColor}; bottom:calc(${targetPct} * 100%); transform:translateY(50%) translateZ(0); z-index:${ELM_FLOAT};`;
+
+      // The line marks the fill's edge, so it stands on two fields at once:
+      // half of it lies on the fill and half on the track. One ink has to be
+      // wrong on one of them, which is why the adaptive line is drawn twice -
+      // the dual-adaptive answer the bar's ticks already give.
+      //
+      // Over the fill the field is known exactly, and the ink for it is
+      // `adaptive-ink.js`: lightness rather than a contrast ratio, because a
+      // two-pixel line on a saturated hue is read by lightness and not by a
+      // ratio built for text.
+      //
+      // Over the track it is not known, and asking the background colour is
+      // worse than not asking. A track is painted at a tenth of its colour by
+      // default, so what the eye sees there is the card - and a white track at
+      // half strength over a dark dashboard reads as mid-grey while the
+      // colour says white, which is how the adaptive line came out near-black
+      // on grey and all but vanished. The theme's own text colour is right on
+      // the card by definition, and the card is what the track is showing.
+      const lineAdaptive = this._get('indicator_color_adaptive', false);
+      const inkOnTrack = lineAdaptive ? 'var(--primary-text-color)' : indColor;
+      const inkOnFill = lineAdaptive
+        ? (adaptiveInk({ fill: SC.toRgb(exactHexColor) }) || 'var(--primary-text-color)')
+        : indColor;
+
+      const lineStyle = (col) => isHoriz
+        ? `position:absolute; top:0; bottom:0; width:${indThick}; background:${col}; left:calc(${targetPct} * 100%); transform:translateX(-50%) translateZ(0); z-index:${ELM_FLOAT};`
+        : `position:absolute; left:0; right:0; height:${indThick}; background:${col}; bottom:calc(${targetPct} * 100%); transform:translateY(50%) translateZ(0); z-index:${ELM_FLOAT};`;
       
       let realPillHtml = '';
       if (this._get('indicator_value', false)) {
@@ -514,42 +542,103 @@ class ScProgressbar extends LitElement {
            glassCSS = `box-shadow: 0 2px 2px rgba(0,0,0,0.25); border: none;`;
          }
 
-         const pSize = parseDim(this._get('indicator_value_font_size', 10), `10${u}`, u);
-         const pRot = (this._get('indicator_value_rotation', 'auto') === 'auto') ? (isHoriz ? -90 : 0) : parseInt(this._get('indicator_value_rotation'));
+         // `auto` used to cross the pill with the bar, on the reasoning that a
+         // pill lying along the bar covers a long stretch of it. What it
+         // actually did on a horizontal bar was stand the reading on its end,
+         // where it has the bar's height to fit into and has to shrink to get
+         // there. Upright is what a reading is for, so that is what `auto`
+         // means now - the same 0 degrees a vertical bar has always had.
+         const pRot = (this._get('indicator_value_rotation', 'auto') === 'auto') ? 0 : parseInt(this._get('indicator_value_rotation'));
          const isVertRot = Math.abs(pRot) === 90;
-         
+
          // A liquid pill stands further off the text than a flat one, and the
          // clamp that keeps it inside the bar has to know by how much or the
          // rim hangs over the end at 100 %.
          const pad = liquidPadding(glassEffect);
 
-         // NEW: Dynamic width calculation based on text length so the pill never overflows
-         const halfWidth = `calc(${pSize} * (0.8 + ${indDisplayValue.length} * 0.3 + ${pad.clampEm}))`;
-         const halfHeight = `calc(${pSize} * 1.1)`;
-         const pClampBase = isHoriz ? (isVertRot ? halfHeight : halfWidth) : (isVertRot ? halfWidth : halfHeight);
-         
-         // NEW: Smart indent add-on for the pill
-         let pClampMin = pClampBase;
-         let pClampMax = pClampBase;
-         if (isHoriz && hasCardRadius) {
-           if (this._isAtLeftEdge) pClampMin = `calc(${pClampBase} + ${edgeIndentStr})`;
-           if (this._isAtRightEdge) pClampMax = `calc(${pClampBase} + ${edgeIndentStr})`;
-         }
+         const pSizeSet = parseDim(this._get('indicator_value_font_size', 10), `10${u}`, u);
 
-         const pPosStyle = isHoriz 
-           ? `left: clamp(${pClampMin}, calc(${targetPct} * 100%), calc(100% - ${pClampMax})); top: 50%; transform: translate(-50%, -50%) rotate(${pRot}deg) translateZ(0); will-change: left, transform; transition: background 0.1s linear, color 0.1s linear;` 
-           : `bottom: clamp(${pClampBase}, calc(${targetPct} * 100%), calc(100% - ${pClampBase})); left: 50%; transform: translate(-50%, 50%) rotate(${pRot}deg) translateZ(0); will-change: bottom, transform; transition: background 0.1s linear, color 0.1s linear;`;
+         /**
+          * Everything about the pill that depends on which way it is turned:
+          * the size that fits, the clamp that keeps it off the ends of the bar
+          * and the transform that turns it.
+          *
+          * It is asked twice - once for the rotation the card sets, once for
+          * upright - because a pill on its end can be set on a bar that is too
+          * flat to hold it, and the card stands it up rather than shrink the
+          * reading out of legibility. Two answers built by one piece of
+          * arithmetic cannot drift apart, which a second copy of it would.
+          *
+          * `auto` used to cross the pill with the bar, and the reading then
+          * ran across the narrow way of it - two lines on a slim bar, or ends
+          * cut off by the bar's own clipping. The pill is `nowrap` now and the
+          * size gives way instead. Rotation is a transform and happens after
+          * layout, so which screen axis the text ends up running along is
+          * known here and nowhere else: hence the extents handed over.
+          */
+         const pillAt = (/** @type {number} */ rot) => {
+           const vert = Math.abs(rot) === 90;
+           const size = pillFontSize(pSizeSet, indDisplayValue.length, pad,
+                                     vert ? '100cqh' : '100cqw',
+                                     vert ? '100cqw' : '100cqh');
+           const halfWidth = `calc(${size} * (0.8 + ${indDisplayValue.length} * 0.3 + ${pad.clampEm}))`;
+           const halfHeight = `calc(${size} * 1.1)`;
+           const base = isHoriz ? (vert ? halfHeight : halfWidth) : (vert ? halfWidth : halfHeight);
+           let min = base, max = base;
+           if (isHoriz && hasCardRadius) {
+             if (this._isAtLeftEdge) min = `calc(${base} + ${edgeIndentStr})`;
+             if (this._isAtRightEdge) max = `calc(${base} + ${edgeIndentStr})`;
+           }
+           const decls = isHoriz
+             ? [`left: clamp(${min}, calc(${targetPct} * 100%), calc(100% - ${max}))`,
+                `top: 50%`,
+                `transform: translate(-50%, -50%) rotate(${rot}deg) translateZ(0)`,
+                `will-change: left, transform`,
+                `transition: background 0.1s linear, color 0.1s linear`]
+             : [`bottom: clamp(${base}, calc(${targetPct} * 100%), calc(100% - ${base}))`,
+                `left: 50%`,
+                `transform: translate(-50%, 50%) rotate(${rot}deg) translateZ(0)`,
+                `will-change: bottom, transform`,
+                `transition: background 0.1s linear, color 0.1s linear`];
+           return { size, decls };
+         };
+
+         const turned = pillAt(pRot);
+         const pSize = turned.size;
+         const pPosStyle = turned.decls.join('; ') + ';';
+
+         // The one arrangement a user can set that cannot be honoured: a pill
+         // on its end needs the bar to be as tall as the pill is long, and a
+         // flat bar is not. The card answers it where it is asked - in CSS,
+         // against the bar's own container - so it goes on answering as the
+         // dashboard is resized, which nothing measured at render time could.
+         // The setting is kept, not rewritten: widen the bar and the pill lies
+         // back down on its side.
+         //
+         // Only for a size in pixels, because the threshold is a pixel figure;
+         // a size written in any other unit keeps the plain shrink.
+         const pxSet = /^(\d+(?:\.\d+)?)px$/.exec(pSizeSet);
+         if (isVertRot && pxSet) {
+           const needs = pillCrossExtent(parseFloat(pxSet[1]), indDisplayValue.length, pad);
+           const up = pillAt(0);
+           pillUprightCSS = `@container (max-height: ${(needs - 0.01).toFixed(2)}px) {
+        .sc-pb-pill, .sc-pb-pill-ghost {
+          font-size: ${up.size} !important;
+          ${up.decls.map(d => d + ' !important').join(';\n          ')};
+        }
+      }`;
+         }
 
          // 1. The real layer
          realPillHtml = html`
-            <div class="sc-pb-pill" data-sc-part="pill" style="position:absolute; z-index:${ELM_FLOAT + 50}; background:${finalBg}; color:${pCol}; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; font-weight:bold; display:flex; align-items:center; justify-content:center; ${glassCSS} ${pPosStyle}">
+            <div class="sc-pb-pill" data-sc-part="pill" style="position:absolute; z-index:${ELM_FLOAT + 50}; background:${finalBg}; color:${pCol}; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; font-weight:bold; white-space:nowrap; display:flex; align-items:center; justify-content:center; ${glassCSS} ${pPosStyle}">
               ${indDisplayValue}
             </div>`;
 
          // 2. The goo clone
          if (isGooey) {
             indicatorGooeyHtml = html`
-              <div style="position:absolute; z-index:${ELM_DYNAMIC}; background:${exactHexColor}; color:transparent; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; display:flex; pointer-events:none; ${pPosStyle}">
+              <div class="sc-pb-pill-ghost" style="position:absolute; z-index:${ELM_DYNAMIC}; background:${exactHexColor}; color:transparent; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; white-space:nowrap; display:flex; pointer-events:none; ${pPosStyle}">
                 ${indDisplayValue}
               </div>`;
          }
@@ -559,7 +648,14 @@ class ScProgressbar extends LitElement {
       // its chip, so it breathes whenever the pill is in hand - but its own
       // colour and thickness are set on that chip too, and while one of those
       // is being held the line answers alone.
-      indicatorTopHtml = html`<div class="sc-pb-indicator-line" data-sc-part="pill indicator_line" style="${lineStyle}"></div>${realPillHtml}`;
+      // The second copy carries the same two part names as the first: it is
+      // the same line, and a highlight that inked only the half outside the
+      // fill would be pointing at half a mark.
+      const filledLineHtml = lineAdaptive ? html`
+        <div style="position:absolute; inset:0; z-index:${ELM_FLOAT}; clip-path:${fillClipPath}; pointer-events:none;">
+          <div class="sc-pb-indicator-line" data-sc-part="pill indicator_line" style="${lineStyle(inkOnFill)}"></div>
+        </div>` : '';
+      indicatorTopHtml = html`<div class="sc-pb-indicator-line" data-sc-part="pill indicator_line" style="${lineStyle(inkOnTrack)}"></div>${filledLineHtml}${realPillHtml}`;
     }
 
     let circularHtml = ''; 
@@ -1037,7 +1133,7 @@ class ScProgressbar extends LitElement {
     const hostCSS = `width: ${w}; height: ${h}; --pb-radius: ${radius}; --pb-bg-color: ${bgColor};`;
 
     return html`
-      <style>:host { ${hostCSS} }</style>
+      <style>:host { ${hostCSS} } ${pillUprightCSS}</style>
       
       ${lensFraction ? html`
       <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
@@ -1251,18 +1347,25 @@ const STYLE_FIELDS = [
 
   { id: '_section_indicator',  icon: icon('pill'), label: '── Indicator & Pill',  type: 'section', condition: cfg => isLin(cfg) },
   { id: 'show_indicator',      label: 'Show indicator line', type: 'checkbox', condition: cfg => isLin(cfg) },
-  { id: 'indicator_color',     label: 'Line colour',       type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
+  { id: 'indicator_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
+  { id: 'indicator_color',     label: 'Line colour',       type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator && !cfg.indicator_color_adaptive, framedBy: 'pill' },
   { id: 'indicator_thickness', label: 'Line thickness (px/%)',type: 'text', placeholder: '2px', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
   { type: 'note', framedWhen: 'pill', label: 'The pill is on the canvas while this bar is open - the line it rides, its own colours, its type and its glass are all under the chip.' },
   { id: 'indicator_value',     label: 'Show pill with value on line', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
   { id: 'value_animated',      label: 'Animate value (follow fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
   { id: 'indicator_value_rotation', label: 'Pill rotation', type: 'select', framedBy: 'pill', options: [
-    { value: 'auto', label: 'Auto (H ↔ V crossed)' },
+    { value: 'auto', label: 'Auto (upright, as it reads)' },
     { value: '0', label: '0° (horizontal)' },
     { value: '90', label: '90°' },
     { value: '-90', label: '-90°' },
     { value: '180', label: '180° (upside down)' }
   ], condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
+  // Said where the turn is chosen, because that is where it looks like a free
+  // choice. The card keeps the setting either way - it is the drawing that
+  // gives way, and it gives way back the moment there is room.
+  { type: 'note', framedBy: 'pill', label: 'On its end, the reading has to fit across the bar. Where the bar is too flat for it the pill stands itself upright instead of shrinking out of legibility, and lies back down when the bar is tall enough.',
+    condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value
+      && Math.abs(parseInt(cfg.indicator_value_rotation)) === 90 },
   { id: 'indicator_value_decimals', label: 'Pill decimal places', type: 'range', min: 0, max: 3, step: 1, placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
   { id: 'indicator_value_adaptive_mode', label: 'Adaptive behavior', type: 'select', framedBy: 'pill', options: [
     { value: 'none', label: 'None (manual colours)' },
