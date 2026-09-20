@@ -129,6 +129,37 @@ function withoutKeysDeep(value, keys) {
 
 
 /**
+ * A bar's label with the weight written the one way it is read.
+ *
+ * `label_bold` was a checkbox: normal or bold, nothing between. The label has
+ * three weights now, like the gauge's, and `label_font_weight` holds them -
+ * so a saved `label_bold` is turned into the weight it drew and taken away.
+ * The renderer still reads it, because a card nobody edits is never rewritten
+ * and has to keep drawing what it drew; this is what stops the two from
+ * sitting in one config, each looking like the setting.
+ *
+ * A card that already carries a weight keeps it: the checkbox cannot have
+ * been what drew that label.
+ *
+ * @param {any} slot
+ * @returns {any[]|null} the rewritten bars, or null where nothing changed
+ */
+function withLabelWeights(slot) {
+  const list = slot?.progressbars;
+  if (!Array.isArray(list)) return null;
+  let touched = false;
+  const next = list.map(bar => {
+    if (!bar || typeof bar !== 'object' || !('label_bold' in bar)) return bar;
+    touched = true;
+    const { label_bold: bold, ...rest } = bar;
+    return 'label_font_weight' in rest
+      ? rest
+      : { ...rest, label_font_weight: bold ? '700' : '400' };
+  });
+  return touched ? next : null;
+}
+
+/**
  * The keys whose value is a list of gradient stops.
  *
  * All three used to be written `{value, color}` by the gauge and
@@ -248,6 +279,9 @@ export function stripDeadConfig(slot) {
     const next = list.filter(entry => !isDead(entry));
     if (next.length !== list.length) lists[key] = next;
   }
+
+  const weighted = withLabelWeights(lists.progressbars ? { progressbars: lists.progressbars } : slot);
+  if (weighted) lists.progressbars = weighted;
 
   let cleaned = Object.keys(lists).length ? { ...slot, ...lists } : slot;
 

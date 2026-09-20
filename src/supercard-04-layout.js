@@ -725,7 +725,8 @@ const INNER_RATIO = 1;
  *
  * A card that already says 600 is left alone: it draws what it always drew.
  */
-const textWeights = (/** @type {string} */ key, /** @type {string} */ dflt) => ({
+const textWeights = (/** @type {string} */ key,
+                     /** @type {string|((cfg: any) => string)} */ dflt) => ({
   key, dflt, order: ['400', '500', '700'],
   of: { '400': { glyph: 'A', label: 'to normal', weight: 400 },
         '500': { glyph: 'A', label: 'to medium', weight: 500 },
@@ -1449,6 +1450,12 @@ const BAR_PARTS = Object.freeze({
     label: 'Label', section: '_section_label', spot: { l: 25, t: 28 },
     on: (/** @type {any} */ cfg) => !!cfg.show_label,
     turnOn: { show_label: true }, turnOff: { show_label: false },
+    // `label_bold` is the weight this label had before it had three of them.
+    // A card that still carries it has never been edited since, so it decides
+    // what the button starts on - otherwise a bold label would show under a
+    // button reading normal, and the first press would make it lighter.
+    weight: textWeights('label_font_weight',
+                        (/** @type {any} */ cfg) => cfg.label_bold ? '700' : '400'),
     steps: [
       { key: 'label_font_size', icon: icon('a-large-small'), by: 1, min: 4, max: 60, dflt: 12,
         what: 'label type' },
@@ -1598,6 +1605,7 @@ const BAR_PARTS = Object.freeze({
     turnOn: { show_tick_labels: true, show_ticks: true },
     turnOff: { show_tick_labels: false },
     seed: { tick_count: 11, tick_labels_size: '10' },
+    weight: textWeights('tick_labels_weight', '400'),
     steps: [
       { key: 'tick_label_step', icon: icon('hash'), by: 1, min: 1, max: 20, dflt: 1,
         what: 'every Xth tick numbered' },
@@ -5318,6 +5326,7 @@ class ScCanvasEditor extends LitElement {
             @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'chip')}>
         ${spec.label}
         ${spec.shapes && sel ? this._renderSwap(spec.label, spec.shapes, 'Make') : ''}
+        ${spec.weight && sel ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
         ${spec.turnOff ? html`
           <button class="ring-drop"
                   title=${`Take the ${spec.label.toLowerCase()} off this ${target.k.noun}`}
@@ -5878,7 +5887,10 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     if (!target) return '';
     const held = String(target.cfg[sw.key] ?? '');
-    const now = sw.order.includes(held) ? held : sw.dflt;
+    // A default may be a question about the entry, because what a part is
+    // drawn at now can be an older setting nobody has replaced yet.
+    const dflt = typeof sw.dflt === 'function' ? sw.dflt(target.cfg) : sw.dflt;
+    const now = sw.order.includes(held) ? held : dflt;
     const next = sw.order[(sw.order.indexOf(now) + 1) % sw.order.length];
     return html`
       <button class="ring-shape"

@@ -121,8 +121,16 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   only by the edit button that brought it and by the reset button; and the
   indicator line carries its own name beside the pill's, so a row that holds
   the line's colour or thickness pulses the line alone.
-- **19** - The bar label has no weight in its chip menu; neither do the bar's
-  tick labels.
+- **19** - ~~The bar label has no weight in its chip menu; neither do the bar's
+  tick labels.~~ Done. Both now carry the gauge's three-step weight button on
+  their chip - `weight` was only ever drawn on a part's frame, and a bar's
+  parts have chips rather than frames, so it is drawn on the chip too. The
+  label's weight was `label_bold`, a checkbox with two of the three; it is
+  `label_font_weight` now, the renderer still reads the checkbox where nothing
+  has replaced it, and `stripDeadConfig` rewrites it on the next edit so the
+  two never sit in one config. The tick labels had no weight at all, and the
+  one they are given is written only once somebody sets it - a label with none
+  keeps inheriting the card's, which is what every bar drawn so far is doing.
 - **20** - The bar label cannot be dragged out and placed by hand.
 - **35** - Check the pill's automatic alignment, and make sure the pill never
   wraps to two lines - shrinking the font where it must.
