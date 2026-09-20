@@ -89,6 +89,37 @@ export function rowHeights(rows) {
 }
 
 /**
+ * The same rows, with their heights scaled to fill the card.
+ *
+ * For a layout that is switched on, `rowHeights` is the truth and must stay
+ * untouched: rows adding up to more than 100 really do overflow the card, and
+ * a configuration may be relying on it.
+ *
+ * A layout that is switched off is a different thing. Its row heights have
+ * never been on screen - `layout_active` gates the renderer - so they are not
+ * a picture to preserve but a draft, and a draft is routinely abandoned at the
+ * editor's starting value. `flex: 1` means one per cent of the card, so the
+ * two gauges in such a row migrate into boxes two units across on a
+ * four-hundred-unit canvas: a card converted out of existence. Sharing the
+ * card between the rows instead is the one reading that cannot do that, and
+ * for a single-row draft - which is what these are - it gives back exactly the
+ * arrangement the cells describe.
+ *
+ * Only the heights are touched. The widths across a row are the arrangement,
+ * and the arrangement is what the draft is actually saying.
+ *
+ * @param {any[]} rows
+ * @returns {any[]}
+ */
+export function filledRows(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const heights = rowHeights(list);
+  const sum = heights.reduce((a, b) => a + b, 0);
+  if (!(sum > 0)) return list;
+  return list.map((row, i) => ({ ...row, flex: heights[i] / sum * 100 }));
+}
+
+/**
  * Width of every cell in a row, as a percentage of the card.
  *
  * Cells, unlike rows, carry only a `flex-basis` and keep the default
@@ -981,6 +1012,60 @@ function editedSection(node) {
     n = root && root.host ? root.host : n.parentElement;
     const section = n && n._params && n._params.sectionConfig;
     if (section) return section;
+  }
+  return null;
+}
+
+/**
+ * Tells the card edit dialog that what the editor has just committed is not
+ * the user's unsaved work.
+ *
+ * Home Assistant compares the dialog's working copy against the config it
+ * opened with, and a difference makes the dialog dirty: it then passes
+ * `prevent-scrim-close` to its `ha-dialog`, which turns the light dismiss off,
+ * and a click on the dashboard beside the dialog does nothing at all - no
+ * close, and no confirmation either, so the card reads as stuck. That is the
+ * right behaviour for an edit somebody made. It is the wrong behaviour for a
+ * migration the editor stages on its own while it is opening, before anyone
+ * has touched a control.
+ *
+ * So the one place that commits without being asked says so afterwards. The
+ * dialog is found the way everything else in here finds it, by walking out
+ * through the shadow roots, and the whole thing is feature-detected: this is
+ * Home Assistant's own bookkeeping, and a release that renames it should cost
+ * a dialog that closes one way rather than an editor that throws.
+ *
+ * It has to run after the commit has been through Home Assistant, which is why
+ * the caller schedules it rather than calling it in the same tick - and why
+ * the caller looks the dialog up with `editingDialog` *before* committing and
+ * hands it over. The commit is what replaces the element that made it, so by
+ * the time the task runs there is no longer a path from that element to
+ * anything: an editor that walked up then would find a detached root and
+ * silently do nothing.
+ *
+ * @param {any} node the dialog itself, or an element inside it
+ * @returns {boolean} whether there was a dialog that understood
+ */
+export function markDialogClean(node) {
+  const dialog = editingDialog(node);
+  if (!dialog) return false;
+  dialog._dirtyStateContext.markClean();
+  return true;
+}
+
+/**
+ * The card edit dialog this node is in, if it keeps dirty state the way this
+ * version of Home Assistant does. The node itself counts, so the answer can be
+ * passed straight back to `markDialogClean`.
+ *
+ * @param {any} node
+ * @returns {any} the dialog element, or null
+ */
+export function editingDialog(node) {
+  for (let n = node, hops = 0; n && hops < 20; hops++) {
+    if (typeof n._dirtyStateContext?.markClean === 'function') return n;
+    const root = typeof n.getRootNode === 'function' ? n.getRootNode() : null;
+    n = root && root.host ? root.host : n.parentElement;
   }
   return null;
 }

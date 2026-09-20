@@ -4,7 +4,7 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
          isSquareLocked, isPinned, DEFAULT_CANVAS, DEFAULT_GRID,
          gridRowsToPx, gridColumnsToPx, gridSize, canvasFromGrid, canvasFromCard,
          pinnedToShape, rescaleCanvas, rowsForShape,
-         sectionColumns, sectionWidthPx, HA_COLUMN_COUNT,
+         sectionColumns, sectionWidthPx, editingDialog, markDialogClean, HA_COLUMN_COUNT,
          canDuplicate, reorderElement, overlappingElements,
          alignElements, restorePatch,
          NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview,
@@ -2250,7 +2250,11 @@ class ScCanvasEditor extends LitElement {
     // only ever from off to on, for a card that already has a canvas.
     if (this.slot?.canvas && !this.slot.layout_active && !this._activated) {
       this._activated = true;
+      // Unasked-for, like the adoption's own commit, and it must not count as
+      // unsaved work either - see `markDialogClean`.
+      const dialog = editingDialog(this);
       this.commitFn?.('__merge__', { layout_active: true });
+      setTimeout(() => markDialogClean(dialog));
     }
     if (changed.has('slot') && !this._zoomRestored && this._zoomKey) {
       this._zoomRestored = true;
@@ -6845,7 +6849,17 @@ class ScCanvasAdopt extends LitElement {
     // content row instead. A layout that was switched off comes on, because
     // the alternative is a card that cannot be laid out at all. It travels in
     // this commit: a second one in the same tick would be lost.
-    if (migrated) this.commitFn('__merge__', { ...migrated, layout_active: true });
+    if (!migrated) return;
+    // Nobody asked for that commit, so it must not count as unsaved work: a
+    // dirty dialog turns Home Assistant's light dismiss off, and the card then
+    // refuses to close when the dashboard beside it is clicked. See
+    // `markDialogClean`. The dialog is looked up first, because the commit
+    // replaces this element with the canvas editor and there is no walking up
+    // out of a detached one; and it is told afterwards, because Home Assistant
+    // has to have taken the commit in before it can be told to forget it.
+    const dialog = editingDialog(this);
+    this.commitFn('__merge__', { ...migrated, layout_active: true });
+    setTimeout(() => markDialogClean(dialog));
   }
 
   render() { return html``; }
@@ -6913,14 +6927,17 @@ Object.assign(window.SupercardModules['layout'], (() => {
    * the canvas its rows describe and then gets the same editor; a card on
    * neither is offered one.
    *
-   * The difference between migrating and offering is whether the picture
-   * survives it. A rows layout migrates position for position - it is already
-   * being drawn as a canvas on the dashboard, rows-compat.js does that in
-   * memory on every load, so writing it down changes the model and nothing
-   * else. A card that never had a layout draws the content row, and the
-   * canvas built from it arranges the same contents as bands, top to bottom.
-   * That is a new arrangement, however faithful the contents - so it stays an
-   * offer, with the button that says what it will do.
+   * The difference between migrating and offering is whether there is a layout
+   * to migrate at all. A rows layout migrates position for position - one that
+   * is switched on is already being drawn as a canvas on the dashboard,
+   * rows-compat.js does that in memory on every load, so writing it down
+   * changes the model and nothing else; one that is switched off is a draft,
+   * and `rowsToRead` shares the card between its rows rather than believing a
+   * height nobody has ever seen. A card that never had a layout draws the
+   * content row, and the canvas built from it arranges the same contents as
+   * bands, top to bottom. That is a new arrangement, however faithful the
+   * contents - so that one stays an offer, with the button that says what it
+   * will do.
    */
   function renderCustomBlock(commitFn, hass, slot, cardConfig) {
     if (slot?.canvas) {

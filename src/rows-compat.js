@@ -21,7 +21,7 @@
  * recoverable exactly as it was.
  */
 import {
-  migrateLayoutToCanvas, repointPatterns, canvasFromBox,
+  migrateLayoutToCanvas, repointPatterns, canvasFromBox, filledRows,
   paintedCells, colouredCells, glassedCells, soleElementTargets, deadCellTargets,
 } from "./canvas-model.js";
 
@@ -33,6 +33,22 @@ import {
  */
 export function needsRowsCompat(slot) {
   return !slot?.canvas && Array.isArray(slot?.layout_rows) && slot.layout_rows.length > 0;
+}
+
+/**
+ * The rows to build the canvas from.
+ *
+ * A layout that is switched on is reproduced exactly - it is on screen, and
+ * the migration's whole promise is that the picture survives it. A layout that
+ * is switched off has never been on screen, so there is no picture to keep and
+ * its row heights are a draft rather than a fact: left alone, a row abandoned
+ * at `flex: 1` converts a card's two gauges into two specks. See `filledRows`.
+ *
+ * @param {any} slot
+ * @returns {any[]}
+ */
+function rowsToRead(slot) {
+  return slot.layout_active ? slot.layout_rows : filledRows(slot.layout_rows);
 }
 
 /**
@@ -64,13 +80,14 @@ export function rowsAsCanvas(slot, boxW, boxH) {
 
   // Glass on a cell that holds exactly one element follows that element, so
   // that cell needs no surface painted behind it - unless it is coloured too.
-  const follows = soleElementTargets(slot.layout_rows);
+  const rows = rowsToRead(slot);
+  const follows = soleElementTargets(rows);
   const coloured = live(colouredCells(slot));
   const onElement = live(glassedCells(slot)).filter(k => k in follows);
   const surfaced = live(paintedCells(slot)).filter(k => !onElement.includes(k) || coloured.includes(k));
 
   const { elements, cellTargets } =
-    migrateLayoutToCanvas(slot.layout_rows, shape, { targetedCells: surfaced, slot });
+    migrateLayoutToCanvas(rows, shape, { targetedCells: surfaced, slot });
   const { lists } = repointPatterns(slot, cellTargets, follows);
 
   return { canvas: { ...shape, elements }, ...lists };

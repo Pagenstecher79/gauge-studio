@@ -32,6 +32,8 @@ import {
   gridColumnsToPx,
   sectionColumns,
   sectionWidthPx,
+  markDialogClean,
+  editingDialog,
   gridSize,
   canvasFromGrid,
   defaultShapeRows,
@@ -1767,6 +1769,44 @@ describe('repointPatterns with glass following the element', () => {
     const slot = { fx_glass_patterns: [{ id: 2, target: 'r0c0' }] };
     repointPatterns(slot, cellTargets, follows);
     expect(slot.fx_glass_patterns[0].target).toBe('r0c0');
+  });
+});
+
+describe('markDialogClean', () => {
+  const nest = (tags) => {
+    const nodes = tags.map(t => ({ ...t, getRootNode: () => ({ host: null }) }));
+    for (let i = nodes.length - 1; i > 0; i--) nodes[i].getRootNode = () => ({ host: nodes[i - 1] });
+    return nodes[nodes.length - 1];
+  };
+
+  it('tells the dialog it found, however deep the editor sits', () => {
+    let called = 0;
+    const editor = nest([{ _dirtyStateContext: { markClean: () => { called++; } } }, {}, {}]);
+    expect(markDialogClean(editor)).toBe(true);
+    expect(called).toBe(1);
+  });
+
+  // The element that commits is gone by the time the task runs, so the caller
+  // looks the dialog up first and hands that over: it has to be accepted as
+  // the node, not only as something above one.
+  it('accepts the dialog itself, which is what the caller keeps hold of', () => {
+    let called = 0;
+    const editor = nest([{ _dirtyStateContext: { markClean: () => { called++; } } }, {}, {}]);
+    const dialog = editingDialog(editor);
+    expect(dialog).not.toBe(null);
+    expect(markDialogClean(dialog)).toBe(true);
+    expect(called).toBe(1);
+  });
+
+  // It reaches into Home Assistant's own bookkeeping, so the version that
+  // renames it has to cost a dialog that closes differently, not an editor
+  // that throws on open.
+  it('says no and does nothing when there is no dialog to tell', () => {
+    expect(markDialogClean(nest([{}, {}]))).toBe(false);
+    expect(markDialogClean(nest([{ _dirtyStateContext: {} }, {}]))).toBe(false);
+    expect(markDialogClean(nest([{ _dirtyStateContext: { markClean: 'yes' } }, {}]))).toBe(false);
+    expect(markDialogClean(null)).toBe(false);
+    expect(markDialogClean({})).toBe(false);
   });
 });
 

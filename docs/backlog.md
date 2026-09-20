@@ -212,10 +212,26 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   width change imposed the old 2:1 default shape on a canvas someone had
   drawn square. Neither happens now; worth a second look if a ring still
   comes back oval.
-- **44** - The automatic conversion is still wrong. Cards 10 and 11 in the
-  showcase 2 section are where to see it.
-- **45** - On some cards HA does not return to the dashboard when the
-  dashboard is clicked beside the card editor.
+- **44** - ~~The automatic conversion is still wrong. Cards 10 and 11 in the
+  showcase 2 section are where to see it.~~ Done. Both cards carried a rows
+  layout that was switched *off*, so the old renderer never drew it and its
+  row height was a value somebody stopped typing - `flex: 1` and `flex: 2`,
+  which are one and two per cent of the card. Reproduced faithfully, the two
+  gauges in them came out as boxes two units across on a four-hundred-unit
+  canvas. A layout that is on is still reproduced exactly; one that is off now
+  goes through `filledRows`, which shares the card between the rows and leaves
+  the widths - the arrangement - alone. Both cards convert to the two
+  half-width gauges they have always shown.
+- **45** - ~~On some cards HA does not return to the dashboard when the
+  dashboard is clicked beside the card editor.~~ Done. Those were the cards
+  that get something committed while the editor is opening - the staged
+  rows-to-canvas migration, and the `layout_active` switch for a card carrying
+  a canvas nobody can see. Home Assistant reads any difference from the config
+  it opened with as unsaved work, passes `prevent-scrim-close` to the dialog
+  and switches the light dismiss off, so the click beside it does nothing at
+  all - not even a confirmation. Both commits now tell the dialog to forget
+  them (`markDialogClean`), and the first real edit is what makes it dirty
+  again.
 
 ## Later
 
