@@ -138,9 +138,9 @@ class ScColorEditor extends LitElement {
         { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
           label: 'The corners are on the canvas - drag either grip, at the bottom '
                + 'left or the top right.' },
-        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
-          label: 'Each side can be bowed out or in from the grip on its middle. '
-               + 'Double-click one to put that side straight again.' },
+        // The side grips are switched off on the canvas (`sides` on the
+        // surface kind), so the line that pointed at them would be pointing
+        // at nothing. It goes back in with them.
         { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox',
           value: autoBorder, framedBy: 'corners' },
         { id: 'border_radius', label: 'Corner radius (manual)', type: 'length',

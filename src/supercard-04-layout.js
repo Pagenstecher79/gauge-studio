@@ -2515,8 +2515,14 @@ const INNER_KINDS = Object.freeze({
     // what says the radius is set by hand, which is the switch the menu offers
     // above the same number.
     // Every side of a box can be bowed, and the keys are always the same, so
-    // the kind has nothing to say here beyond that it can be.
-    sides: true,
+    // the kind would have nothing to say here beyond that it can be.
+    //
+    // Switched off for now, and only here: a card that already carries a bow
+    // is still drawn with it, `canvas-bend.js` is untouched and so is
+    // everything that reads a bend - what has gone is the four grips and the
+    // drag behind them, because `_renderSides` and `_innerDown` both ask the
+    // kind first. One word back to `true` brings them all back.
+    sides: false,
     corners: (/** @type {any} */ cfg) => {
       const unit = cfg.border_radius_unit === '%' ? '%' : 'px';
       return { key: 'border_radius', unit, now: SC.safeFloat(cfg.border_radius, 0),

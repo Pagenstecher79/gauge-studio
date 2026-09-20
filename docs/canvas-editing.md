@@ -710,6 +710,13 @@ The rest of the arithmetic is worth stating because it is not obvious:
 
 ### Bending the sides
 
+**Switched off at the moment.** `sides` on the surface kind is `false`, so no
+side grip is drawn and none can be taken hold of - on the user's call, until
+the shape is worth the four handles it costs. Nothing else changed: a card
+that carries a bow is still drawn with it, `canvas-bend.js` is untouched, and
+one word back to `true` brings the grips back. The rest of this section is
+how they work when they are on.
+
 Each side has a grip that bows it out into a barrel or in into a waist. Four
 of them rather than one, because one control could not say a waist on the left
 and a barrel on the right, and that is a shape people actually want. The same
