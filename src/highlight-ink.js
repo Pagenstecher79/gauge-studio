@@ -24,10 +24,13 @@ export const HL_INKS = ['#ff9100', '#ffea00', '#ff1744', '#00e5ff', '#d500f9'];
 /**
  * WCAG relative luminance.
  *
+ * Exported because `adaptive-ink.js` asks the same question of a colour and
+ * there is no second way to answer it.
+ *
  * @param {[number, number, number]} rgb
  * @returns {number}
  */
-function luminance(rgb) {
+export function luminance(rgb) {
   const [r, g, b] = rgb.map(v => {
     const c = Math.min(255, Math.max(0, Number(v) || 0)) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
