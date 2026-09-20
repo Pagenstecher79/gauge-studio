@@ -51,8 +51,14 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Gauge
 
-- **3** - Halve the thickness of the dashed sizing lines on the round
-  elements.
+- **3** - ~~Halve the thickness of the dashed sizing lines on the round
+  elements.~~ Done, and measured in pixels rather than in the gauge's own
+  units. A band drawn in user units was a different line on every gauge - a
+  hair on a small one and a rope on a big one, and thicker again at every step
+  of the canvas zoom, which is wrong for a measure: the part frames and the
+  grip crosshair are 1px whatever is under them. A band is now `BAND_PX`, half
+  a pixel, which is half what it came to on a gauge of the usual size and half
+  the weight of the frames it is read beside.
 - **7** - Sectors created and shaped on the canvas: a permanent `+ sector`
   button in the top right corner, then a chip per sector holding the options
   that cannot be set by hand (gradient, opacity). Inner and outer radius by

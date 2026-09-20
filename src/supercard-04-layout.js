@@ -474,6 +474,17 @@ const SAME_SPOT_PX = 4;
 const PART_GRAB_PX = 8;
 
 /**
+ * How thick a sizing band is drawn, in screen pixels.
+ *
+ * Half a pixel, which is half what these lines used to be: a band lies across
+ * the very ticks and numbers it is there to place, and at a full pixel it hid
+ * them. In pixels rather than in the gauge's own units so that it is the same
+ * line whatever the gauge's size - the needle's handles and the crosshair are
+ * already measured that way.
+ */
+const BAND_PX = 0.5;
+
+/**
  * The icon on an alignment button.
  *
  * Two bars and the line they are pulled to. Unicode has arrows and brackets
@@ -2753,7 +2764,7 @@ class ScCanvasEditor extends LitElement {
          it was the ring in hand, back when every ring had one and the width
          was what told them apart. Only the ring in hand is drawn now, so
          there is nothing left to tell apart and the colour is enough. */
-      .ring-band { fill: none; stroke: var(--sc-part); stroke-width: 0.35;
+      .ring-band { fill: none; stroke: var(--sc-part); stroke-width: var(--sc-band-w, 0.175);
         stroke-dasharray: 1.2 1.2; opacity: 0.5;
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
       .ring-band.sel { stroke: var(--sc-part-sel); }
@@ -5171,10 +5182,17 @@ class ScCanvasEditor extends LitElement {
         ({ x: c.x + r * Math.cos(a2), y: c.y + r * Math.sin(a2) });
       return { tip: on(ends.tip), tail: on(ends.tail) };
     };
+    // One SVG user unit in screen pixels. A band drawn in user units is a
+    // different line on every gauge - a hair on a small one and a rope on a
+    // big one - so its width is worked back out of the pixels it should come
+    // to, the way the needle's handles and the crosshair already are.
+    const unit = (this._innerRects?.px?.width || 0) * svgBox.w / 100 / GAUGE_VIEW;
+    const bandW = unit > 0 ? BAND_PX / unit : 0.175;
     return html`
       ${!bands.length ? '' : html`
       <svg class="ring-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
-           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;">
+           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;
+                  --sc-band-w:${bandW};">
         ${bands.map(([part, spec]) => svg`${ringBands(spec, cfg, ring, scale).map((b) => {
           const c = cen;
           if (b.r < 0.5) return '';
@@ -5197,11 +5215,11 @@ class ScCanvasEditor extends LitElement {
       // label box's grip is ten pixels wherever it is, and a handle that is
       // dragged the same way should be the same thing to reach for - so the
       // radius is worked back out of the pixels it has to come to.
-      const unit = (this._innerRects?.px?.width || 0) * svgBox.w / 100 / GAUGE_VIEW;
       const gripR = unit > 0 ? 5 / unit : 1.1;
       return html`
       <svg class="ring-layer grip-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
-           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;">
+           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;
+                  --sc-band-w:${bandW};">
         ${needles.map(([part, spec]) => {
           const sel = this._innerSel === part;
           const n = needleAt(spec);
