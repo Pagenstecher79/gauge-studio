@@ -6061,9 +6061,9 @@ class ScCanvasEditor extends LitElement {
     // clearance leaves nowhere free and ends in the overlap it was meant to
     // prevent - better a chip standing against a chip than one over it.
     const MC = 2;
-    const hits = (/** @type {any} */ h, /** @type {any} */ o) =>
-      h.l < o.right + o.m && h.l + h.w > o.left - o.m
-      && h.t < o.bottom + o.m && h.t + h.h > o.top - o.m;
+    const hits = (/** @type {any} */ h, /** @type {any} */ o, /** @type {number} */ m) =>
+      h.l < o.right + m && h.l + h.w > o.left - m
+      && h.t < o.bottom + m && h.t + h.h > o.top - m;
     // The same question without the clearance: touching is not covering, and
     // only covering costs a press.
     const hitsHard = (/** @type {any} */ h, /** @type {any} */ o) =>
@@ -6094,6 +6094,19 @@ class ScCanvasEditor extends LitElement {
         // being typed into is, head or not.
         if (r.width || r.height) note(r, { own: el === f ? f : null });
       }
+    }
+    // The part being worked on is protected whether it has a frame or not:
+    // a ring's chip has no frame, and its drawing was the one thing nothing
+    // kept off. Selected means looked at, so everything that would come to
+    // lie over it is moved instead - including the chip that names it, which
+    // reads better beside the mark than on it.
+    const selBox = this._innerBoxRect();
+    const selR = this._innerSel ? this._innerRects?.parts?.[this._innerSel] : null;
+    if (selBox && selR) {
+      note({ left: selBox.left + selR.l / 100 * selBox.width,
+             top: selBox.top + selR.t / 100 * selBox.height,
+             right: selBox.left + (selR.l + selR.w) / 100 * selBox.width,
+             bottom: selBox.top + (selR.t + selR.h) / 100 * selBox.height }, {});
     }
     const chips = /** @type {any[]} */ (
       [...root.querySelectorAll('.ring-tag, .inner-adds, .inner-tag')]);
@@ -6144,10 +6157,15 @@ class ScCanvasEditor extends LitElement {
       // names on purpose, and the seven pixels between them are less than
       // the clearance everything else is given.
       const own = chip.closest('.inner-frame');
-      const mine = (/** @type {any} */ o) => !!own && o.own === own;
+      // Its own frame asks for no clearance - a head sits against the frame
+      // it names on purpose, and the seven pixels between them are less than
+      // anything else is given. It is still something not to be *on*, though:
+      // given away entirely, a head crowded by the rest ends up over the very
+      // drawing it names, which is the worst place of all for it.
+      const clear = (/** @type {any} */ o) => (own && o.own === own ? 0 : o.m);
       const at = (/** @type {any} */ w) => ({ l: h.l + w.x, t: h.t + w.y, w: h.w, h: h.h });
       const free = (/** @type {any} */ w) =>
-        !taken.some((/** @type {any} */ o) => !mine(o) && hits(at(w), o));
+        !taken.some((/** @type {any} */ o) => hits(at(w), o, clear(o)));
       const inside = (/** @type {any} */ w) =>
         h.l + w.x >= c.left && h.l + w.x + h.w <= c.right
         && h.t + w.y >= c.top && h.t + w.y + h.h <= c.bottom;
@@ -6165,16 +6183,31 @@ class ScCanvasEditor extends LitElement {
         // a chip that goes round a corner reads as a chip that has wandered.
         const ways = [];
         for (const o of taken) {
-          if (mine(o)) continue;
-          ways.push({ x: o.left - o.m - (h.l + h.w), y: 0 }, { x: o.right + o.m - h.l, y: 0 },
-                    { x: 0, y: o.top - o.m - (h.t + h.h) }, { x: 0, y: o.bottom + o.m - h.t });
+          const m = clear(o);
+          ways.push({ x: o.left - m - (h.l + h.w), y: 0 }, { x: o.right + m - h.l, y: 0 },
+                    { x: 0, y: o.top - m - (h.t + h.h) }, { x: 0, y: o.bottom + m - h.t });
         }
         // A head names the frame under it, so it may only go as far as it can
         // while still reading as that frame's - about its own height either
         // way. A chip of its own has no such tie and may go where it must.
         const far = chip.classList.contains('inner-tag') ? h.h * 2.5 : Infinity;
+        // The three other sides of its own frame, for the head that has run
+        // out of room above it. They are further than the cap allows and are
+        // let through anyway: a head against its frame reads as that frame's
+        // from whichever side, and the alternative is the one place a head
+        // must never be - on the drawing it names. The panel hangs directly
+        // over the parts in a gauge's middle, so for the value and the
+        // multiplier this is the ordinary case, not the odd one.
+        const sides = [];
+        if (own && far !== Infinity) {
+          const o = own.getBoundingClientRect();
+          sides.push({ x: 0, y: o.bottom + 7 - h.t },
+                     { x: o.left - 7 - (h.l + h.w), y: o.top - h.t },
+                     { x: o.right + 7 - h.l, y: o.top - h.t });
+        }
         const near = ways.map(held).filter(inside)
-          .filter((/** @type {any} */ w) => Math.abs(w.x) + Math.abs(w.y) <= far);
+          .filter((/** @type {any} */ w) => Math.abs(w.x) + Math.abs(w.y) <= far)
+          .concat(sides.map(held).filter(inside));
         const ok = near.filter(free)
           .sort((/** @type {any} */ p, /** @type {any} */ q) =>
             (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
@@ -6191,7 +6224,6 @@ class ScCanvasEditor extends LitElement {
             const a = at(w);
             let sum = 0;
             for (const o of taken) {
-              if (mine(o)) continue;
               const ov = Math.max(0, Math.min(a.l + a.w, o.right) - Math.max(a.l, o.left))
                        * Math.max(0, Math.min(a.t + a.h, o.bottom) - Math.max(a.t, o.top));
               sum += ov * (o.panel ? 10 : 1);
