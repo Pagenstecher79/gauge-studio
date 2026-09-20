@@ -1528,6 +1528,9 @@ const BAR_PARTS = Object.freeze({
                 { value: '90', label: 'Quarter turn - upright where the bar is flat', short: '90\u00B0' },
                 { value: '-90', label: 'Quarter turn back - upright where the bar is flat', short: '-90\u00B0' },
                 { value: '180', label: 'Upside down', short: '180\u00B0' }] },
+      { note: 'On its end the reading has to fit across the bar. Where the bar is too flat it stands upright by itself, and lies down again when there is room.',
+        condition: (/** @type {any} */ cfg) =>
+          Math.abs(parseInt(cfg.indicator_value_rotation)) === 90 },
       { key: 'indicator_value_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 3, dflt: 0,
         what: 'decimal places' },
       barSlide('indicator_value_font_size', '10', 'type size',
@@ -3026,6 +3029,11 @@ class ScCanvasEditor extends LitElement {
       .ring-swatch input[type="color"] { position: absolute; inset: -50%;
         width: 200%; height: 200%; padding: 0; border: none; background: none;
         cursor: pointer; opacity: 0; }
+      /* Words, so they wrap: four cells across and a width of its own, or a
+         sentence would stretch the columns every other row is measured by. */
+      .ring-note { grid-column: span 4; justify-self: stretch; max-width: 190px;
+        font-size: 10px; line-height: 1.3; color: rgba(255,255,255,0.72);
+        padding: 1px 2px 2px; }
       .ring-flag { display: flex; align-items: center; gap: 4px; height: 20px;
         font-size: 11px; line-height: 1; color: #fff; cursor: pointer;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -5798,6 +5806,14 @@ class ScCanvasEditor extends LitElement {
       // A row that would set something this part has not got is not drawn: a
       // gradient has a list of colours, not a colour, so it has no swatch.
       if (st.condition && !st.condition(cfg)) return '';
+      // A row that sets nothing. Where a choice can be asked for and not
+      // honoured - a pill on its end that the bar is too flat to hold - the
+      // menu says so under the row that makes the choice, because that is
+      // where it looks like a free one. It takes the four cells a whole row
+      // is made of rather than a row of its own, so a menu drawn in two
+      // columns still pairs its rows up the way it counts on.
+      if (st.note) return html`
+        <span class="ring-group"><span class="ring-note">${st.note}</span></span>`;
       // A swatch and a select each take the three cells the two buttons and
       // the number would, so every row still reads as one line of the grid.
       if (st.paint) return html`
