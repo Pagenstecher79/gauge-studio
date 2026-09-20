@@ -823,6 +823,19 @@ const NEEDLE_GLASS_MODE = (/** @type {any} */ cfg) =>
   lensFitsPointer(cfg?.pointer_width ?? 2)
     ? GLASS_MODE : GLASS_MODE.filter(o => o.value !== 'glass_liquid');
 
+/**
+ * The two shapes a needle is drawn as.
+ *
+ * This was a button on the chip, stepping between the two - which reads well
+ * with two and says nothing about what the other one is until you press it.
+ * A row in the menu names both, and stands beside the width and the colour
+ * that shape the same needle.
+ */
+const POINTER_SHAPE = Object.freeze([
+  { value: 'needle', label: 'Needle' },
+  { value: 'triangle', label: 'Triangle' },
+]);
+
 /** Whether there is a shadow for the four rows under it to shape. */
 const hasShadow = (/** @type {any} */ cfg) =>
   (cfg.pointer_shadow_type || 'none') !== 'none';
@@ -1310,6 +1323,8 @@ const GAUGE_RINGS = Object.freeze({
     // would be a second answer to a question already asked.
     steps: [
       ...SWEEP_STEPS,
+      { key: 'pointer_type', icon: icon('triangle'), what: 'shape', picks: POINTER_SHAPE,
+        read: (/** @type {any} */ cfg) => cfg.pointer_type || 'needle' },
       { key: 'pointer_width', icon: THICK, slide: true, by: 0.1, min: 0.1, max: 10,
         dflt: 2, what: 'pointer width' },
       ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
@@ -1338,11 +1353,6 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_shadow_opacity', icon: icon('contrast'), slide: true, by: 0.05, min: 0,
         max: 1, dflt: 0.35, what: 'shadow opacity', condition: hasShadow },
     ],
-    // Shape is the other thing a needle is, and with only two of them a button
-    // on the chip says it better than a select eight folds down the dialog.
-    shapes: { key: 'pointer_type', dflt: 'needle', order: ['needle', 'triangle'],
-              of: { needle: { glyph: '\u25AC', label: 'a needle' },
-                    triangle: { glyph: '\u25B2', label: 'a triangle' } } },
   },
   pointer_center: {
     label: 'Centre point', section: '_section_pointer',
@@ -5928,7 +5938,6 @@ class ScCanvasEditor extends LitElement {
             @dblclick=${() => this._putChipBack(part)}
             @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'chip')}>
         ${spec.label}
-        ${spec.shapes && sel ? this._renderSwap(spec.label, spec.shapes, 'Make') : ''}
         ${spec.weight && sel ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
         ${spec.turnOff ? html`
           <button class="chip-btn drop"
@@ -6492,8 +6501,13 @@ class ScCanvasEditor extends LitElement {
       (st.read ? st.read(cfg)
        : st.unit ? splitUnit(cfg[st.key], st.dflt).n
        : SC.safeFloat(cfg[st.key], st.dflt));
+    // One sentence per row, on the icon and on the control alike: the icon
+    // is the nearest thing to hand and used to name only the setting, so
+    // hovering it said less than hovering the slider an inch to its right.
+    const tip = (/** @type {any} */ st) => `${spec.label}: ` +
+      (st.flag ? `turn ${st.what} on or off` : `set the ${st.what}`);
     const stepIcon = (/** @type {any} */ st) => html`
-      <span class="ring-step-icon" title=${`${spec.label}: ${st.what}`}>${st.icon}</span>`;
+      <span class="ring-step-icon" title=${tip(st)}>${st.icon}</span>`;
 
     const group = (/** @type {any} */ st) => {
       // A row that would set something this part has not got is not drawn: a
@@ -6512,7 +6526,7 @@ class ScCanvasEditor extends LitElement {
       if (st.paint) return html`
         <span class="ring-group">${stepIcon(st)}
           <label class="ring-wide ring-swatch" style="background:${now(st)}"
-                 title=${`Set the ${st.what}`} @pointerdown=${keep}>
+                 title=${tip(st)} @pointerdown=${keep}>
             <input type="color" .value=${now(st)}
                    @input=${(/** @type {any} */ e) =>
                      this._writeInner(st.patch(cfg, e.target.value), false)}>
@@ -6523,7 +6537,7 @@ class ScCanvasEditor extends LitElement {
       // with its name beside it.
       if (st.flag) return html`
         <span class="ring-group">${stepIcon(st)}
-          <label class="ring-wide ring-flag" title=${`Turn ${st.what} on or off`}
+          <label class="ring-wide ring-flag" title=${tip(st)}
                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}>
             <input type="checkbox" .checked=${!!cfg[st.key]}
                    @change=${(/** @type {any} */ e) =>
@@ -6537,7 +6551,7 @@ class ScCanvasEditor extends LitElement {
       // only "about here".
       if (st.slide) return html`
         <span class="ring-group">${stepIcon(st)}
-          <input type="range" class="ring-slide" title=${`Set the ${st.what}`}
+          <input type="range" class="ring-slide" title=${tip(st)}
                  min=${st.min} max=${st.max} step=${st.by} .value=${String(now(st))}
                  @pointerdown=${(/** @type {any} */ e) => {
                    e.stopPropagation();
@@ -6562,7 +6576,7 @@ class ScCanvasEditor extends LitElement {
         <span class="ring-group">${stepIcon(st)}
           <ha-icon-picker class="ring-wide ring-iconpick" .hass=${this.hass}
                           .value=${cfg[st.key] || ''}
-                          title=${`Set the ${st.what}`}
+                          title=${tip(st)}
                           @pointerdown=${keep}
                           @value-changed=${(/** @type {any} */ e) =>
                             this._writeInner({ [st.key]: e.detail.value || undefined }, false)}></ha-icon-picker>
@@ -6574,7 +6588,7 @@ class ScCanvasEditor extends LitElement {
       const picks = typeof st.picks === 'function' ? st.picks(cfg) : st.picks;
       return html`
         <span class="ring-group">${stepIcon(st)}
-          <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
+          <select class="ring-wide ring-pick" title=${tip(st)}
                   @pointerdown=${keep}
                   @change=${(/** @type {any} */ e) => {
                     // A row that sets one key names it; one that drops a whole
@@ -6674,10 +6688,10 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * The button on a chip that steps the part through the shapes it can take.
+   * The button on a chip that steps the part through the few states it takes.
    *
    * On the chip rather than in the corner cluster: the corner holds a number
-   * that is stepped up and down, and a shape is neither - it is the same one
+   * that is stepped up and down, and a weight is neither - it is the same one
    * setting the form's select writes, offered where the part is.
    */
   _renderSwap(label, sw, verb) {
