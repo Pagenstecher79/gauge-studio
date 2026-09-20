@@ -5,7 +5,7 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
          gridRowsToPx, gridColumnsToPx, gridSize, canvasFromGrid, canvasFromCard,
          pinnedToShape, rescaleCanvas, rowsForShape,
          sectionColumns, sectionWidthPx, editingDialog, markDialogClean,
-         dialogHasUnsavedWork, HA_COLUMN_COUNT,
+         dialogHasUnsavedWork, contentRowArranges, HA_COLUMN_COUNT,
          canDuplicate, reorderElement, overlappingElements,
          alignElements, restorePatch,
          NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview,
@@ -6854,14 +6854,22 @@ if (!customElements.get('sc-canvas-dimensions')) customElements.define('sc-canva
 
 
 /**
- * Writes down the canvas a rows layout describes, once, when the editor opens.
+ * Writes down the canvas the card is already drawing, once, when the editor
+ * opens.
  *
- * The card is already drawing that canvas - rows-compat.js builds it in memory
- * on every load - so this changes the model and not the picture, which is what
- * makes doing it without asking defensible. `layout_rows` is left in the config,
- * so a migration that lands badly is undone by deleting `canvas` in the YAML
- * editor. A card that never had a layout is not touched here; it gets the offer
- * instead, because the canvas built from a content row is a new arrangement.
+ * Two cards come here, and neither of them has a picture to lose. A rows
+ * layout is already being drawn as a canvas - rows-compat.js builds it in
+ * memory on every load - so writing it down changes the model and nothing
+ * else. A card with no layout and at most one object has nothing to arrange:
+ * the one element fills the card exactly as the content row drew it. See
+ * `contentRowArranges` for where that line is and why.
+ *
+ * A card with no layout and several objects is *not* here. Stacking its
+ * contents into bands is a new arrangement however faithful the contents, so
+ * that one gets the offer and its button.
+ *
+ * `layout_rows` is left in the config either way, so a migration that lands
+ * badly is undone by deleting `canvas` in the YAML editor.
  *
  * The write happens on open rather than at render because a Lovelace card
  * cannot persist its own config outside the editor. This is the only place that
@@ -6886,9 +6894,19 @@ class ScCanvasAdopt extends LitElement {
     this._done = true;
 
     const slot = this.slot || {};
-    const shape = canvasFromGrid(this.cardConfig, slot, 400,
-                                 sectionColumns(this), sectionWidthPx(this));
-    const migrated = rowsAsCanvas(slot, shape.w, shape.h);
+    const columns = sectionColumns(this), px = sectionWidthPx(this);
+    const shape = canvasFromGrid(this.cardConfig, slot, 400, columns, px);
+    const migrated = needsRowsCompat(slot)
+      ? rowsAsCanvas(slot, shape.w, shape.h)
+      // The content row's own canvas, built the way the offer's button builds
+      // it. Pill was a card *shape* and the canvas has only a corner radius;
+      // half the shorter side is the same stadium, so a round card stays
+      // round instead of being squared off by a change of model. It travels
+      // in this commit, because a second one in the same tick is lost.
+      : { canvas: canvasFromCard(this.cardConfig, slot, columns, px),
+          ...(SC.cardIsPill(slot)
+            ? { border_radius: 50, border_radius_unit: '%', border_radius_ref: 'min' }
+            : {}) };
     // `layout_active` travels with it. The canvas is what the card draws from
     // now, and a canvas without that switch is one nobody sees - which is how
     // the last rows cards ended up carrying a picture and showing their plain
@@ -6969,21 +6987,21 @@ Object.assign(window.SupercardModules['layout'], (() => {
   }
 
   /**
-   * A card with a canvas gets the canvas editor; a card still on rows is given
-   * the canvas its rows describe and then gets the same editor; a card on
-   * neither is offered one.
+   * A card with a canvas gets the canvas editor; a card whose canvas can be
+   * written down without inventing anything is given it and then gets the same
+   * editor; only a card where the switch would *rearrange* something is
+   * offered one.
    *
-   * The difference between migrating and offering is whether there is a layout
-   * to migrate at all. A rows layout migrates position for position - one that
-   * is switched on is already being drawn as a canvas on the dashboard,
-   * rows-compat.js does that in memory on every load, so writing it down
-   * changes the model and nothing else; one that is switched off is a draft,
-   * and `rowsToRead` shares the card between its rows rather than believing a
+   * Migrating and offering differ by whether a layout has to be invented. A
+   * rows layout migrates position for position - one that is switched on is
+   * already being drawn as a canvas on the dashboard, rows-compat.js does that
+   * in memory on every load; one that is switched off is a draft, and
+   * `rowsToRead` shares the card between its rows rather than believing a
    * height nobody has ever seen. A card that never had a layout draws the
-   * content row, and the canvas built from it arranges the same contents as
-   * bands, top to bottom. That is a new arrangement, however faithful the
-   * contents - so that one stays an offer, with the button that says what it
-   * will do.
+   * content row, and there the count decides: one object, or none, is not an
+   * arrangement and comes along on its own, while several are stacked into
+   * bands that nobody chose and so stay behind a button. See
+   * `contentRowArranges`.
    */
   function renderCustomBlock(commitFn, hass, slot, cardConfig) {
     if (slot?.canvas) {
@@ -6991,7 +7009,7 @@ Object.assign(window.SupercardModules['layout'], (() => {
                                     .slot=${slot} .hass=${hass} .cardConfig=${cardConfig}
                                     .commitFn=${commitFn}></sc-canvas-editor>`;
     }
-    if (needsRowsCompat(slot)) {
+    if (needsRowsCompat(slot) || !contentRowArranges(cardConfig, slot)) {
       return html`<sc-canvas-adopt .slot=${slot} .cardConfig=${cardConfig}
                                    .commitFn=${commitFn}></sc-canvas-adopt>`;
     }

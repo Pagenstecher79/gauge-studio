@@ -218,9 +218,13 @@ per render, and `_drawnSlot` in the core hands that one answer to every module
 so none of them sees two models. Nothing is written back - a Lovelace card
 cannot persist its own config outside the editor - so the editor stages the
 same canvas as an ordinary edit when it opens such a card. Do not add a second
-read path for `layout_rows`, and do not migrate a card that never had a layout:
-the canvas built from a content row is a new arrangement, so that one stays an
-offer with a button. See `docs/canvas-layout.md` §3.
+read path for `layout_rows`. A card that never had a layout is migrated only
+when there is nothing to arrange: `contentRowArranges` counts the elements the
+canvas would hold, and one, or none, comes along on its own - the single
+element fills the card exactly as the content row drew it. Several are stacked
+into bands that nobody chose, which is a new arrangement however faithful the
+contents, so that card keeps its offer and its button. See
+`docs/canvas-layout.md` §3.
 
 **One control, drawn once.** A colour is `SC.colorRow`/`SC.colorField` and a
 range is `SC.slider`/`SC.sliderRow`/`SC.sliderField`, in every editor, whether

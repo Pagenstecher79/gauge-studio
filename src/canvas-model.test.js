@@ -40,6 +40,7 @@ import {
   defaultShapeRows,
   rowsForShape,
   canvasFromCard,
+  contentRowArranges,
   rescaleCanvas,
   pinnedToShape,
   applyGroupDrag,
@@ -515,6 +516,62 @@ describe('repointPatterns', () => {
   });
 });
 
+describe('contentRowArranges', () => {
+  const card = { grid_options: { columns: 6, rows: 4 } };
+  const bare = { hide_icon: true, hide_entity_name: true, hide_entity_state: true };
+
+  // The line the offer is drawn at: an arrangement is something the canvas
+  // invents, and one element is not one. Asserted against the canvas that
+  // would be written, so the two cannot drift apart.
+  it('is whether the canvas it would write holds more than one element', () => {
+    for (const slot of [
+      {},
+      bare,
+      { ...bare, gauge_active: true, gauges: [{}] },
+      { ...bare, gauge_active: true, gauges: [{}, {}] },
+      { gauge_active: true, gauges: [{}] },
+      { ...bare, progressbar_active: true, progressbars: [{}] },
+      { ...bare, labels_list: [{ enabled: true }] },
+      { ...bare, hide_icon: false },
+    ]) {
+      expect(contentRowArranges(card, slot))
+        .toBe(canvasFromCard(card, slot).elements.length > 1);
+    }
+  });
+
+  it('says no for a card holding one object, and none for an empty one', () => {
+    expect(contentRowArranges(card, { ...bare, gauge_active: true, gauges: [{}] })).toBe(false);
+    expect(contentRowArranges(card, { ...bare, progressbar_active: true, progressbars: [{}] })).toBe(false);
+    expect(contentRowArranges(card, bare)).toBe(false);
+  });
+
+  // Three things side by side in one band is an arrangement as much as three
+  // bands are - the header is a row, not a single object.
+  it('says yes for the card own three, and for two objects', () => {
+    expect(contentRowArranges(card, {})).toBe(true);
+    expect(contentRowArranges(card, { ...bare, gauge_active: true, gauges: [{}, {}] })).toBe(true);
+    expect(contentRowArranges(card, { gauge_active: true, gauges: [{}] })).toBe(true);
+  });
+
+  // A bar switched off, or a label not enabled, is not on the card and so is
+  // not something the switch would have to place.
+  it('does not count what the card is not showing', () => {
+    expect(contentRowArranges(card, { ...bare, gauge_active: true, gauges: [{}],
+                                      progressbar_active: true,
+                                      progressbars: [{ active: false }] })).toBe(false);
+    expect(contentRowArranges(card, { ...bare, gauge_active: true, gauges: [{}],
+                                      labels_list: [{ enabled: false }] })).toBe(false);
+  });
+
+  it('does not care what shape the card is', () => {
+    const slot = { ...bare, gauge_active: true, gauges: [{}, {}] };
+    for (const grid_options of [{ columns: 3, rows: 6 }, { columns: 'full', rows: 1 },
+                                undefined, { columns: 12, rows: 12 }]) {
+      expect(contentRowArranges({ grid_options }, slot)).toBe(true);
+    }
+  });
+});
+
 describe('canvasFromCard', () => {
   const card = { grid_options: { columns: 6, rows: 4 } };
 
@@ -530,6 +587,40 @@ describe('canvasFromCard', () => {
     // the icon centres against the two lines, as it does in the content row
     const mid = el => el.y + el.h / 2;
     expect(Math.abs(mid(icon) - (name.y + (state.y + state.h - name.y) / 2))).toBeLessThanOrEqual(1);
+  });
+
+  // The card this matters for is the one that converts without being asked.
+  // The content row draws a lone gauge edge to edge, and a band would hand it
+  // back three quarters of the card it had - a visible loss, on a dashboard
+  // nobody touched.
+  it('gives a lone object the whole card, with no band margin', () => {
+    const bare = { hide_icon: true, hide_entity_name: true, hide_entity_state: true };
+    const canvas = canvasFromCard(card, { ...bare, gauge_active: true, gauges: [{}] });
+    const [g] = canvas.elements;
+    expect(canvas.elements.length).toBe(1);
+    // Square-locked, so it is the short side, centred on the other axis.
+    const side = Math.min(canvas.w, canvas.h);
+    expect(g.w).toBe(side);
+    expect(g.h).toBe(side);
+    // The box is rounded to whole units, so a half unit either way is the
+    // rounding and not an offset.
+    expect(Math.abs(g.x - (canvas.w - side) / 2)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(g.y - (canvas.h - side) / 2)).toBeLessThanOrEqual(0.5);
+  });
+
+  it('gives a lone bar the whole card, which is not square', () => {
+    const bare = { hide_icon: true, hide_entity_name: true, hide_entity_state: true };
+    const canvas = canvasFromCard(card, { ...bare, progressbar_active: true, progressbars: [{}] });
+    expect(canvas.elements).toEqual([expect.objectContaining(
+      { id: 'progressbar_0', x: 0, y: 0, w: canvas.w, h: canvas.h })]);
+  });
+
+  // Two of them is an arrangement again, and an arrangement keeps its margins.
+  it('still bands two objects off the edges', () => {
+    const bare = { hide_icon: true, hide_entity_name: true, hide_entity_state: true };
+    const canvas = canvasFromCard(card, { ...bare, gauge_active: true, gauges: [{}, {}] });
+    expect(canvas.elements.length).toBe(2);
+    expect(Math.min(...canvas.elements.map(e => e.y))).toBeGreaterThan(0);
   });
 
   it('keeps the header a row on a tall card, not a block', () => {

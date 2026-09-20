@@ -1380,17 +1380,59 @@ export function canvasFromCard(cardConfig, slot, total = HA_COLUMN_COUNT, sectio
   }
 
   for (const id of stacked) {
-    const b = bandRect(shape, band++, bands);
+    // One object and no header is not an arrangement, so it gets no band. The
+    // content row draws such a card edge to edge - a lone gauge is its own
+    // card - and the margins exist to keep an arrangement off the edges. Kept
+    // here rather than fixed up by the caller, because this is the canvas the
+    // editor writes down without asking for exactly this case, and it has to
+    // be the card the person was already looking at.
+    const b = bands === 1 ? { x: 0, y: 0, w: shape.w, h: shape.h }
+                          : bandRect(shape, band++, bands);
     // A gauge, and a circular bar, is drawn as the largest square that fits
     // its box, so a wide box would be mostly empty space that still counts as
     // the element.
     const side = Math.min(b.w, b.h);
     elements.push(el(id, isSquareLocked({ id }, slot)
-      ? { x: b.x + (b.w - side) / 2, y: b.y, w: side, h: side }
+      // Centred both ways when it has the whole card: a band is a strip and
+      // its square only has room to slide sideways, but a square in a card
+      // that is taller than it is wide has to come down from the top too.
+      ? { x: b.x + (b.w - side) / 2, y: b.y + (b.h - side) / 2, w: side, h: side }
       : b));
   }
 
   return { ...shape, elements };
+}
+
+/**
+ * Whether turning this card's content row into a canvas would *arrange*
+ * anything.
+ *
+ * This is the whole reason the switch is an offer rather than something the
+ * editor does on opening. A rows layout migrates position for position: it
+ * says where things go, and the canvas repeats it. A content row does not -
+ * it stacks whatever the card shows, and `canvasFromCard` has to invent bands
+ * to put that in. Inventing a layout and writing it into somebody's dashboard
+ * unasked is not a migration, so it gets a button and a sentence saying what
+ * the button will do.
+ *
+ * None of that applies to a card holding one object, or none. There are no
+ * bands to invent, the single element fills the card exactly as the content
+ * row drew it, and the offer is a button that changes nothing anybody can
+ * see - in the way of the editor it is standing in front of. So the line is
+ * drawn at the count, not at whether a layout key happens to exist.
+ *
+ * Counted off the canvas that would actually be written rather than off the
+ * slot, because what becomes an element is `canvasFromCard`'s answer: which
+ * gauges are active, which bars are switched on, which labels are enabled,
+ * and whether the header is showing at all. The shape it is asked for makes
+ * no difference to the count, so the defaults will do.
+ *
+ * @param {any} cardConfig
+ * @param {any} slot
+ * @returns {boolean}
+ */
+export function contentRowArranges(cardConfig, slot) {
+  return canvasFromCard(cardConfig, slot).elements.length > 1;
 }
 
 /**
