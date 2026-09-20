@@ -1509,13 +1509,20 @@ const SURFACE_PARTS = Object.freeze({
 });
 
 /**
- * What the card's own icon has: which icon it is.
+ * What the card's own icon has: which icon it is, and whether it stands on
+ * anything.
  *
- * One part and one row, because there is only one thing about it the canvas
- * can answer for. The card draws the icon its entity carries, which is the
- * right icon almost always and the wrong one exactly when somebody has put
- * the entity on a card to mean something else - and until now there was
- * nowhere at all to say so. Left empty it goes back to the entity's own.
+ * The card draws the icon its entity carries, which is the right icon almost
+ * always and the wrong one exactly when somebody has put the entity on a card
+ * to mean something else - and until now there was nowhere at all to say so.
+ * Left empty it goes back to the entity's own.
+ *
+ * The round plate under it is the other half. It was drawn unconditionally,
+ * which is right in the content row - a glyph floating in a strip of text
+ * needs something to sit on - and wrong on a canvas, where the icon is an
+ * object of its own placed against whatever the card is painted with. So it
+ * is a switch, and it lives here rather than in the form: the plate is a
+ * thing you see, and the place to take it away is where you can see it.
  */
 const ICON_PARTS = Object.freeze({
   glyph: {
@@ -1523,6 +1530,8 @@ const ICON_PARTS = Object.freeze({
     on: () => true,
     steps: [
       { key: 'icon_override', icon: icon('image'), what: 'icon', pickIcon: true },
+      { key: 'hide_icon_background', icon: icon('circle-off'), flag: true,
+        what: 'no plate behind it' },
     ],
   },
 });
@@ -2171,6 +2180,10 @@ const INNER_KINDS = Object.freeze({
     noun: 'gauge',
     holds: 'its label, its value, its scale, its needle',
     editor: 'sc-gauge-editor',
+    // Which module's form the panel points back at. The editor tag draws it;
+    // this is the same form as a field array, for asking what is left in a
+    // fold after a part has taken its rows.
+    form: 'gauge',
     parts: GAUGE_PARTS,
     rings: GAUGE_RINGS,
     measure: measureGauge,
@@ -2214,6 +2227,7 @@ const INNER_KINDS = Object.freeze({
     noun: 'bar',
     holds: 'its ticks, its pill, its label',
     editor: 'sc-progressbar-editor',
+    form: 'progressbar',
     parts: BAR_LABEL_PARTS,
     rings: BAR_PARTS,
     measure: measureBar,
@@ -3377,6 +3391,13 @@ class ScCanvasEditor extends LitElement {
       .ring-note { grid-column: span 4; justify-self: stretch; max-width: 190px;
         font-size: 10px; line-height: 1.3; color: rgba(255,255,255,0.72);
         padding: 1px 2px 2px; }
+      /* The last line of a panel, and it reads as one: quieter than a row
+         that sets something, and set apart from the rows above so the eye
+         does not take it for another control. */
+      .ring-more { grid-column: span 4; justify-self: stretch; display: flex;
+        align-items: center; gap: 4px; margin-top: 2px; padding: 3px 2px 0;
+        border-top: 1px solid rgba(255,255,255,0.12);
+        font-size: 10px; line-height: 1.3; color: rgba(255,255,255,0.62); }
       .ring-flag { display: flex; align-items: center; gap: 4px; height: 20px;
         font-size: 11px; line-height: 1; color: #fff; cursor: pointer;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -6583,11 +6604,23 @@ class ScCanvasEditor extends LitElement {
           ${btn(-1, '−')}<span class="ring-step-val">${shown}</span>${btn(1, '+')}
         </span>`;
     };
+    // The other side of the note in the form: that one says settings have
+    // come here, and without this the panel is silent about the ones that
+    // stayed. A part that took a whole fold with it says nothing, because
+    // then there is nothing below to be sent to.
+    const menu = target.k.form
+      ? SC.menuFor(window.SupercardModules?.[target.k.form]?.formFields?.() || [],
+                   cfg, this.slot, this._innerSel)
+      : null;
     return html`
       <div class="ring-steps ${opts?.up ? 'up' : ''} ${opts?.wide ? 'wide' : ''}"
            data-part=${this._innerSel}
            style="left:${left}%; top:${top}%;">
         ${spec.steps.map(group)}
+        ${menu && menu.rest ? html`
+          <span class="ring-group ring-more">
+            ${icon('chevrons-down')} More under ${menu.title}, below the canvas
+          </span>` : ''}
         <div class="steps-grip" title="Drag to make this menu bigger or smaller"
              @pointerdown=${(/** @type {any} */ e) => this._stepsResize(e)}></div>
       </div>`;

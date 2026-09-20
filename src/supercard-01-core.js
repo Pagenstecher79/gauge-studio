@@ -4,6 +4,7 @@ import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { rowsAsCanvas } from "./rows-compat.js";
 import { icon } from "./icons.js";
 import { GRADIENT_PRESETS, gradientPresetCss } from "./gradient-presets.js";
+import { framedPart, fieldFramed, framedIn, menuFor } from "./framed-fields.js";
 
 // --- CENTRAL LAYER DICTIONARY ---
 export const SC_LAYERS = {
@@ -573,6 +574,14 @@ Object.assign(window.SupercardUtils, (() => {
       ${lengthRow(value, onInput, opts)}
     </div>`;
 
+  /*
+   * Whether a field has been handed over to the canvas, which of its parts
+   * took it, and what a fold has left - all three are `framed-fields.js`,
+   * because one editor of the two draws its own fields and the rule has to
+   * be the same rule there. They are published below so that editor and the
+   * canvas can both ask.
+   */
+
   /**
    * One field of an editor built from a field array.
    *
@@ -595,50 +604,6 @@ Object.assign(window.SupercardUtils, (() => {
    * @param {any} field
    * @param {any} ctx
    */
-  /**
-   * Whether a field has been handed over to the canvas and should not be
-   * drawn here.
-   *
-   * Two rules, one answer. `framedBy` names the part whose frame replaces the
-   * field, and the field goes while that part is framed - two live controls
-   * for one value is worse than one badly placed control. It may be a function
-   * of the entry, for where that depends on what is being edited: a solid
-   * colour is a swatch on the drawing, a gradient is a list and is not. It
-   * may also name several parts, for a setting that more than one of them
-   * offers - where the dial starts is asked under the ring that draws the
-   * sweep and under the pointer that walks it, and the form has to let go
-   * for either.
-   * `framedWhen` is the mirror, for the line that stands in for what has gone,
-   * so a fold that has lost most of its rows does not read as one that is
-   * missing something.
-   *
-   * Here rather than inside `renderField` because one editor - the bar's -
-   * draws its own fields, and the rule has to be the same rule there.
-   *
-   * `framedPart` is the same question asked for an answer rather than a yes:
-   * which of a field's parts is the one that took it. A note that stands in
-   * for the missing rows has to say what took them, and with a field that
-   * names several parts, reading `framedBy` back is no longer that answer.
-   *
-   * @param {any} field
-   * @param {any} entry the config being edited
-   * @param {Set<string>|undefined} framed the parts the canvas has taken over
-   * @returns {boolean} true when the field is not to be drawn
-   */
-  const framedPart = (field, entry, framed) => {
-    if (!field) return null;
-    const by = typeof field.framedBy === 'function'
-      ? field.framedBy(entry) : field.framedBy;
-    const parts = Array.isArray(by) ? by : (by ? [by] : []);
-    return parts.find((p) => framed?.has?.(p)) ?? null;
-  };
-
-  const fieldFramed = (field, entry, framed) => {
-    if (!field) return false;
-    if (framedPart(field, entry, framed)) return true;
-    return !!field.framedWhen && !framed?.has?.(field.framedWhen);
-  };
-
   const renderField = (field, ctx) => {
     if (!field) return html``;
     if (field.condition && !field.condition(ctx.entry, ctx.slot)) return html``;
@@ -1114,7 +1079,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, lengthRow, lengthField, splitLength, rampGrid,
     slider, sliderRow, sliderField, tipDot,
-    renderField, renderFields, fieldFramed, framedPart,
+    renderField, renderFields, fieldFramed, framedPart, framedIn, menuFor,
     editorStyles, formStyles, partHighlight
   });
 })());
@@ -1325,6 +1290,17 @@ class SupercardCore extends LitElement {
         flex-shrink: 0;
         z-index: ${SC_LAYERS.ELM_STATIC};
         position: relative;
+      }
+
+      /* The plate taken away, not the box: the border goes transparent rather
+         than away, because the container is content-box in the content row
+         and a border that stops existing takes two pixels of width with it -
+         the icon would shift the moment the plate was switched off. Both
+         declarations need an !important of their own to beat the ones above,
+         which carry it to get past the theme. */
+      .supercard-icon-container.no-plate {
+        background-color: transparent !important;
+        border-color: transparent !important;
       }
 
      .layer-elm-dynamic {
@@ -1546,7 +1522,7 @@ class SupercardCore extends LitElement {
         <div class="supercard-container" id="main-container" style="${combinedStyles}" @click=${handleTouchOrClick} @touchstart=${handleTouchOrClick}>
 
           <div class="sc-content-row">
-            <div class="supercard-icon-container" id="icon" style="display: ${slot.hide_icon ? 'none' : ''}">
+            <div class="supercard-icon-container ${slot.hide_icon_background ? 'no-plate' : ''}" id="icon" style="display: ${slot.hide_icon ? 'none' : ''}">
               <ha-icon icon="${iconId}"></ha-icon>
             </div>
 

@@ -1953,7 +1953,10 @@ Object.assign(window.SupercardModules['progressbar'], (() => {
     return _cachedEditor;
   }
 
+  // See the gauge's: the canvas asks this which fold a part took its rows
+  // from, to know whether its panel should point at the form below.
   return /** @type {SupercardModule} */ ({ update, editorFields, renderCustomBlock,
                                            newEntry: newProgressbarEntry,
+                                           formFields: () => STYLE_FIELDS,
                                            ownedByCanvas: true });
 })());

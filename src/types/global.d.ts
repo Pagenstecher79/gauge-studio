@@ -48,6 +48,12 @@ declare global {
      * has a canvas. A card still on rows and cells keeps it.
      */
     ownedByCanvas?: boolean;
+    /**
+     * This module's own form, as a field array, for the canvas to ask what a
+     * part has taken from it and what is left behind. Reading only - the
+     * module's editor is what draws it.
+     */
+    formFields?: () => any[];
     /** Extra <style> text injected once per render. */
   }
 
@@ -188,6 +194,12 @@ declare global {
     fieldFramed: (field: any, entry: any, framed?: Set<string>) => boolean;
     /** Which of a field's parts took it, for the line that stands in for it. */
     framedPart: (field: any, entry: any, framed?: Set<string>) => string | null;
+    /** What a fold has lost to the canvas, and how many rows it still has. */
+    framedIn: (items: any[], entry: any, slot: any, framed?: Set<string>)
+      => { part: string, rest: number } | null;
+    /** The fold a part took rows from, named, and what is left in it. */
+    menuFor: (fields: any[], entry: any, slot: any, part: string)
+      => { id: string, title: string, rest: number } | null;
     /** Shared chrome for the card-list module editors (ha-switch family). */
     editorStyles: CSSResult;
     /** Shared chrome for the compact config forms (.toggle family). */

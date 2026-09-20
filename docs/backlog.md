@@ -405,9 +405,14 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   click then made. Two thirds, times `circular_scale: 90`, is the 63%.
   `pendingPatch` is now the one place that knows what the slot gains, and both
   callers ask it.
-- **50** - The main icon draws a background behind itself; there should be an
-  option to take it away, so the icon stands on the card with nothing under
-  it.
+- **50** - ~~The main icon draws a background behind itself; there should be
+  an option to take it away, so the icon stands on the card with nothing under
+  it.~~ Done, as a switch under the icon's own chip rather than a row in a
+  form: the plate is a thing you look at, so the place to take it away is
+  where you can see it. The border goes transparent instead of away - the
+  container is content-box in the content row, so a border that stops
+  existing takes two pixels of width with it and the icon would shift as the
+  plate was switched off.
 
 ## Card and editor
 
@@ -425,10 +430,20 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   canvas follows them; the second of them is now *Basics, Entity & Aliases*.
   The canvas being the card is why it led - but it is also the tallest thing
   in the dialog, and a settings menu below it is a menu nobody scrolls to.
-- **26** - "This one is on the canvas ..." should name the menu that is gone:
-  "<name> settings are on the canvas ...". Where only part of a menu has
+- **26** - ~~"This one is on the canvas ..." should name the menu that is
+  gone: "<name> settings are on the canvas ...". Where only part of a menu has
   moved: "Parts of the <name> settings are in the canvas options box, ...",
-  and the canvas options box in question says that more settings are below.
+  and the canvas options box in question says that more settings are below.~~
+  Done, and the two halves turned out to be one question asked from two
+  sides: what a fold has lost, and what it has left. `framed-fields.js` holds
+  it - the two framing rules moved there out of core, because they were
+  always shared and the counting is the same rule again. `framedIn` gives the
+  note the part in hand and the number of rows still standing, so it names
+  the fold and chooses between *the* settings and *parts of the* settings
+  rather than guessing; `menuFor` asks from the drawing, so a chip's panel
+  closes with the name of the menu below it - and closes with nothing where
+  the part took the whole fold, because then there is nothing down there to
+  send anyone to.
 - **36** - ~~A card made almost square through the layout tab keeps a
   rectangular canvas in the editor, so an object cannot be drawn out to the
   full card. *Match the card* should fire automatically after a size change
