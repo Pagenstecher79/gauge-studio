@@ -605,6 +605,28 @@ Object.assign(window.SupercardUtils, (() => {
   };
 
   /**
+   * The list a `select` field offers.
+   *
+   * It may be a function, because a list of targets depends on what the other
+   * entries have already claimed and a list of shapes on whether the drawing
+   * can show them. Three editors used to read `field.options` straight, and
+   * all three broke the day a field first answered with a function - a
+   * `.map` on a function throws, and a throw inside a render takes the whole
+   * editor with it, so the menus below the canvas simply stopped opening.
+   * One reader, so that cannot happen again in a fourth place.
+   *
+   * @param {any} field
+   * @param {any} entry the config being edited
+   * @param {any} [ctx] whatever the caller's renderer passes on
+   * @returns {any[]}
+   */
+  const fieldOptions = (field, entry, ctx) => {
+    const list = typeof field?.options === 'function'
+      ? field.options(entry, ctx) : field?.options;
+    return Array.isArray(list) ? list : [];
+  };
+
+  /**
    * One field of an editor built from a field array.
    *
    * The gauge and the progressbar are written that way - a field is a record,
