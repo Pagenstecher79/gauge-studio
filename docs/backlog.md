@@ -139,7 +139,17 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **35** - Check the pill's automatic alignment, and make sure the pill never
   wraps to two lines - shrinking the font where it must.
 - **42** - The corner radius should be set exactly the way a surface's is.
-- **49** - The indicator line has no adaptive colour, or no switch for one.
+- **49** - ~~The indicator line has no adaptive colour, or no switch for
+  one.~~ Done. The line marks the fill's edge, so half of it lies on the
+  fill and half on the track, and one ink has to be wrong on one of them.
+  So the adaptive line is drawn twice and clipped, the way the bar's ticks
+  already are, and each half is `adaptive-ink.js`'s answer to the field
+  under it - lightness rather than a contrast ratio, because a two-pixel
+  line on a saturated hue is read by lightness. Where a field says nothing
+  - a track the card shows through, a fill that resolved to no colour -
+  the theme's own text colour stays the answer. The switch is
+  *Dual-adaptive colour*, worded as the ticks' own, in the form and on the
+  pill's chip.
 
 ## Surfaces
 

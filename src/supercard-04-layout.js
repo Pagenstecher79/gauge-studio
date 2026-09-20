@@ -1507,7 +1507,10 @@ const BAR_PARTS = Object.freeze({
       // pill's own, and a pulse over both while the line's thickness is being
       // set is a pulse over the wrong thing. A row that names a part narrows
       // the highlight to it for as long as it is held.
+      { key: 'indicator_color_adaptive', icon: icon('palette'), flag: true,
+        what: 'adaptive line colour', hl: 'indicator_line' },
       { icon: icon('paintbrush'), what: 'line colour', paint: true, hl: 'indicator_line',
+        condition: (/** @type {any} */ cfg) => !cfg.indicator_color_adaptive,
         read: (/** @type {any} */ cfg) => markHex(cfg.indicator_color, '#ffffff'),
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ indicator_color: v }) },
       barSlide('indicator_thickness', '2px', 'line thickness',

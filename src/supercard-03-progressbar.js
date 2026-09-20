@@ -6,6 +6,7 @@ import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding } from "
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
+import { adaptiveInk } from "./adaptive-ink.js";
 
 const SC = window.SupercardUtils;
 
@@ -460,10 +461,29 @@ class ScProgressbar extends LitElement {
     if (showInd) {
       const indColor = this._get('indicator_color', '#ffffff');
       const indThick = parseDim(this._get('indicator_thickness', 2), `2${u}`, u);
-      
-      const lineStyle = isHoriz 
-        ? `position:absolute; top:0; bottom:0; width:${indThick}; background:${indColor}; left:calc(${targetPct} * 100%); transform:translateX(-50%) translateZ(0); z-index:${ELM_FLOAT};`
-        : `position:absolute; left:0; right:0; height:${indThick}; background:${indColor}; bottom:calc(${targetPct} * 100%); transform:translateY(50%) translateZ(0); z-index:${ELM_FLOAT};`;
+
+      // The line marks the fill's edge, so it stands on two fields at once:
+      // half of it lies on the fill and half on the track. One ink has to be
+      // wrong on one of them, which is why the adaptive line is drawn twice -
+      // the dual-adaptive answer the bar's ticks already give. The arithmetic
+      // is `adaptive-ink.js` rather than a contrast ratio, because a two-pixel
+      // line on a saturated hue is read by lightness and not by a ratio built
+      // for text. Where a field has nothing to say - a track the card shows
+      // through, a fill that resolved to no colour - the theme's own text
+      // colour is still the best answer.
+      const lineAdaptive = this._get('indicator_color_adaptive', false);
+      const trackRgb = SC.toRgb(bgColorRaw, { resolveVars: true });
+      const inkOnTrack = lineAdaptive
+        ? (adaptiveInk({ mode: 'solid', stops: trackRgb ? [trackRgb] : [],
+                         opacity: bgOpacity / 100 }) || 'var(--primary-text-color)')
+        : indColor;
+      const inkOnFill = lineAdaptive
+        ? (adaptiveInk({ fill: SC.toRgb(exactHexColor) }) || 'var(--primary-text-color)')
+        : indColor;
+
+      const lineStyle = (col) => isHoriz
+        ? `position:absolute; top:0; bottom:0; width:${indThick}; background:${col}; left:calc(${targetPct} * 100%); transform:translateX(-50%) translateZ(0); z-index:${ELM_FLOAT};`
+        : `position:absolute; left:0; right:0; height:${indThick}; background:${col}; bottom:calc(${targetPct} * 100%); transform:translateY(50%) translateZ(0); z-index:${ELM_FLOAT};`;
       
       let realPillHtml = '';
       if (this._get('indicator_value', false)) {
@@ -559,7 +579,14 @@ class ScProgressbar extends LitElement {
       // its chip, so it breathes whenever the pill is in hand - but its own
       // colour and thickness are set on that chip too, and while one of those
       // is being held the line answers alone.
-      indicatorTopHtml = html`<div class="sc-pb-indicator-line" data-sc-part="pill indicator_line" style="${lineStyle}"></div>${realPillHtml}`;
+      // The second copy carries the same two part names as the first: it is
+      // the same line, and a highlight that inked only the half outside the
+      // fill would be pointing at half a mark.
+      const filledLineHtml = lineAdaptive ? html`
+        <div style="position:absolute; inset:0; z-index:${ELM_FLOAT}; clip-path:${fillClipPath}; pointer-events:none;">
+          <div class="sc-pb-indicator-line" data-sc-part="pill indicator_line" style="${lineStyle(inkOnFill)}"></div>
+        </div>` : '';
+      indicatorTopHtml = html`<div class="sc-pb-indicator-line" data-sc-part="pill indicator_line" style="${lineStyle(inkOnTrack)}"></div>${filledLineHtml}${realPillHtml}`;
     }
 
     let circularHtml = ''; 
@@ -1251,7 +1278,8 @@ const STYLE_FIELDS = [
 
   { id: '_section_indicator',  icon: icon('pill'), label: '── Indicator & Pill',  type: 'section', condition: cfg => isLin(cfg) },
   { id: 'show_indicator',      label: 'Show indicator line', type: 'checkbox', condition: cfg => isLin(cfg) },
-  { id: 'indicator_color',     label: 'Line colour',       type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
+  { id: 'indicator_color_adaptive', label: 'Dual-adaptive colour (inverted at fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
+  { id: 'indicator_color',     label: 'Line colour',       type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator && !cfg.indicator_color_adaptive, framedBy: 'pill' },
   { id: 'indicator_thickness', label: 'Line thickness (px/%)',type: 'text', placeholder: '2px', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
   { type: 'note', framedWhen: 'pill', label: 'The pill is on the canvas while this bar is open - the line it rides, its own colours, its type and its glass are all under the chip.' },
   { id: 'indicator_value',     label: 'Show pill with value on line', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },

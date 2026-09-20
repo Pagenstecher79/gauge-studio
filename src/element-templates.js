@@ -559,6 +559,9 @@ export const PROGRESSBAR_TEMPLATES = Object.freeze([
       show_value: false,
       show_indicator: true,
       indicator_color: '#ffffff',
+      // The ticks on this template already invert at the fill level; a line
+      // that did not would be the white one nobody can see on a light fill.
+      indicator_color_adaptive: true,
       indicator_value: true,
       indicator_value_rotation: '0',
       indicator_value_adaptive_mode: 'pill',
