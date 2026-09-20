@@ -183,6 +183,16 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   not be reordered by hand and the chevrons were the only way. The grip now
   carries the row through the list on pointer events, and dragging past
   either end means the front or the back.
+
+  The confusion had a second half, and it is gone too: there were *two* lists
+  over the same objects, the folded stack list and the list of boxes under it,
+  in opposite orders, both with a pair of chevrons - so the same button meant
+  "forward" in one and "back" in the other, and the fold meant the one you saw
+  without opening anything was the one running the wrong way. They are now one
+  list, front at the top, unfolded, carrying the grip and the four order
+  buttons of the stack list and the numbers and the lock of the other. It no
+  longer hides the rows that are not selected either: a stack list that shows
+  one object is not a stack list.
 - **39** - ~~A circular bar placed through `+ add object` appears at about 63%
   of the box it was drawn in.~~ Done. The ghost under the crosshair and the
   click sized the box from different slots: the click asks the slot *with* the
