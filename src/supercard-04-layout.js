@@ -4,7 +4,8 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
          isSquareLocked, isPinned, DEFAULT_CANVAS, DEFAULT_GRID,
          gridRowsToPx, gridColumnsToPx, gridSize, canvasFromGrid, canvasFromCard,
          pinnedToShape, rescaleCanvas, rowsForShape,
-         sectionColumns, sectionWidthPx, editingDialog, markDialogClean, HA_COLUMN_COUNT,
+         sectionColumns, sectionWidthPx, editingDialog, markDialogClean,
+         dialogHasUnsavedWork, contentRowArranges, HA_COLUMN_COUNT,
          canDuplicate, reorderElement, overlappingElements,
          alignElements, restorePatch,
          NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview,
@@ -1992,6 +1993,7 @@ class ScCanvasEditor extends LitElement {
       _menu: { type: Boolean, state: true },
       _applyState: { type: String, state: true },
       _applyError: { type: String, state: true },
+      _canApply: { type: Boolean, state: true },
       _menuKind: { type: String, state: true },
       _placing: { type: String, state: true },
       _ghost: { type: Object, state: true },
@@ -2037,6 +2039,10 @@ class ScCanvasEditor extends LitElement {
     // knows the change it is about to see is not a user's edit.
     this._restoredGrid = false;
     this._configOpen = true;
+    // Live until the first render has asked the dialog. A button that starts
+    // grey and comes on a frame later reads as broken; one that starts live
+    // and goes grey reads as the answer arriving.
+    this._canApply = true;
     this._menu = false;
     // Which kind's template page the menu is showing, null for its front
     // page. State, because the menu is drawn from it.
@@ -2214,6 +2220,7 @@ class ScCanvasEditor extends LitElement {
     // wait for something to ask: the controls that read them sit in a fold,
     // and the Layout tab is often the first thing opened.
     if (this.isConnected) { void this._maxColumns; void this._sectionPx; }
+    this._refreshApply();
     // However a gauge's parts were left - the button, or a different element
     // selected - the canvas goes back to the zoom it was being arranged at,
     // and the gauge is properly let go of. Letting go matters: `_inner` holds
@@ -3636,8 +3643,28 @@ class ScCanvasEditor extends LitElement {
       return;
     }
     this._applyState = 'saved';
+    this._refreshApply();
     clearTimeout(this._appliedTimer);
     this._appliedTimer = setTimeout(() => { this._applyState = 'idle'; }, APPLY_SAVED_MS);
+  }
+
+  /**
+   * Whether Apply has anything to do, read off the dialog's dirty state.
+   *
+   * Read rather than tracked, because the dialog goes dirty for edits this
+   * editor never sees - a card's size set in the Layout tab is Home
+   * Assistant's own control writing Home Assistant's own key. Tracking our
+   * commits would grey the button out over work that really is unsaved, which
+   * is the one failure mode worth designing against; a button that is live
+   * with nothing to do merely writes the same config twice.
+   *
+   * So it is asked for at every render, and once more when the pointer
+   * arrives on the button - the render may be older than the last visit to
+   * another tab, and you cannot click it without going there first.
+   */
+  _refreshApply() {
+    const can = dialogHasUnsavedWork(this);
+    if (can !== this._canApply) this._canApply = can;
   }
 
   /** The window the canvas is zoomed and scrolled inside. */
@@ -5976,7 +6003,26 @@ class ScCanvasEditor extends LitElement {
   _ghostAt(e) {
     if (!this._placing) return;
     this._ghost = newElementPreview(this.slot, this._canvas, this._placing,
-                                    this._atPointer(e), this._placingTemplate?.aspect);
+                                    this._atPointer(e), this._placingTemplate?.aspect,
+                                    this._pendingEntry(this._placing, this._placingEntry));
+  }
+
+  /**
+   * The entry the click is about to add: the template's where one was chosen,
+   * and the module's own otherwise.
+   *
+   * The ghost needs it for the same reason the placement does - it is what
+   * says whether the new box is locked square - so both ask here rather than
+   * the ghost guessing from the template's `aspect`, which cannot answer it.
+   *
+   * @param {string} what
+   * @param {any} chosen
+   * @returns {any}
+   */
+  _pendingEntry(what, chosen) {
+    if (chosen) return chosen;
+    const kind = NEW_ELEMENT_KINDS.find(k => k.kind === what);
+    return kind?.module ? window.SupercardModules[kind.module]?.newEntry?.() : undefined;
   }
 
   /**
@@ -6021,10 +6067,7 @@ class ScCanvasEditor extends LitElement {
     const c = this._canvas;
     const at = this._atPointer(e);
 
-    const kind = NEW_ELEMENT_KINDS.find(k => k.kind === what);
-    const entry = chosen ?? (kind?.module
-      ? window.SupercardModules[kind.module]?.newEntry?.()
-      : undefined);
+    const entry = this._pendingEntry(what, chosen);
 
     const made = addElement(this.slot, c, what, entry, at, aspect);
     if (!made) return;
@@ -6557,8 +6600,11 @@ class ScCanvasEditor extends LitElement {
           ${this._placing ? '' : SC.tipDot('Later in the list draws on top. A gauge and a '
                      + 'round bar stay square and fill their box.')}
           <button class="add-btn apply-btn" style="width:auto; padding:6px 12px;"
-                  ?disabled=${this._applyState === 'saving'}
-                  title="Put the card on the dashboard now and carry on - the dialog stays open"
+                  ?disabled=${this._applyState === 'saving' || !this._canApply}
+                  title=${this._canApply
+                    ? 'Put the card on the dashboard now and carry on - the dialog stays open'
+                    : 'Nothing to save - the dashboard already has this card'}
+                  @pointerenter=${() => this._refreshApply()}
                   @click=${() => this._apply()}>
             ${this._applyState === 'saved' ? html`${icon('check')} Saved`
               : this._applyState === 'saving' ? html`${icon('save')} Saving…`
@@ -6808,14 +6854,22 @@ if (!customElements.get('sc-canvas-dimensions')) customElements.define('sc-canva
 
 
 /**
- * Writes down the canvas a rows layout describes, once, when the editor opens.
+ * Writes down the canvas the card is already drawing, once, when the editor
+ * opens.
  *
- * The card is already drawing that canvas - rows-compat.js builds it in memory
- * on every load - so this changes the model and not the picture, which is what
- * makes doing it without asking defensible. `layout_rows` is left in the config,
- * so a migration that lands badly is undone by deleting `canvas` in the YAML
- * editor. A card that never had a layout is not touched here; it gets the offer
- * instead, because the canvas built from a content row is a new arrangement.
+ * Two cards come here, and neither of them has a picture to lose. A rows
+ * layout is already being drawn as a canvas - rows-compat.js builds it in
+ * memory on every load - so writing it down changes the model and nothing
+ * else. A card with no layout and at most one object has nothing to arrange:
+ * the one element fills the card exactly as the content row drew it. See
+ * `contentRowArranges` for where that line is and why.
+ *
+ * A card with no layout and several objects is *not* here. Stacking its
+ * contents into bands is a new arrangement however faithful the contents, so
+ * that one gets the offer and its button.
+ *
+ * `layout_rows` is left in the config either way, so a migration that lands
+ * badly is undone by deleting `canvas` in the YAML editor.
  *
  * The write happens on open rather than at render because a Lovelace card
  * cannot persist its own config outside the editor. This is the only place that
@@ -6840,9 +6894,19 @@ class ScCanvasAdopt extends LitElement {
     this._done = true;
 
     const slot = this.slot || {};
-    const shape = canvasFromGrid(this.cardConfig, slot, 400,
-                                 sectionColumns(this), sectionWidthPx(this));
-    const migrated = rowsAsCanvas(slot, shape.w, shape.h);
+    const columns = sectionColumns(this), px = sectionWidthPx(this);
+    const shape = canvasFromGrid(this.cardConfig, slot, 400, columns, px);
+    const migrated = needsRowsCompat(slot)
+      ? rowsAsCanvas(slot, shape.w, shape.h)
+      // The content row's own canvas, built the way the offer's button builds
+      // it. Pill was a card *shape* and the canvas has only a corner radius;
+      // half the shorter side is the same stadium, so a round card stays
+      // round instead of being squared off by a change of model. It travels
+      // in this commit, because a second one in the same tick is lost.
+      : { canvas: canvasFromCard(this.cardConfig, slot, columns, px),
+          ...(SC.cardIsPill(slot)
+            ? { border_radius: 50, border_radius_unit: '%', border_radius_ref: 'min' }
+            : {}) };
     // `layout_active` travels with it. The canvas is what the card draws from
     // now, and a canvas without that switch is one nobody sees - which is how
     // the last rows cards ended up carrying a picture and showing their plain
@@ -6923,21 +6987,21 @@ Object.assign(window.SupercardModules['layout'], (() => {
   }
 
   /**
-   * A card with a canvas gets the canvas editor; a card still on rows is given
-   * the canvas its rows describe and then gets the same editor; a card on
-   * neither is offered one.
+   * A card with a canvas gets the canvas editor; a card whose canvas can be
+   * written down without inventing anything is given it and then gets the same
+   * editor; only a card where the switch would *rearrange* something is
+   * offered one.
    *
-   * The difference between migrating and offering is whether there is a layout
-   * to migrate at all. A rows layout migrates position for position - one that
-   * is switched on is already being drawn as a canvas on the dashboard,
-   * rows-compat.js does that in memory on every load, so writing it down
-   * changes the model and nothing else; one that is switched off is a draft,
-   * and `rowsToRead` shares the card between its rows rather than believing a
+   * Migrating and offering differ by whether a layout has to be invented. A
+   * rows layout migrates position for position - one that is switched on is
+   * already being drawn as a canvas on the dashboard, rows-compat.js does that
+   * in memory on every load; one that is switched off is a draft, and
+   * `rowsToRead` shares the card between its rows rather than believing a
    * height nobody has ever seen. A card that never had a layout draws the
-   * content row, and the canvas built from it arranges the same contents as
-   * bands, top to bottom. That is a new arrangement, however faithful the
-   * contents - so that one stays an offer, with the button that says what it
-   * will do.
+   * content row, and there the count decides: one object, or none, is not an
+   * arrangement and comes along on its own, while several are stacked into
+   * bands that nobody chose and so stay behind a button. See
+   * `contentRowArranges`.
    */
   function renderCustomBlock(commitFn, hass, slot, cardConfig) {
     if (slot?.canvas) {
@@ -6945,7 +7009,7 @@ Object.assign(window.SupercardModules['layout'], (() => {
                                     .slot=${slot} .hass=${hass} .cardConfig=${cardConfig}
                                     .commitFn=${commitFn}></sc-canvas-editor>`;
     }
-    if (needsRowsCompat(slot)) {
+    if (needsRowsCompat(slot) || !contentRowArranges(cardConfig, slot)) {
       return html`<sc-canvas-adopt .slot=${slot} .cardConfig=${cardConfig}
                                    .commitFn=${commitFn}></sc-canvas-adopt>`;
     }

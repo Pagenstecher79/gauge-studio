@@ -41,6 +41,17 @@ so a restart always serves the build you just made. Home Assistant caches
 `/local/` for a month; at a fixed URL you would be testing last week's code
 without any sign of it.
 
+`npm run build` takes care of that itself: `postbuild.mjs` runs afterwards,
+re-registers the URL and restarts the container, so a plain reload gets the
+build you just made. It does nothing at all where there is nothing to do - no
+`.storage` here (a fresh clone, and CI), the container not running, the bundle
+byte for byte the one already registered, or `SKIP_HA_SYNC=1` - and it never
+fails a build, because a build is also how the release workflow ships.
+
+`npm run watch` does not get that: `vite build --watch` never exits, so npm's
+`postbuild` never runs. That loop keeps the hard refresh above, and where the
+service worker is stubborn, one `node docker/prepare.mjs` and a restart.
+
 ## What is in the instance
 
 `config/configuration.yaml` defines numbers that **move**, because a still

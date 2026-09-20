@@ -270,10 +270,21 @@ ran inside the edit dialog, where the card is not on screen, so it inferred the
 card's shape from `grid_options` and a reference section width. The card has
 measured itself, so `canvasFromBox` takes the ratio it actually has.
 
-A card that never had a layout is *not* migrated. There the canvas is built
-from what the card draws and arranged as bands, which is a new arrangement
-however faithful the contents — so it stays an offer, with a button that says
-so, and the two models it sits between are the content row and the canvas.
+A card that never had a layout is migrated only where the switch rearranges
+nothing. There the canvas is built from what the card draws and stacked as
+bands, and bands are something the canvas invents — so the count decides, and
+`contentRowArranges` is where the line is. More than one element and it stays
+an offer, with a button that says what it will do; one element, or none, and
+the editor writes it down like any other card it can reproduce, because a lone
+gauge fills the canvas exactly as it filled the content row. The two models
+such a card sits between are the content row and the canvas.
+
+The count is taken off the canvas that would actually be written rather than
+off the slot, because what becomes an element is `canvasFromCard`'s answer:
+which gauges are active, which bars are switched on, which labels are enabled,
+and whether the header shows at all. A card showing only its icon, name and
+state has three elements in one band — that is an arrangement too, and it
+keeps the button.
 
 ### A layout that was switched off is a draft, not a picture
 

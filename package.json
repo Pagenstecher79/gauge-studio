@@ -6,6 +6,7 @@
   "main": "dist/gauge-studio.js",
   "scripts": {
     "build": "vite build",
+    "postbuild": "node docker/postbuild.mjs",
     "watch": "vite build --watch",
     "dev": "vite build --watch",
     "typecheck": "tsc -p jsconfig.json --noEmit",

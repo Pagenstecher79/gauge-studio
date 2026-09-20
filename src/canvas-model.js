@@ -1071,6 +1071,33 @@ export function editingDialog(node) {
 }
 
 /**
+ * Whether the card edit dialog is holding work that is not on the dashboard.
+ *
+ * The other side of `markDialogClean`: the same bookkeeping, read rather than
+ * written. Apply writes the dialog's config to the dashboard, so a dialog that
+ * has nothing the dashboard does not already have has nothing for Apply to do,
+ * and the button says so by going grey.
+ *
+ * `isEffectiveDirty` is the one to ask - it is what Home Assistant itself
+ * gates the light dismiss on, and it accounts for a nested editor's own state
+ * as well as this one's. `isDirty` stands in where a version does not have it.
+ *
+ * Not finding a dialog answers `true`, which looks like the wrong way round
+ * and is not: no dialog means Apply cannot work at all, and the click already
+ * explains that in place (`APPLY_UNAVAILABLE`). A grey button explains
+ * nothing. Not knowing is not a reason to take a button away.
+ *
+ * @param {any} node the dialog itself, or an element inside it
+ * @returns {boolean}
+ */
+export function dialogHasUnsavedWork(node) {
+  const ctx = editingDialog(node)?._dirtyStateContext;
+  if (!ctx) return true;
+  const dirty = ctx.isEffectiveDirty ?? ctx.isDirty;
+  return typeof dirty === 'boolean' ? dirty : true;
+}
+
+/**
  * The first element of this tag whose `config` is that very object.
  *
  * Identity, not equality: two cards can carry configurations that compare
@@ -1353,17 +1380,59 @@ export function canvasFromCard(cardConfig, slot, total = HA_COLUMN_COUNT, sectio
   }
 
   for (const id of stacked) {
-    const b = bandRect(shape, band++, bands);
+    // One object and no header is not an arrangement, so it gets no band. The
+    // content row draws such a card edge to edge - a lone gauge is its own
+    // card - and the margins exist to keep an arrangement off the edges. Kept
+    // here rather than fixed up by the caller, because this is the canvas the
+    // editor writes down without asking for exactly this case, and it has to
+    // be the card the person was already looking at.
+    const b = bands === 1 ? { x: 0, y: 0, w: shape.w, h: shape.h }
+                          : bandRect(shape, band++, bands);
     // A gauge, and a circular bar, is drawn as the largest square that fits
     // its box, so a wide box would be mostly empty space that still counts as
     // the element.
     const side = Math.min(b.w, b.h);
     elements.push(el(id, isSquareLocked({ id }, slot)
-      ? { x: b.x + (b.w - side) / 2, y: b.y, w: side, h: side }
+      // Centred both ways when it has the whole card: a band is a strip and
+      // its square only has room to slide sideways, but a square in a card
+      // that is taller than it is wide has to come down from the top too.
+      ? { x: b.x + (b.w - side) / 2, y: b.y + (b.h - side) / 2, w: side, h: side }
       : b));
   }
 
   return { ...shape, elements };
+}
+
+/**
+ * Whether turning this card's content row into a canvas would *arrange*
+ * anything.
+ *
+ * This is the whole reason the switch is an offer rather than something the
+ * editor does on opening. A rows layout migrates position for position: it
+ * says where things go, and the canvas repeats it. A content row does not -
+ * it stacks whatever the card shows, and `canvasFromCard` has to invent bands
+ * to put that in. Inventing a layout and writing it into somebody's dashboard
+ * unasked is not a migration, so it gets a button and a sentence saying what
+ * the button will do.
+ *
+ * None of that applies to a card holding one object, or none. There are no
+ * bands to invent, the single element fills the card exactly as the content
+ * row drew it, and the offer is a button that changes nothing anybody can
+ * see - in the way of the editor it is standing in front of. So the line is
+ * drawn at the count, not at whether a layout key happens to exist.
+ *
+ * Counted off the canvas that would actually be written rather than off the
+ * slot, because what becomes an element is `canvasFromCard`'s answer: which
+ * gauges are active, which bars are switched on, which labels are enabled,
+ * and whether the header is showing at all. The shape it is asked for makes
+ * no difference to the count, so the defaults will do.
+ *
+ * @param {any} cardConfig
+ * @param {any} slot
+ * @returns {boolean}
+ */
+export function contentRowArranges(cardConfig, slot) {
+  return canvasFromCard(cardConfig, slot).elements.length > 1;
 }
 
 /**
@@ -1756,25 +1825,43 @@ export function addElement(slot, canvas, what, entry, at, aspect) {
   const elements = Array.isArray(canvas?.elements) ? canvas.elements : [];
   const who = newIdentity(slot, canvas, what);
   if (!who) return null;
-  const { id, surface, spec } = who;
+  const { id, surface } = who;
+  // Cloned here rather than in `pendingPatch`, because the other caller is
+  // the ghost under a moving pointer and only reads what comes back.
+  const patch = pendingPatch(slot, who, structuredClone(entry ?? {}));
 
-  /** @type {Record<string, any>} */
-  const patch = {};
-  if (spec?.key) {
-    const list = Array.isArray(slot?.[spec.key]) ? slot[spec.key] : [];
-    patch[spec.key] = [...list, structuredClone(entry ?? {})];
-    // Nothing renders while its module is off, and the switch that used to
-    // turn it on is in the section the canvas replaces.
-    if (spec.active && !slot?.[spec.active]) patch[spec.active] = true;
-  }
-
-  // The slot as it will be, not as it is: the entry being added is what says
-  // whether this bar is a ring, and it is in `patch` rather than in `slot`
-  // until the caller commits. Asking the old slot would give the new element
-  // the shape of whatever happened to sit at that index before.
   const el = { id, ...(surface ? { surface: true } : { inner: 'cc' }),
                ...newBox(canvas, id, surface, at, aspect, { ...slot, ...patch }) };
   return { canvas: { ...canvas, elements: [...elements, el] }, patch, id };
+}
+
+/**
+ * What the slot gains when `entry` is added as `who`.
+ *
+ * Shared by the placement and by the ghost that previews it, because the two
+ * have to size the box the same way and the entry is what decides it: a bar
+ * is square only if it is a ring, and whether it is a ring is in the entry
+ * being added, not in the slot it is being added to. Asking the old slot
+ * gives the new element the shape of whatever happened to sit at that index
+ * before - nothing, usually, so a ring came out a third smaller than the
+ * ghost that promised it.
+ *
+ * @param {any} slot
+ * @param {{spec?: {key?: string, active?: string}}} who from `newIdentity`
+ * @param {any} entry
+ * @returns {Record<string, any>} the keys to merge onto the slot
+ */
+function pendingPatch(slot, who, entry) {
+  /** @type {Record<string, any>} */
+  const patch = {};
+  const spec = who?.spec;
+  if (!spec?.key) return patch;
+  const list = Array.isArray(slot?.[spec.key]) ? slot[spec.key] : [];
+  patch[spec.key] = [...list, entry ?? {}];
+  // Nothing renders while its module is off, and the switch that used to
+  // turn it on is in the section the canvas replaces.
+  if (spec.active && !slot?.[spec.active]) patch[spec.active] = true;
+  return patch;
 }
 
 /**
@@ -1824,13 +1911,16 @@ function newIdentity(slot, canvas, what) {
  * @param {string} what a kind, or the id of an existing element
  * @param {{x: number, y: number}} [at] point the box is centred on
  * @param {number} [aspect] the shape the entry wants, see `newBox`
+ * @param {any} [entry] the entry the click will add, see `pendingPatch`
  * @returns {{ id: string, surface: boolean, x: number, y: number, w: number, h: number } | null}
  */
-export function newElementPreview(slot, canvas, what, at, aspect) {
+export function newElementPreview(slot, canvas, what, at, aspect, entry) {
   const who = newIdentity(slot, canvas, what);
   if (!who) return null;
-  // The ghost has no entry yet - the template's `aspect` is what carries a
-  // ring's shape until there is one - so the slot here is the slot as it is.
+  // The same prospective slot the click will use. `aspect` cannot stand in
+  // for it: a square is a lock rather than a default, and `newBox` does not
+  // read `aspect` at all once it has locked.
+  const patch = pendingPatch(slot, who, entry);
   return { id: who.id, surface: who.surface,
-           ...newBox(canvas, who.id, who.surface, at, aspect, slot) };
+           ...newBox(canvas, who.id, who.surface, at, aspect, { ...slot, ...patch }) };
 }
