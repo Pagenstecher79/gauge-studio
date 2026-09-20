@@ -445,10 +445,11 @@ two rules finish the job:
 - **The dodge is animated, nothing else is.** A chip's own place is `left`/
   `top` and a chip dragged by hand writes those; the stepping aside is a
   `transform`. Transitioning only the transform glides a chip out of the way
-  and still lets a dragged one keep up with the finger. It takes 1.2s and is
+  and still lets a dragged one keep up with the finger. It takes 0.9s and is
   slowest at both ends, because a chip is getting out of the way of something
   the eye is already on and the movement has to be possible to ignore; at 160ms
-  it read as a jump.
+  it read as a jump, and at 1.2s - tried on the toolbar for an afternoon - it
+  was slow enough to watch.
 - **One chip, and its buttons at the right end.** A ring's chip and a frame's
   head are the same surface: the name, then what the part reads (the pencil),
   then the way back out (the bin), in that order wherever a chip is drawn. The

@@ -686,20 +686,6 @@ const STEPS_MIN = 0.75;
 const STEPS_MAX = 2;
 let stepsZoom = 1;
 
-/**
- * How long a chip takes to step aside, in seconds.
- *
- * On the toolbar while the right number is being found: how slow is slow
- * enough to be ignored, and how slow starts to feel like waiting, is a
- * judgement nobody can make from a still picture. It belongs to the session
- * and not to the card - remembered here so it survives the dialog being
- * closed, written into no config, and read by nothing but the stylesheet.
- */
-let chipGlide = (() => {
-  try { return Math.min(4, Math.max(0, parseFloat(localStorage.getItem('sc-chip-glide') || '') || 1.2)); }
-  catch { return 1.2; }
-})();
-
 /** How much of the window a "zoom to the selection" leaves around it. */
 const FIT_MARGIN = 0.85;
 
@@ -2541,9 +2527,6 @@ class ScCanvasEditor extends LitElement {
    */
   updated(changed) {
     super.updated(changed);
-    // A custom property on the host, because that is what reaches the chips
-    // inside the shadow root without any of them being told about it.
-    this.style.setProperty('--sc-chip-glide', chipGlide + 's');
     // Reading the section while this editor is in the document is what fills
     // the memory the detached case lives on - see `_maxColumns`. It cannot
     // wait for something to ask: the controls that read them sit in a fold,
@@ -2974,7 +2957,7 @@ class ScCanvasEditor extends LitElement {
            drawn in a gauge's middle are the ones the steppers hang over, and
            a head under the panel is a bin and a pencil nobody can press. */
         transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
-        transition: transform var(--sc-chip-glide, 1.2s) cubic-bezier(0.33, 0, 0.2, 1);
+        transition: transform var(--sc-chip-glide, 0.9s) cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; align-items: center; gap: 3px;
         font-size: 11.5px; line-height: 1; padding: 2px 3px 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
@@ -3038,7 +3021,7 @@ class ScCanvasEditor extends LitElement {
       .inner-adds { position: absolute; top: 6px;
         max-height: calc(100% - 42px);
         transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
-        transition: transform var(--sc-chip-glide, 1.2s) cubic-bezier(0.33, 0, 0.2, 1);
+        transition: transform var(--sc-chip-glide, 0.9s) cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; flex-flow: column wrap; column-gap: 6px; row-gap: 3px;
         z-index: 6; pointer-events: none; }
       /* Below the pencil, which owns the top left corner. */
@@ -3121,7 +3104,7 @@ class ScCanvasEditor extends LitElement {
            finger. Slow, and slowest at both ends: a chip is getting out of
            the way of something the eye is already on, so it has to be
            possible to ignore. At a fifth of a second it read as a jump. */
-        transition: transform var(--sc-chip-glide, 1.2s) cubic-bezier(0.33, 0, 0.2, 1);
+        transition: transform var(--sc-chip-glide, 0.9s) cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; align-items: center; gap: 3px; z-index: 7;
         font-size: 11.5px; line-height: 1; padding: 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
@@ -6037,17 +6020,6 @@ class ScCanvasEditor extends LitElement {
    * it: a chip dragged aside by hand keeps the place it was given, and the
    * needle's chip keeps being fetched back to the needle.
    */
-  /**
-   * The glide time from the toolbar. Kept for the browser rather than the
-   * card: it is how this editor behaves, not how the card is drawn.
-   */
-  _setGlide(v) {
-    chipGlide = Math.min(4, Math.max(0, parseFloat(v) || 0));
-    try { localStorage.setItem('sc-chip-glide', String(chipGlide)); } catch { /* denied */ }
-    this.style.setProperty('--sc-chip-glide', chipGlide + 's');
-    this.requestUpdate();
-  }
-
   _clearChips() {
     const root = this.shadowRoot;
     const c = this._safeRect();
@@ -7371,10 +7343,6 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
-    const glideTip = 'How long a chip takes to step out of the way of the frame or the '
-      + 'menu being worked on. Nothing else moves by it, so a chip dragged by hand still '
-      + 'follows the pointer. Kept for this browser, not written into the card. 0 turns '
-      + 'the movement off.';
     const hlTip = 'The part in hand blinks on the drawing itself and is lent a colour that stands out against what it is drawn on - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
     // The switch says what the card is set to; while an element is open the
     // preview is on over the top of it, and the tip is what says so - a
@@ -7405,11 +7373,6 @@ class ScCanvasEditor extends LitElement {
         <span class="settings-label">Live preview ${SC.tipDot(liveTip, { right: true })}</span>
         <ha-switch .checked=${this._live} .disabled=${liveHeld}
                    @change=${e => this._send('live_preview', e.target.checked ? undefined : false)}></ha-switch>
-        <span class="gap"></span>
-        <span class="settings-label">Glide ${SC.tipDot(glideTip, { right: true })}</span>
-        <input class="num" type="number" min="0" max="4" step="0.1" .value=${String(chipGlide)}
-               @change=${(/** @type {any} */ e) => this._setGlide(e.target.value)}>
-        <span class="hint">s</span>
         <span class="gap"></span>
         <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
         <ha-switch .checked=${this._hl}
