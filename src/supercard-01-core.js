@@ -993,7 +993,14 @@ Object.assign(window.SupercardUtils, (() => {
     .pattern-card { background: var(--secondary-background-color, #1e1e1e); border: 1px solid var(--divider-color, #444); border-radius: 8px; padding: 10px; position: relative; }
     .pattern-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; cursor: pointer; }
     .pattern-content { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; margin-top: 8px; border-top: 1px dashed var(--divider-color, #333); }
-    .drag-handle { cursor: grab; padding-right: 8px; color: var(--secondary-text-color); }
+    /* touch-action:none is what makes a grip work with a finger at all -
+       without it the browser claims the gesture for a scroll before the first
+       move is delivered, and the list slides away under the hand. See
+       list-reorder.js. */
+    .drag-handle { cursor: grab; padding-right: 8px; color: var(--secondary-text-color);
+                   touch-action: none; user-select: none; }
+    .drag-lifted { opacity: 0.4; }
+    .drag-target { border-top: 3px dashed var(--primary-color, #03a9f4); }
     option:disabled { color: rgba(255,255,255,0.3); font-style: italic; }
     ${tipStyles}
   `;

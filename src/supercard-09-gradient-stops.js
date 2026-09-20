@@ -2,6 +2,7 @@ import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/co
 import { icon } from "./icons.js";
 import { normalizeStops, addStop, removeStop, moveStop, withStop,
          distributeStops, stopsToCss } from "./gradient-stops.js";
+import { ListReorder } from "./list-reorder.js";
 
 const SC = window.SupercardUtils;
 
@@ -43,6 +44,14 @@ class ScGradientStops extends LitElement {
 
   constructor() {
     super();
+    // Made here rather than in `render`, or every redraw would throw away the
+    // drag it is holding. See `list-reorder.js` for why this is not the
+    // browser's own drag and drop.
+    this._reorder = new ListReorder(this, {
+      rows: () => this.renderRoot?.querySelectorAll('details.stop') || [],
+      move: (from, to) => this._emit(moveStop(
+        normalizeStops(this.stops, { blocks: this.blocks, fill: false }), from, to)),
+    });
     this.stops = [];
     this.absolute = false;
     this.blocks = false;
@@ -66,8 +75,17 @@ class ScGradientStops extends LitElement {
       details.stop > summary { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
       .head { font-weight: 600; color: var(--primary-color, #03a9f4); flex: 1; display: flex; align-items: center; }
       /* The handle is what starts a drag, not the row: a press anywhere else
-         still opens the row, which is what a summary is for. */
-      .grip { cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px; user-select: none; }
+         still opens the row, which is what a summary is for.
+         touch-action:none is what makes it work with a finger at all -
+         without it the browser claims the gesture for a scroll before the
+         first move is delivered, and the list slides away under the hand. */
+      .grip { cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa);
+              font-size: 16px; user-select: none; touch-action: none; }
+      /* Where it is, and where it is going. The row being carried fades, the
+         one it would land on is marked along its top edge - which is the same
+         mark the browser's own drag used to leave. */
+      details.stop.lifted { opacity: 0.4; }
+      details.stop.target { border-top: 3px dashed var(--primary-color, #03a9f4); }
       .pos { font-weight: normal; color: var(--secondary-text-color, #aaa); font-size: 11px; margin-left: 6px; }
       .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-left: 8px;
              box-shadow: 0 0 2px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); }
@@ -110,34 +128,17 @@ class ScGradientStops extends LitElement {
         </div>
 
         ${stops.map((st, i) => html`
-          <details class="inner-section stop" ?open=${!!this._open[i]}
-            @toggle=${e => this._fold(i, e.target.open)}
-            @dragstart=${e => {
-              e.dataTransfer.effectAllowed = 'move';
-              e.dataTransfer.setData('stopIdx', String(i));
-              setTimeout(() => { e.target.style.opacity = '0.3'; }, 0);
-            }}
-            @dragover=${e => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = 'move';
-              e.currentTarget.style.borderTop = '3px dashed var(--primary-color, #03a9f4)';
-            }}
-            @dragleave=${e => { e.currentTarget.style.borderTop = ''; }}
-            @drop=${e => {
-              e.preventDefault();
-              e.currentTarget.style.borderTop = '';
-              const from = parseInt(e.dataTransfer.getData('stopIdx'));
-              if (!isNaN(from) && from !== i) this._emit(moveStop(stops, from, i));
-            }}
-            @dragend=${e => {
-              e.target.style.opacity = '1';
-              e.target.removeAttribute('draggable');
-            }}>
+          <details class="inner-section stop ${this._reorder.lifted(i) ? 'lifted' : ''} ${
+              this._reorder.target(i) ? 'target' : ''}" ?open=${!!this._open[i]}
+            @toggle=${e => this._fold(i, e.target.open)}>
             <summary>
               <div class="head">
-                <span class="grip" title="Move"
-                      @mousedown=${e => e.target.closest('details').setAttribute('draggable', 'true')}
-                      @mouseup=${e => e.target.closest('details').removeAttribute('draggable')}>${icon('grip-vertical')}</span>
+                <span class="grip" title="Drag to move"
+                      @pointerdown=${e => this._reorder.down(e, i)}
+                      @pointermove=${this._reorder.over}
+                      @pointerup=${this._reorder.up}
+                      @pointercancel=${this._reorder.up}
+                      @click=${this._reorder.swallow}>${icon('grip-vertical')}</span>
                 ${this.itemLabel} ${i + 1}
                 <span class="pos">[${this.absolute ? 'Value' : 'Position'}: ${st.pos ?? 'auto'}]</span>
                 <span class="dot" style="background:${st.color}"></span>

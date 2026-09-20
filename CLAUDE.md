@@ -252,6 +252,19 @@ a function inside a render, and a throw in a render takes the whole editor
 with it: the menus below the canvas stopped opening, in a way that named
 neither the field nor the editor. One reader, everywhere.
 
+**One list reorder, and it answers a finger.** A list with a grip is
+reordered through `ListReorder` (`list-reorder.js`): `pointerdown` on the
+grip, pointer capture, the row under the pointer is where it lands, and
+`indexAtY` is the whole of the arithmetic. The grip needs `touch-action:
+none`, or the browser takes the gesture for a scroll before the first move
+arrives and the dialog slides away under the hand. Do not reach for HTML5
+drag and drop - `draggable` armed on `mousedown` is what five of these
+editors did, and it answers a mouse and nothing else, so a dashboard edited
+on a tablet could not be reordered at all. Where a list is filtered before it
+is drawn - the glass editor hides what has its own switch - the controller
+speaks in rows on the screen and the host translates to the stored list; a
+position is not an index.
+
 **Editor styles.** Start from a shared stylesheet and add only what differs:
 
 ```js
