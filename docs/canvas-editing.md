@@ -407,6 +407,20 @@ two rules finish the job:
   axis, because a chip that goes round a corner reads as a chip that has
   wandered. Without the second half of that rule a chip that had dodged the
   panel landed on its neighbour, which is the same fault one step further on.
+- **Each obstacle asks for the clearance it deserves.** Eight pixels for the
+  panel and for the frame being worked on, two between one chip and the next.
+  One figure for all of them was the first answer and it produced the very
+  overlap it was written to stop: on a small element there is not eight
+  pixels of room around four chips, a column of add buttons and a panel, so
+  nothing came back clear, the least-overlap fallback took over and a chip
+  ended up lying on an add button. A chip standing against a chip is untidy;
+  a chip over the one press that adds a part is a fault.
+- **What is being worked on is kept clear, frame or no frame.** A part with a
+  frame is protected by the frame; one whose only mark is a ring - the ticks,
+  the pointer - is protected by its measured box where it has one. The rings
+  themselves have none and want none: a tick ring is spread over the whole
+  circle, and a chip resting on one arc of it hides nothing that cannot be
+  read somewhere else.
 - **Frames are obstacles too, and a frame's head is a chip.** A part's frame is
   worked on the way the panel is read, so the chips give way to its drawing and
   to the field it is being typed into. Its head is not an obstacle but a chip
@@ -414,8 +428,16 @@ two rules finish the job:
   drawn in a gauge's middle - the label, the value, the multiplier, the scale -
   are exactly the ones the steppers hang over, and a head under the panel is a
   bin and a pencil nobody can press. It may only go about its own height either
-  way, or it stops reading as that frame's name, and it never dodges the frame
-  it belongs to.
+  way, or it stops reading as that frame's name.
+- **A head goes round its own frame rather than onto it.** Its frame asks it
+  for no clearance - a head sits against the thing it names on purpose - but
+  the frame is still something not to be *on*. The panel hangs directly over
+  the parts in a gauge's middle, so above the frame is exactly where the
+  value's and the multiplier's heads have no room, and given the frame away
+  entirely they were left lying on the drawing they name. A head may take any
+  of its frame's other three sides instead, further than the cap allows and
+  let through anyway: against its frame it still reads as that frame's, from
+  whichever side.
 - **Over the panel, for the chip that had nowhere to go.** Behind it is the
   better picture and stays the rule, but a chip that cannot be pressed is not a
   chip, so one still covered when everything else has been tried is raised
