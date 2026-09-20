@@ -1507,8 +1507,11 @@ const BAR_PARTS = Object.freeze({
       // pill's own, and a pulse over both while the line's thickness is being
       // set is a pulse over the wrong thing. A row that names a part narrows
       // the highlight to it for as long as it is held.
+      // No `hl` here: only a slider narrows the highlight while it is held,
+      // and a checkbox is a press rather than a hold - there would be nothing
+      // to see.
       { key: 'indicator_color_adaptive', icon: icon('palette'), flag: true,
-        what: 'adaptive line colour', hl: 'indicator_line' },
+        what: 'adaptive line colour' },
       { icon: icon('paintbrush'), what: 'line colour', paint: true, hl: 'indicator_line',
         condition: (/** @type {any} */ cfg) => !cfg.indicator_color_adaptive,
         read: (/** @type {any} */ cfg) => markHex(cfg.indicator_color, '#ffffff'),
@@ -1517,7 +1520,7 @@ const BAR_PARTS = Object.freeze({
                { icon: THICK, by: 0.5, min: 0, max: 10, hl: 'indicator_line' }),
       { key: 'indicator_value_rotation', icon: icon('rotate-cw'), what: 'rotation',
         read: (/** @type {any} */ cfg) => String(cfg.indicator_value_rotation ?? 'auto'),
-        picks: [{ value: 'auto', label: 'Crossed with the bar', short: 'Auto' },
+        picks: [{ value: 'auto', label: 'Upright, as it reads', short: 'Auto' },
                 { value: '0', label: 'Horizontal', short: '0\u00B0' },
                 { value: '90', label: 'Quarter turn', short: '90\u00B0' },
                 { value: '-90', label: 'Quarter turn back', short: '-90\u00B0' },

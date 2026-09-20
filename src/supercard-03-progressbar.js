@@ -465,18 +465,22 @@ class ScProgressbar extends LitElement {
       // The line marks the fill's edge, so it stands on two fields at once:
       // half of it lies on the fill and half on the track. One ink has to be
       // wrong on one of them, which is why the adaptive line is drawn twice -
-      // the dual-adaptive answer the bar's ticks already give. The arithmetic
-      // is `adaptive-ink.js` rather than a contrast ratio, because a two-pixel
-      // line on a saturated hue is read by lightness and not by a ratio built
-      // for text. Where a field has nothing to say - a track the card shows
-      // through, a fill that resolved to no colour - the theme's own text
-      // colour is still the best answer.
+      // the dual-adaptive answer the bar's ticks already give.
+      //
+      // Over the fill the field is known exactly, and the ink for it is
+      // `adaptive-ink.js`: lightness rather than a contrast ratio, because a
+      // two-pixel line on a saturated hue is read by lightness and not by a
+      // ratio built for text.
+      //
+      // Over the track it is not known, and asking the background colour is
+      // worse than not asking. A track is painted at a tenth of its colour by
+      // default, so what the eye sees there is the card - and a white track at
+      // half strength over a dark dashboard reads as mid-grey while the
+      // colour says white, which is how the adaptive line came out near-black
+      // on grey and all but vanished. The theme's own text colour is right on
+      // the card by definition, and the card is what the track is showing.
       const lineAdaptive = this._get('indicator_color_adaptive', false);
-      const trackRgb = SC.toRgb(bgColorRaw, { resolveVars: true });
-      const inkOnTrack = lineAdaptive
-        ? (adaptiveInk({ mode: 'solid', stops: trackRgb ? [trackRgb] : [],
-                         opacity: bgOpacity / 100 }) || 'var(--primary-text-color)')
-        : indColor;
+      const inkOnTrack = lineAdaptive ? 'var(--primary-text-color)' : indColor;
       const inkOnFill = lineAdaptive
         ? (adaptiveInk({ fill: SC.toRgb(exactHexColor) }) || 'var(--primary-text-color)')
         : indColor;
@@ -534,7 +538,13 @@ class ScProgressbar extends LitElement {
            glassCSS = `box-shadow: 0 2px 2px rgba(0,0,0,0.25); border: none;`;
          }
 
-         const pRot = (this._get('indicator_value_rotation', 'auto') === 'auto') ? (isHoriz ? -90 : 0) : parseInt(this._get('indicator_value_rotation'));
+         // `auto` used to cross the pill with the bar, on the reasoning that a
+         // pill lying along the bar covers a long stretch of it. What it
+         // actually did on a horizontal bar was stand the reading on its end,
+         // where it has the bar's height to fit into and has to shrink to get
+         // there. Upright is what a reading is for, so that is what `auto`
+         // means now - the same 0 degrees a vertical bar has always had.
+         const pRot = (this._get('indicator_value_rotation', 'auto') === 'auto') ? 0 : parseInt(this._get('indicator_value_rotation'));
          const isVertRot = Math.abs(pRot) === 90;
 
          // A liquid pill stands further off the text than a flat one, and the
@@ -1298,7 +1308,7 @@ const STYLE_FIELDS = [
   { id: 'indicator_value',     label: 'Show pill with value on line', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator, framedBy: 'pill' },
   { id: 'value_animated',      label: 'Animate value (follow fill level)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
   { id: 'indicator_value_rotation', label: 'Pill rotation', type: 'select', framedBy: 'pill', options: [
-    { value: 'auto', label: 'Auto (H ↔ V crossed)' },
+    { value: 'auto', label: 'Auto (upright, as it reads)' },
     { value: '0', label: '0° (horizontal)' },
     { value: '90', label: '90°' },
     { value: '-90', label: '-90°' },

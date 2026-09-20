@@ -137,20 +137,23 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   part of the canvas, so its three weights are in the form alone.
 - **20** - The bar label cannot be dragged out and placed by hand.
 - **35** - ~~Check the pill's automatic alignment, and make sure the pill never
-  wraps to two lines - shrinking the font where it must.~~ Done. The automatic
-  alignment is right and stays: it crosses the pill with the bar, so the pill
-  only ever covers a thin slice of the bar's length and can travel the whole
-  range. What it costs is that the reading runs across the *narrow* way of the
-  bar - which broke it over two lines on a slim vertical bar, and on a
-  horizontal one had its ends cut off by the bar's own `overflow: hidden`. The
-  pill is `nowrap` now, and `pillFontSize` in `pill-glass.js` caps the type
-  size against both of the bar's measures: the line of text along its own
-  direction, the pill's one line across it. Rotation is a transform, so which
-  screen axis the text ends up on is known only in the renderer, which is why
-  it hands the two extents over rather than the helper working them out. The
-  cap is in `cqw`/`cqh` against the bar's own container, so it costs no
-  measurement and no second layout pass on the one element that moves every
-  frame.
+  wraps to two lines - shrinking the font where it must.~~ Done. `auto` used to
+  cross the pill with the bar, on the reasoning that a pill lying along the bar
+  covers a long stretch of it. On a horizontal bar that stood the reading on
+  its end, where it has only the bar's *height* to fit into - so it shrank
+  until it could not be read. `auto` is 0 degrees now, whichever way the bar
+  runs: upright is what a reading is for. A pill turned on its end by hand
+  still shrinks to fit, and that is the user's own arrangement.
+  The pill is `nowrap` as well, and `pillFontSize` in `pill-glass.js` caps the
+  type size against both of the bar's measures: the line of text along its own
+  direction, the pill's one line across it - which is what keeps a slim
+  vertical bar from breaking the reading over two lines, and keeps the bar's
+  own `overflow: hidden` from taking the rounded ends off. Rotation is a
+  transform, so which screen axis the text ends up on is known only in the
+  renderer, which is why it hands the two extents over rather than the helper
+  working them out. The cap is in `cqw`/`cqh` against the bar's own container,
+  so it costs no measurement and no second layout pass on the one element that
+  moves every frame.
 - **42** - The corner radius should be set exactly the way a surface's is.
 - **49** - ~~The indicator line has no adaptive colour, or no switch for
   one.~~ Done. The line marks the fill's edge, so half of it lies on the
@@ -158,9 +161,12 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   So the adaptive line is drawn twice and clipped, the way the bar's ticks
   already are, and each half is `adaptive-ink.js`'s answer to the field
   under it - lightness rather than a contrast ratio, because a two-pixel
-  line on a saturated hue is read by lightness. Where a field says nothing
-  - a track the card shows through, a fill that resolved to no colour -
-  the theme's own text colour stays the answer. The switch is
+  line on a saturated hue is read by lightness. Over the track the field is
+  not asked at all: a track is a tenth of its colour by default, so what the
+  eye reads there is the card, and a white track at half strength over a dark
+  dashboard reads as mid-grey while its colour says white - which is how the
+  first attempt came out near-black on grey and all but vanished. The theme's
+  own text colour is right on the card by definition. The switch is
   *Dual-adaptive colour*, worded as the ticks' own, in the form and on the
   pill's chip.
 
