@@ -2953,6 +2953,11 @@ class ScCanvasEditor extends LitElement {
          and the buttons at its right - which on a wide frame put the name and
          the button that acts on it half the drawing apart. */
       .inner-tag { position: absolute; left: 0; bottom: 100%; margin-bottom: 7px;
+        /* A head steps aside like any chip - it has to, because the parts
+           drawn in a gauge's middle are the ones the steppers hang over, and
+           a head under the panel is a bin and a pencil nobody can press. */
+        transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
+        transition: transform 1.2s cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; align-items: center; gap: 3px;
         font-size: 11.5px; line-height: 1; padding: 2px 3px 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
@@ -6026,28 +6031,46 @@ class ScCanvasEditor extends LitElement {
     const hits = (/** @type {any} */ h, /** @type {any} */ o) =>
       h.l < o.right + M && h.l + h.w > o.left - M
       && h.t < o.bottom + M && h.t + h.h > o.top - M;
-    const taken = box ? [box.getBoundingClientRect()] : [];
+    // The same question without the clearance: touching is not covering, and
+    // only covering costs a press.
+    const hitsHard = (/** @type {any} */ h, /** @type {any} */ o) =>
+      h.l < o.right && h.l + h.w > o.left && h.t < o.bottom && h.t + h.h > o.top;
+    // How many screen pixels a CSS pixel is worth here. Read once off the
+    // canvas: a chip is a few pixels wide and rounds its own box, so asking
+    // each one gives a factor that is a fraction out - which over a nudge of
+    // a couple of hundred pixels is a pixel of drift, and drift rewrites the
+    // nudge and starts the glide again.
+    const canvasEl = /** @type {any} */ (root.querySelector('.canvas'));
+    const zoom = canvasEl?.offsetWidth
+      ? canvasEl.getBoundingClientRect().width / canvasEl.offsetWidth : 1;
+    const panel = box ? box.getBoundingClientRect() : null;
+    const taken = panel ? [panel] : [];
     // A frame is worked on the way the panel is read, so it gets the same
-    // right to be clear of chips. The one in hand is protected whole - its
-    // box, its head and whatever it is being typed into - because that is
-    // where the eye and the pointer both are; every other frame only asks
-    // that its name stay legible.
+    // right to be clear of chips: its drawing, and the field it is being
+    // typed into. Its head is not in this list - a head steps aside like any
+    // other chip, below.
     for (const f of /** @type {any[]} */ ([...root.querySelectorAll('.inner-frame')])) {
-      const whole = f.classList.contains('sel') || f.querySelector('.inner-text');
-      const parts = whole ? [f, ...f.children] : [...f.querySelectorAll('.inner-tag')];
-      for (const el of /** @type {any[]} */ (parts)) {
+      for (const el of /** @type {any[]} */ ([f, ...f.querySelectorAll('.inner-text')])) {
         const r = el.getBoundingClientRect();
         if (r.width || r.height) taken.push(r);
       }
     }
-    const chips = /** @type {any[]} */ ([...root.querySelectorAll('.ring-tag, .inner-adds')]);
+    const chips = /** @type {any[]} */ (
+      [...root.querySelectorAll('.ring-tag, .inner-adds, .inner-tag')]);
     // The one the panel hangs from goes first, so it gets the shortest way out
     // and the others arrange themselves around it. It gives way like any
     // other: the panel is placed from where that chip belongs, not from where
     // it ends up, so stepping aside costs the panel nothing and is the only
     // way both can be seen when the panel has been pushed up over it.
-    chips.sort((/** @type {any} */ a, /** @type {any} */ b) =>
-      Number(b.dataset.part === this._innerSel) - Number(a.dataset.part === this._innerSel));
+    //
+    // Then the frame heads, before the free-floating chips: a head is the
+    // only way to the bin and the pencil of a part that is drawn where the
+    // panel hangs - the label, the value, the multiplier and the scale all
+    // sit around a gauge's middle - so it gets its pick of the room.
+    const rank = (/** @type {any} */ el) =>
+      (el.dataset.part === this._innerSel ? 0 : 1)
+      + (el.classList.contains('inner-tag') ? 0 : 1);
+    chips.sort((/** @type {any} */ a, /** @type {any} */ b) => rank(a) - rank(b));
     for (const chip of chips) {
       const was = {
         x: parseFloat(chip.style.getPropertyValue('--sc-chip-dx')) || 0,
@@ -6067,14 +6090,21 @@ class ScCanvasEditor extends LitElement {
       // box for a ring's chip and nothing for a column of add buttons.
       const m = new DOMMatrixReadOnly(getComputedStyle(chip).transform);
       const mid = chip.classList.contains('ring-tag');
-      const zoom = chip.offsetWidth ? r.width / chip.offsetWidth : 1;
       const now = {
         x: (m.e + (mid ? chip.offsetWidth / 2 : 0)) * zoom,
         y: (m.f + (mid ? chip.offsetHeight / 2 : 0)) * zoom,
       };
       const h = { l: r.left - now.x, t: r.top - now.y, w: r.width, h: r.height };
+      // Its own frame is not in its way: a head sits against the frame it
+      // names on purpose, and the seven pixels between them are less than
+      // the clearance everything else is given.
+      const own = chip.closest('.inner-frame')?.getBoundingClientRect();
+      const mine = (/** @type {any} */ o) =>
+        own && o.left === own.left && o.top === own.top
+        && o.right === own.right && o.bottom === own.bottom;
       const at = (/** @type {any} */ w) => ({ l: h.l + w.x, t: h.t + w.y, w: h.w, h: h.h });
-      const free = (/** @type {any} */ w) => !taken.some((/** @type {any} */ o) => hits(at(w), o));
+      const free = (/** @type {any} */ w) =>
+        !taken.some((/** @type {any} */ o) => !mine(o) && hits(at(w), o));
       const inside = (/** @type {any} */ w) =>
         h.l + w.x >= c.left && h.l + w.x + h.w <= c.right
         && h.t + w.y >= c.top && h.t + w.y + h.h <= c.bottom;
@@ -6092,14 +6122,27 @@ class ScCanvasEditor extends LitElement {
         // a chip that goes round a corner reads as a chip that has wandered.
         const ways = [];
         for (const o of taken) {
+          if (mine(o)) continue;
           ways.push({ x: o.left - M - (h.l + h.w), y: 0 }, { x: o.right + M - h.l, y: 0 },
                     { x: 0, y: o.top - M - (h.t + h.h) }, { x: 0, y: o.bottom + M - h.t });
         }
+        // A head names the frame under it, so it may only go as far as it can
+        // while still reading as that frame's - about its own height either
+        // way. A chip of its own has no such tie and may go where it must.
+        const far = chip.classList.contains('inner-tag') ? h.h * 2.5 : Infinity;
         const ok = ways.map(held).filter(inside).filter(free)
+          .filter((/** @type {any} */ w) => Math.abs(w.x) + Math.abs(w.y) <= far)
           .sort((/** @type {any} */ p, /** @type {any} */ q) =>
             (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
         if (ok.length) best = ok[0];
       }
+      // The last line, for the chip that had nowhere to go: over the panel
+      // rather than under it. Behind the panel is the better picture, but a
+      // chip that cannot be pressed is not a chip - and the parts drawn in a
+      // gauge's middle are exactly the ones the panel hangs over.
+      const over = panel && hitsHard({ l: h.l + best.x, t: h.t + best.y, w: h.w, h: h.h }, panel);
+      if (over) chip.style.zIndex = '9';
+      else chip.style.removeProperty('z-index');
       taken.push(/** @type {any} */ ({ left: h.l + best.x, right: h.l + best.x + h.w,
                                        top: h.t + best.y, bottom: h.t + best.y + h.h }));
       // Wider than it needs to be for a still picture: measuring against a

@@ -407,12 +407,19 @@ two rules finish the job:
   axis, because a chip that goes round a corner reads as a chip that has
   wandered. Without the second half of that rule a chip that had dodged the
   panel landed on its neighbour, which is the same fault one step further on.
-- **Frames are obstacles too, and the one in hand is one whole.** A part's
-  frame is worked on the way the panel is read, so the chips give way to it as
-  well. The selected frame - or one being typed into - is protected entire: its
-  box, its head and its text field, because that is where both the eye and the
-  pointer are. Every other frame contributes only its head, which has to stay
-  legible but has no claim on the drawing under it.
+- **Frames are obstacles too, and a frame's head is a chip.** A part's frame is
+  worked on the way the panel is read, so the chips give way to its drawing and
+  to the field it is being typed into. Its head is not an obstacle but a chip
+  of its own: it steps aside like the rest, and before them, because the parts
+  drawn in a gauge's middle - the label, the value, the multiplier, the scale -
+  are exactly the ones the steppers hang over, and a head under the panel is a
+  bin and a pencil nobody can press. It may only go about its own height either
+  way, or it stops reading as that frame's name, and it never dodges the frame
+  it belongs to.
+- **Over the panel, for the chip that had nowhere to go.** Behind it is the
+  better picture and stays the rule, but a chip that cannot be pressed is not a
+  chip, so one still covered when everything else has been tried is raised
+  above it instead.
 - **The dodge is animated, nothing else is.** A chip's own place is `left`/
   `top` and a chip dragged by hand writes those; the stepping aside is a
   `transform`. Transitioning only the transform glides a chip out of the way
