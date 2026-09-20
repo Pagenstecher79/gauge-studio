@@ -36,9 +36,10 @@ import { BEND_SIDES, BEND_ROOM, bendKey, bendAtKey, BEND_AT_MID,
          bendsOf, bendEscapes, isBent,
          bendClipPath, bendOutlineSvg, bentBox,
          bendGripHome, bendFromGrip } from "./canvas-bend.js";
-import { PATTERN_ANIMATIONS, patternList, patternFor, patchPattern,
+import { PATTERN_ANIMATIONS, patternList, patternFor, patchPattern, patchPatternStops,
          defaultColorPattern, patternPreviewCss, patternRadiusCss,
          solidColorOf, solidColorPatch } from "./color-pattern.js";
+import { normalizeStops } from "./gradient-stops.js";
 
 const SC = window.SupercardUtils;
 
@@ -1589,14 +1590,73 @@ function needleAngle(el) {
 }
 
 /**
+ * What a colour pattern is doing with its colours, asked in the same words
+ * the form asks them in.
+ *
+ * The same predicates, not a second reading of them: a pattern that shows a
+ * stop list in the menu below the canvas has to show one on the canvas too,
+ * or the two answers drift and the same pattern offers different colours
+ * depending on where it is looked at.
+ */
+const patFluid = (/** @type {any} */ cfg) => cfg.animation === 'fluid';
+const patWave = (/** @type {any} */ cfg) =>
+  ['ripple', 'waves', 'wobble_radial', 'wobble_linear'].includes(cfg.animation);
+/** A list of colours rather than one: every type but plain solid, and the mesh whatever it says. */
+const patStopList = (/** @type {any} */ cfg) =>
+  !patWave(cfg) && ((cfg.bg_type || 'solid') !== 'solid' || patFluid(cfg));
+/** The one colour: a plain solid pattern, and no effect mixing its own. */
+const patSolid = (/** @type {any} */ cfg) => !patWave(cfg) && !patStopList(cfg);
+const patAngled = (/** @type {any} */ cfg) =>
+  cfg.bg_type === 'linear' || cfg.animation === 'waves' || cfg.animation === 'wobble_linear';
+const patRadial = (/** @type {any} */ cfg) =>
+  cfg.bg_type === 'radial' || cfg.animation === 'ripple' || cfg.animation === 'wobble_radial';
+/** Only a pattern that is not painted by an effect has a background type to set. */
+const patTyped = (/** @type {any} */ cfg) => !patWave(cfg) && !patFluid(cfg);
+
+/** What the pattern does with the colours it has, in the words the form uses. */
+const PATTERN_BG_TYPE = Object.freeze([
+  { value: 'solid', label: 'Solid (static)', short: 'Solid' },
+  { value: 'solid_gradient', label: 'Solid (dynamic from the gradient)', short: 'Dynamic' },
+  { value: 'linear', label: 'Gradient (linear)', short: 'Linear' },
+  { value: 'radial', label: 'Gradient (radial)', short: 'Radial' },
+]);
+
+/** The four meshes the liquid effect can be, where it has taken the type over. */
+const PATTERN_FLUID_STYLE = Object.freeze([
+  { value: 'aurora', label: 'Aurora (gentle mesh)', short: 'Aurora' },
+  { value: 'gooey', label: 'Liquid (lava, water)', short: 'Liquid' },
+  { value: 'smoke', label: 'Smoke / fog', short: 'Smoke' },
+  { value: 'particles', label: 'Particles / stardust', short: 'Particles' },
+]);
+
+/**
+ * A wave's trough is a colour or it is nothing, and nothing is the default -
+ * which a swatch cannot say: every colour control speaks `#rrggbb` and has no
+ * way to mean "let the card through". So the two answers are a row of their
+ * own, and the swatch below it is drawn only for the one that has a colour.
+ */
+const WAVE_TROUGH = Object.freeze([
+  { value: 'transparent', label: 'Transparent', short: 'Clear' },
+  { value: 'color', label: 'A colour', short: 'Colour' },
+]);
+
+const troughClear = (/** @type {any} */ cfg) => (cfg.wave_c2 ?? 'transparent') === 'transparent';
+
+/**
  * The one part a surface has: the paint on it.
  *
  * A surface draws nothing of its own, so there are no frames to put on
  * anything - the box *is* the part. Its chip stands near the top of the box
- * and carries what the drawing can answer for: the one colour, when the
- * pattern is a solid one; which effect it runs; and how strongly it is
- * painted. A gradient is a list of stops and a picture of its own, so it stays
- * in the menu, where there is room to see it.
+ * and carries the whole of what the box is painted with: what kind of
+ * background it is, the one colour or the list of them, the ramp that fills
+ * that list, where a gradient points or radiates from, the effect it runs and
+ * how strongly it is all painted.
+ *
+ * The list of stops is here too, which is the one place this card puts a
+ * small editor under a chip rather than a control. It is the trial the
+ * backlog asked for: a gradient is what a surface mostly *is*, and sending
+ * someone down to the menu for its colours while its type, its angle and its
+ * effect are all on the drawing is the split the frames exist to end.
  *
  * `spot` is what says this part is not on a ring: it stands where it is told
  * to, in per cent of the box, and pressing it is only ever taking it in hand.
@@ -1606,13 +1666,55 @@ const SURFACE_PARTS = Object.freeze({
     label: 'Colour', spot: { l: 50, t: 14 },
     on: () => true,
     steps: [
+      { key: 'bg_type', icon: icon('blend'), what: 'background type', picks: PATTERN_BG_TYPE,
+        condition: patTyped,
+        read: (/** @type {any} */ cfg) => cfg.bg_type || 'solid' },
+      { key: 'fluid_style', icon: icon('waves'), what: 'mesh', picks: PATTERN_FLUID_STYLE,
+        condition: patFluid,
+        read: (/** @type {any} */ cfg) => cfg.fluid_style || 'aurora' },
       { icon: icon('paintbrush'), what: 'colour', paint: true,
         // Only a solid pattern has *a* colour. The others have a list of them.
-        condition: (/** @type {any} */ cfg) => (cfg.bg_type || 'solid') === 'solid',
+        condition: patSolid,
         read: solidColorOf,
         patch: (/** @type {any} */ cfg, /** @type {string} */ v) => solidColorPatch(cfg, v) },
+      // A ramp is not a mode and nothing remembers it was picked: it writes a
+      // list of colours and steps back out of the way, which is why this row
+      // reads its own name rather than a value.
+      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
+        condition: patStopList, read: () => '',
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
+          gradientPresetPatch(v, 'pattern') },
+      { stops: true, icon: icon('palette'), what: 'colours', condition: patStopList,
+        read: (/** @type {any} */ cfg) => normalizeStops(
+          cfg.gradient_stops ?? { colors: cfg.colors, stops: cfg.stops }, { fill: false }),
+        preview: patternPreviewCss,
+        patch: (/** @type {any} */ _cfg, /** @type {any[]} */ list) => ({ gradient_stops: list }) },
+      { key: 'gradient_angle', icon: icon('compass'), slide: true, by: 1, min: 0, max: 360,
+        dflt: 90, what: 'angle', condition: patAngled },
+      { key: 'radial_x', icon: icon('move-horizontal'), slide: true, by: 1, min: 0, max: 100,
+        dflt: 50, what: 'origin across the box (%)', condition: patRadial },
+      { key: 'radial_y', icon: icon('move-vertical'), slide: true, by: 1, min: 0, max: 100,
+        dflt: 50, what: 'origin down the box (%)', condition: patRadial },
       { key: 'animation', icon: icon('clapperboard'), what: 'effect', picks: PATTERN_ANIMATIONS,
         read: (/** @type {any} */ cfg) => cfg.animation || 'none' },
+      // An effect that mixes its own colours takes the background's place, so
+      // its two are the pattern's colours while it runs - and they belong
+      // here for the same reason the others do.
+      { icon: icon('paintbrush'), what: 'crest colour', paint: true, condition: patWave,
+        read: (/** @type {any} */ cfg) => markHex(cfg.wave_c1 ?? '#03a9f4', '#03a9f4'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ wave_c1: v }) },
+      { icon: icon('layers'), what: 'trough', picks: WAVE_TROUGH, condition: patWave,
+        read: (/** @type {any} */ cfg) => troughClear(cfg) ? 'transparent' : 'color',
+        patch: (/** @type {any} */ cfg, /** @type {string} */ v) =>
+          ({ wave_c2: v === 'transparent' ? 'transparent' : markHex(cfg.wave_c2, '#000000') }) },
+      { icon: icon('paintbrush'), what: 'trough colour', paint: true,
+        condition: (/** @type {any} */ cfg) => patWave(cfg) && !troughClear(cfg),
+        read: (/** @type {any} */ cfg) => markHex(cfg.wave_c2, '#000000'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ wave_c2: v }) },
+      { key: 'wave_count', icon: icon('hash'), by: 1, min: 1, max: 20, dflt: 3,
+        what: 'count', condition: patWave },
+      { key: 'wave_balance', icon: icon('proportions'), slide: true, by: 1, min: 5, max: 95, dflt: 50,
+        what: 'balance of crest against trough (%)', condition: patWave },
       { key: 'opacity', icon: icon('contrast'), by: 5, min: 0, max: 100, dflt: 100, what: 'opacity' },
     ],
   },
@@ -2429,8 +2531,17 @@ const INNER_KINDS = Object.freeze({
     config: (/** @type {any} */ slot, /** @type {string} */ id) =>
       patternFor(patternList(slot), 'elm_' + id) || defaultColorPattern('elm_' + id),
     drawn: () => [],
-    write: (/** @type {any} */ slot, /** @type {any} */ t, /** @type {any} */ patch) =>
-      ({ key: 'color_patterns', value: patchPattern(patternList(slot), 'elm_' + t.id, patch) }),
+    // A stop list written from the drawing is the same edit the panel makes,
+    // so it goes the same way: the parallel `colors`/`stops` an older card
+    // still carries are taken out with it, or the card keeps a second, now
+    // stale, answer to what it is painted with.
+    write: (/** @type {any} */ slot, /** @type {any} */ t, /** @type {any} */ patch) => {
+      const target = 'elm_' + t.id;
+      const { gradient_stops: stops, ...rest } = patch || {};
+      const list = stops
+        ? patchPatternStops(patternList(slot), target, stops) : patternList(slot);
+      return { key: 'color_patterns', value: patchPattern(list, target, rest) };
+    },
   },
 });
 
@@ -3532,6 +3643,16 @@ class ScCanvasEditor extends LitElement {
       .ring-swatch input[type="color"] { position: absolute; inset: -50%;
         width: 200%; height: 200%; padding: 0; border: none; background: none;
         cursor: pointer; opacity: 0; }
+      /* The stop editor is a menu's worth of controls, not a row's: it takes
+         the whole width the panel has and brings its own dark ground, so the
+         form's own light surfaces do not cut a hole in a panel that stands
+         over the drawing. */
+      .ring-stops { grid-column: span 4; justify-self: stretch; min-width: 190px;
+        --primary-text-color: #fff; --secondary-text-color: rgba(255,255,255,0.72);
+        --divider-color: rgba(255,255,255,0.22);
+        --card-background-color: rgba(0,0,0,0.5);
+        --secondary-background-color: rgba(255,255,255,0.06);
+        font-size: 11px; }
       /* Words, so they wrap: four cells across and a width of its own, or a
          sentence would stretch the columns every other row is measured by. */
       .ring-note { grid-column: span 4; justify-self: stretch; max-width: 190px;
@@ -6891,6 +7012,20 @@ class ScCanvasEditor extends LitElement {
                    @input=${(/** @type {any} */ e) =>
                      put(st.patch(view, e.target.value))}>
           </label>
+        </span>`;
+      // The one small editor that stands under a chip rather than in the
+      // form. A list of colours dragged into order is not a control and §9
+      // says so - but a surface's gradient *is* the surface, and the type,
+      // the angle and the effect that go with it are all here. It takes the
+      // whole width of the panel, which is what the size grip is for: a
+      // panel left at its default is too narrow to drag a stop about in.
+      if (st.stops) return html`
+        <span class="ring-group">
+          <sc-gradient-stops class="ring-stops"
+            .stops=${st.read(view)} .previewCss=${st.preview ? st.preview(view) : ''}
+            .onUpdate=${(/** @type {any[]} */ list) => put(st.patch(view, list))}
+            title=${tip(st)}
+            @pointerdown=${keep}></sc-gradient-stops>
         </span>`;
       // A switch is neither a number nor a choice from a list: it is on or it
       // is off, and the shortest honest control for that is the box itself

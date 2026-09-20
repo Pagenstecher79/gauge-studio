@@ -110,17 +110,20 @@ export function gradientPreset(/** @type {string} */ id) {
  * colours and their positions, so all of it is written, every time.
  *
  * @param {string} id
- * @param {'gauge'|'bar'} [kind] which element's keys the pick is written to
+ * @param {'gauge'|'bar'|'pattern'} [kind] which element's keys the pick is written to
  */
 export function gradientPresetPatch(/** @type {string} */ id,
                                     /** @type {string} */ kind = 'gauge') {
   const preset = gradientPreset(id);
   if (!preset) return null;
   const stops = preset.stops.map(s => ({ pos: s.pos, color: s.color }));
-  // One catalogue, two sets of keys. A gauge colours a ring it may also
+  // One catalogue, three sets of keys. A gauge colours a ring it may also
   // colour three other ways, so a ramp has to say which of the four it is;
   // a bar has one fill and a switch that says whether it is a ramp at all,
-  // and picking a ramp is asking for that switch to be on.
+  // and picking a ramp is asking for that switch to be on. A colour pattern
+  // has nothing but the list - what it does with those colours is the
+  // background type, and dropping a ramp on it says nothing about that.
+  if (kind === 'pattern') return { gradient_stops: stops };
   return kind === 'bar'
     ? { use_gradient: true, gradient_stops: stops }
     : { gradient_preset: 'manual', threshold_unit: 'percent', manual_stops: stops };

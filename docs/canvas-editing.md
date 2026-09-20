@@ -358,10 +358,21 @@ Not everything fits on a chip. What worked:
   list is read by.
 - **Not a free colour value, and no text that is not drawn.** An entity, an
   `rgba()` someone types out, a unit to substitute - those stay in the form:
-  there is nothing on the drawing for them to be typed *into*. A list that is
-  edited by dragging its items about - a gradient's stops - stays there too:
-  it is not one control but a small editor, and it needs the room the form
-  has.
+  there is nothing on the drawing for them to be typed *into*.
+- **A small editor, where the thing it edits is the whole object.** A list
+  edited by dragging its items about is not one control, and for a gauge's
+  ring it stays in the form - the ring is one of a dozen things a gauge
+  draws, and its stops are a menu's worth of rows among others. A surface is
+  the other case: it draws nothing but its paint, so its stop list *is* the
+  object, and leaving it below while the type, the ramp, the angle and the
+  effect are all on the drawing is exactly the split these frames exist to
+  end. So `<sc-gradient-stops>` stands under the surface's chip (`stops` on
+  a step), the one editor rather than a second one, and the panel's size grip
+  is what makes room for it - a panel at its default width is too narrow to
+  drag a stop about in. Two things it needs: the panel is dark and the editor
+  is the form's, so the host sets the half-dozen theme properties it reads;
+  and a press inside it must not reach the canvas, which `stopPropagation`
+  on the host does, shadow DOM retargeting doing the rest.
 - **All of it, or the part will be looked for in both places.** Once a chip
   carries a part's settings it carries the whole of them, minus only what the
   frame already does by being dragged. A chip with three of a part's eight
