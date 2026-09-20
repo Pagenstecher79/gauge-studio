@@ -366,8 +366,10 @@ Not everything fits on a chip. What worked:
   is the bigger target, so a press on it selects, and a drag from it moves the
   part with the pointer the way a press on the text does.
 - **The middle axis.** A guide rather than a mark: a dashed line down the
-  dial's own square, switched on beside the grid and the highlight, and only
-  offered while a gauge's parts are open. A part dragged within a few screen
+  dial's own square, switched on by a button beside the one that opened the
+  parts - it is about placing them and belongs where the hand already is,
+  rather than in the settings row over the canvas - and offered only while a
+  gauge's parts are open. A part dragged within a few screen
   pixels of it is taken by it - `snapToCentre`, and the tolerance is in
   pixels, not units, or the same number would be half the dial on a small
   gauge and nothing on a big one. Off by default, because a text nudged a hair

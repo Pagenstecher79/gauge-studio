@@ -3670,6 +3670,11 @@ class ScCanvasEditor extends LitElement {
       .inner-open.on { border-color: var(--sc-part-sel);
         background: var(--sc-part-sel); color: var(--sc-part-sel-ink); }
       .inner-open[disabled] { opacity: 0.35; cursor: default; }
+      /* Beside the button that opened the parts, because it is about placing
+         them and is reached while looking at them - it stood in the settings
+         row over the canvas first, which is a long way from the hand that is
+         dragging a label about. */
+      .axis-btn { left: 34px; }
       /* The tag itself takes no presses - it is a label on a frame that is
          dragged - so the one button inside it has to ask for them back. */
       .inner-tag .ring-shape { pointer-events: auto; margin-left: 4px;
@@ -8385,11 +8390,6 @@ class ScCanvasEditor extends LitElement {
     // The switch says what the card is set to; while an element is open the
     // preview is on over the top of it, and the tip is what says so - a
     // switch that reads "on" and cannot be thrown explains nothing on its own.
-    // Only while a gauge's own parts are in hand: it is a guide for placing
-    // the four texts on a dial and means nothing anywhere else, and a row of
-    // switches that are all there all the time is a row nobody reads.
-    const axisOn = this._innerOn && this._innerTarget?.k?.noun === 'gauge';
-    const axisTip = 'A line down the middle of the dial, and a pull onto it: the label, the value, the multiplier and the scale are taken by it as they come near, so centring one is a drag rather than a number. Everything else, and every other way of moving them, is untouched.';
     const liveHeld = this._innerOn && this.slot?.live_preview === false;
     const liveTip = liveHeld
       ? 'On for as long as this element\'s own parts are in hand - the frames sit on the drawing. Back to plain boxes when it is closed.'
@@ -8420,11 +8420,6 @@ class ScCanvasEditor extends LitElement {
         <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
         <ha-switch .checked=${this._hl}
                    @change=${(/** @type {any} */ e) => { this._hl = e.target.checked; }}></ha-switch>
-        ${axisOn ? html`
-          <span class="gap"></span>
-          <span class="settings-label">Middle axis ${SC.tipDot(axisTip, { right: true })}</span>
-          <ha-switch .checked=${this._axis}
-                     @change=${(/** @type {any} */ e) => { this._axis = e.target.checked; }}></ha-switch>` : ''}
       </div>`;
   }
 
@@ -8643,7 +8638,17 @@ class ScCanvasEditor extends LitElement {
                                   ? ', with the live preview on for as long as it is open'
                                   : '')}
                           @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
-                          @click=${() => this._toggleInner()}>${icon('pencil')}</button>` : ''}
+                          @click=${() => this._toggleInner()}>${icon('pencil')}</button>
+                  ${this._innerOn && inner.k.noun === 'gauge' ? html`
+                    <button class="inner-open axis-btn ${this._axis ? 'on' : ''}"
+                            title=${'A line down the middle of the dial, and a pull onto it: '
+                              + 'the label, the value, the multiplier and the scale are taken '
+                              + 'by it as they come near, so centring one is a drag rather '
+                              + 'than a number. Nothing else is moved by it.'}
+                            @pointerdown=${(/** @type {any} */ e) => {
+                              e.stopPropagation(); e.preventDefault(); }}
+                            @click=${() => { this._axis = !this._axis; }}>${
+                              icon('fold-horizontal')}</button>` : ''}` : ''}
                 ${this._innerOn ? '' : html`
                 <button class="el-lock"
                         title=${pinned
