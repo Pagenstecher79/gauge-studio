@@ -8,7 +8,7 @@ Vanilla JS + LitElement, no framework, no transpile step beyond Vite's bundling.
 ## Commands
 
 ```bash
-npm run build      # src/index.js -> dist/gauge-studio.js (Vite lib mode)
+npm run build      # src/index.js + src/editor.js -> dist/ (Vite lib mode)
 npm run watch      # same, rebuilding on change
 npm run typecheck  # tsc -p jsconfig.json --noEmit   (NOT `npx tsc`, see below)
 npm run ha         # real Home Assistant in Docker (docker/README.md)
@@ -24,6 +24,20 @@ every ``css` `` literal, which esbuild does not look into at all. Together:
 ``css` `` literal is compacted like every other, so do not hand-minify one -
 write it readably. And an ``html` `` literal is *not* touched, because a
 space between two text nodes is a space between two words.
+
+**The build makes two files**, and a dashboard fetches one of them:
+`dist/gauge-studio.js` is the card, 159 kB, and
+`dist/gauge-studio-editor-<hash>.js` is everything that configures it, 431 kB,
+fetched by `getConfigElement()` the first time somebody opens the settings.
+They are two *builds*, editor first - `npm run build` runs both, and the
+editor's build writes its own hashed name into `dist/.editor-chunk` for the
+card's build to import. Not one build with two chunks: Rollup would have the
+editor chunk import the card back as `./gauge-studio.js`, a name under which
+Home Assistant never serves it, and the whole card would load twice. `npm run
+watch` rebuilds both for the same reason; a bare `vite build` now refuses.
+The hash is in the name because only the *resource* URL carries a cache
+buster. A manual install copies both files; HACS installs a zip. See
+`docs/editor-split.md`, and the two-stage registration under *Architecture*.
 
 **Testing happens in that one Docker instance, at <http://127.0.0.1:8123/>.**
 One is enough and one is all there should be: a second container, a second
@@ -86,22 +100,34 @@ checks nothing.
 
 ## Architecture
 
-`src/index.js` imports every module in order; that order matters, because
+**Every module is two modules.** `supercard-NN-thing.js` draws and
+`supercard-NN-thing-editor.js` configures, and they are bundled separately:
+`src/index.js` imports the first kind, `src/editor.js` the second, and
+`getConfigElement()` in `supercard-01-core.js` is the only place the editor
+bundle is named. A new module has to be imported in the entry that matches its
+half or it is simply absent - nothing warns you. See `docs/editor-split.md`.
+
+Both entries import their modules in order, and that order matters, because
 `supercard-01-core.js` populates `window.SupercardUtils` and every other module
 destructures from it at module scope.
 
-The build entry is `src/index.js`. A new module has to be imported there or it
-is simply absent from the bundle - nothing warns you.
-
 Modules register themselves on `window.SupercardModules[name]` and implement any
-subset of the `SupercardModule` contract in `src/types/global.d.ts`:
-`update`, `onAfterRender`, `editorFields`, `renderCustomBlock`. The card renders
-them in the fixed order in `moduleOrder` (`supercard-01-core.js`).
+subset of the `SupercardModule` contract in `src/types/global.d.ts`. The split
+is exactly that contract: **`update` and `onAfterRender` belong to the runtime
+half, `editorFields`, `renderCustomBlock`, `newEntry`, `formFields` and
+`ownedByCanvas` to the editor half.** Both halves `Object.assign` onto an entry
+created with `|| {}`, so neither cares which loaded first. The card renders
+them in the fixed order in `moduleOrder` (`supercard-01-core-editor.js`).
+
+So a renderer must never read an editor helper - it would work in the editor,
+where both halves are loaded, and be `undefined` on a dashboard. Put a helper
+both halves need in a pure module of its own (`item-typography.js` is one), not
+in either half.
 
 `supercard-10-debug.js` is **deliberately not imported**. It is a developer
 panel for inspecting which modules loaded, kept out of the bundle for design
 reasons. `moduleOrder` still lists `debug`, so adding the import to
-`src/index.js` locally is all it takes to use it. Do not "fix" the missing
+`src/editor.js` locally is all it takes to use it. Do not "fix" the missing
 import.
 
 Stacking is governed by the `SC_LAYERS` dictionary in `supercard-01-core.js`.
@@ -125,7 +151,11 @@ everywhere else, and never add a second read path for the old key.
 
 ### Shared helpers - use these, do not re-implement
 
-`window.SupercardUtils` (defined in `supercard-01-core.js`):
+`window.SupercardUtils`, which is two halves of one object: the runtime one in
+`supercard-01-core.js`, always there, and the editor's - every control, both
+stylesheets - in `supercard-01-core-editor.js`, there only once the editor
+bundle has loaded. The types say which is which (`SupercardUtilsRuntime` /
+`SupercardUtilsEditor`):
 
 - `safeFloat(v, d)`
 - `hexToRgb` / `rgbToHex`
@@ -452,7 +482,8 @@ comparing against the previous build:
 
 1. Build the current `HEAD` in a git worktree, and the working tree as usual.
 2. Load both bundles in a page that instantiates every editor and renderer with
-   a fixed synthetic `hass` and config.
+   a fixed synthetic `hass` and config. The working tree's build is two files
+   now, so that page imports the runtime bundle and the editor chunk together.
 3. Compare `shadowRoot.innerHTML` byte for byte, and compare what each editor
    commits when every control in it is driven.
 
@@ -469,7 +500,11 @@ reading it as a behaviour change.
 
 That comparison covers rendering and committed values. It cannot cover the
 editor inside HA's config dialog, drag and drop, or whether an animation looks
-smooth - for those, `npm run ha` and click.
+smooth - for those, `npm run ha` and click. It also cannot cover the *lazy*
+path, because it loads both bundles: that the card draws before the editor
+exists, and that `getConfigElement()` brings the other half in. Load the
+runtime bundle alone and assert on both - `.claude/bench/lazy-editor.html`
+does, and `docs/editor-split.md` says what it checks.
 
 When you replace one pure mechanism with another - a visibility rule, a
 formatter - do not just eyeball the translation. Run both side by side in the
@@ -521,5 +556,10 @@ written in German by following the previous release's language; their release
 bodies have since been translated back, but the tag messages those bodies came
 from are still German, because force-pushing a tag re-fires the release
 workflow and ships a new build to everyone.
+
+**The asset HACS installs is `gauge-studio.zip`**, because the card is two
+files and `hacs.json` names one `filename`. The workflow zips `dist/*.js` flat
+and uploads that, plus both loose files for a manual install. A release that
+ships the card without its editor chunk is a card whose settings dialog 404s.
 
 `dist/` is gitignored; the release workflow builds it. Never commit build output.

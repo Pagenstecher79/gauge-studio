@@ -5,10 +5,10 @@
   "type": "module",
   "main": "dist/gauge-studio.js",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build -c vite.editor.config.js && vite build",
     "postbuild": "node docker/postbuild.mjs",
-    "watch": "vite build --watch",
-    "dev": "vite build --watch",
+    "watch": "node build/watch.mjs",
+    "dev": "node build/watch.mjs",
     "typecheck": "tsc -p jsconfig.json --noEmit",
     "ha": "npm run build && node docker/prepare.mjs && docker compose -f docker/docker-compose.yml up",
     "ha:down": "docker compose -f docker/docker-compose.yml down",
