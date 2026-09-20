@@ -11,7 +11,7 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
          NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview,
          barIsCircular } from "./canvas-model.js";
 import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
-import { offsetsFromDrag, fontFromResize, GAUGE_VIEW,
+import { offsetsFromDrag, fontFromResize, snapToCentre, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
          needleEnds, needleFromRadius, needleSlide,
          ringInnerEdge, strokeFromRadius, alignParts, frameBand, gaugeScaleOf, gaugeOuter,
@@ -2739,6 +2739,7 @@ class ScCanvasEditor extends LitElement {
       // highlight is a way of looking at the canvas, not a property of the
       // card being drawn.
       _hl: { type: Boolean, state: true },
+      _axis: { type: Boolean, state: true },
       _hlHold: { type: Number, state: true },
       // Which of the needle's two handles is being held, and so which one is
       // drawing a crosshair. One at a time: the pair of lines is there to say
@@ -2841,6 +2842,9 @@ class ScCanvasEditor extends LitElement {
     /** @type {{x: number, y: number, same: boolean, stack: string[]}|null} */
     this._innerLastDown = null;
     this._hl = true;
+    // The middle axis is off until it is asked for: a part set a hair off it
+    // on purpose would be pulled back onto it by a guide that was always on.
+    this._axis = false;
     this._hlHold = 0;
     this._hlTimer = 0;
     this._hlNarrow = null;
@@ -3396,6 +3400,15 @@ class ScCanvasEditor extends LitElement {
          is what fixes that: the layer is redrawn whole, so there is no dirty
          rectangle to get wrong. Only the parts of the one element being
          worked on carry a frame, so this is a handful of layers, not many. */
+      /* The middle axis: a hairline, because it is a guide and not a mark on
+         the card - and dashed, so it is not read as something the gauge
+         draws. Under the frames and past every press: it is there to be
+         aimed at, never to be taken hold of. */
+      .axis-line { position: absolute; width: 0; z-index: 4; pointer-events: none;
+        border-left: 1px dashed rgba(242,181,68,0.55); }
+      .axis-line.on { border-left-style: solid;
+        border-left-color: var(--sc-part-sel);
+        box-shadow: 0 0 0 1px rgba(242,181,68,0.25); }
       .inner-frame { position: absolute; outline: 1px dashed var(--sc-part);
         outline-offset: 3px; box-shadow: 0 0 0 4px rgba(0,0,0,0.55);
         background: rgba(3,169,244,0.14); cursor: move;
@@ -3428,7 +3441,13 @@ class ScCanvasEditor extends LitElement {
         display: flex; align-items: center; gap: 3px;
         font-size: 11.5px; line-height: 1; padding: 2px 3px 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
-        pointer-events: none; opacity: 0.8; box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
+        /* The head is a handle, the way a ring's chip is. The four texts a
+           gauge draws are the smallest marks on it - a scale label is a few
+           pixels tall - and until this the only way to take one in hand was
+           to hit the text itself. Its own name is the bigger target, and it
+           is already standing beside the thing it names. */
+        pointer-events: auto; cursor: move; touch-action: none;
+        opacity: 0.8; box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
       .inner-frame.sel .inner-tag { opacity: 1;
         background: var(--sc-part-sel); color: var(--sc-part-sel-ink); }
       /* The buttons every chip ends with, in one order wherever a chip is
@@ -3789,14 +3808,14 @@ class ScCanvasEditor extends LitElement {
       .ring-ramps::-webkit-scrollbar { height: 4px; }
       .ring-ramps::-webkit-scrollbar-thumb { border-radius: 2px;
         background: rgba(255,255,255,0.25); }
-      .ring-ramp { flex: none; width: 52px; padding: 0; border: none; cursor: pointer;
+      .ring-ramp { flex: none; width: 58px; padding: 0; border: none; cursor: pointer;
         background: none; display: flex; flex-direction: column; gap: 2px; }
       .ring-ramp-bar { height: 13px; border-radius: 3px;
         border: 1px solid rgba(255,255,255,0.28); }
       .ring-ramp:hover .ring-ramp-bar { border-color: var(--sc-part-sel); }
       /* The name at the size the panel's own last line is set in: a ramp says
          what it looks like by itself, and what it is *for* only in words. */
-      .ring-ramp-name { font-size: 9px; line-height: 1.2; text-align: center;
+      .ring-ramp-name { font-size: 10px; line-height: 1.2; text-align: center;
         color: rgba(255,255,255,0.72); white-space: nowrap; overflow: hidden;
         text-overflow: ellipsis; }
       /* Words, so they wrap: four cells across and a width of its own, or a
@@ -5530,13 +5549,25 @@ class ScCanvasEditor extends LitElement {
           const movers = d.group || [{ part: d.part, spec, from: d.from, pxPerUnit: d.pxPerUnit }];
           const out = {};
           const px = this._innerRects?.px;
+          // The middle axis takes a part that comes near it, where it has
+          // been switched on and where there is one - a gauge's parts are
+          // offset from the centre of its viewBox, so the axis is x = 0, and
+          // a bar's label is offset from whichever of nine sectors it is
+          // anchored to, where zero is not the middle of anything.
+          //
+          // One part at a time, too: several held parts travel together by
+          // the same pixels, and an axis that took each of them as it came
+          // near would pull the group apart - the arrangement being carried
+          // is the thing the hand is holding.
+          const axis = this._axis && movers.length === 1
+            && this._innerTarget?.k?.noun === 'gauge';
           for (const m of movers) {
             const per = (m.pxPerUnit || 1) * (d.scale || 1);
             const at = offsetsFromDrag(m.from, p.x - d.startX, p.y - d.startY,
                                        m.pxPerUnit, d.scale,
                                        m.spec.limit && px
                                          ? m.spec.limit(px, per) : undefined);
-            out[m.spec.x] = at.x;
+            out[m.spec.x] = snapToCentre(at.x, per, axis);
             out[m.spec.y] = at.y;
           }
           return out;
@@ -5978,6 +6009,34 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
+   * The middle axis, where it has been asked for.
+   *
+   * A line down the dial's own square rather than the element's box, because
+   * a gauge letterboxes inside it and the box's middle is not the dial's.
+   * Drawn under the frames, so a text taken in hand is still read over it,
+   * and only while a gauge's parts are open - it is a guide for placing those
+   * four texts and nothing else on the canvas is measured from it.
+   *
+   * It goes solid while something is sitting on it, which is the whole of the
+   * feedback the pull needs: the number it writes is a round zero, and what a
+   * hand wants to know at that moment is whether it took.
+   *
+   * @param {any} target the object whose parts are open
+   */
+  _renderAxis(target) {
+    const svg = this._innerRects?.svg;
+    if (!this._axis || target.k.noun !== 'gauge' || !svg) return '';
+    const cfg = target.cfg || {};
+    const on = this._innerHeld.some((/** @type {string} */ p) => {
+      const key = target.parts[p]?.x;
+      return key && SC.safeFloat(cfg[key], 0) === 0;
+    });
+    return html`
+      <div class="axis-line ${on ? 'on' : ''}"
+           style="left:${svg.l + svg.w / 2}%; top:${svg.t}%; height:${svg.h}%;"></div>`;
+  }
+
+  /**
    * The frames over the drawn label and value.
    *
    * Drawn from the measured rects rather than from the offsets, so a frame
@@ -5994,7 +6053,8 @@ class ScCanvasEditor extends LitElement {
     // A press must not reach the element under it, or reaching for one of
     // these would start dragging the whole gauge.
     const swallow = (/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); };
-    return html`${Object.entries(target.parts).map(([part, spec]) => {
+    return html`${this._renderAxis(target)}
+      ${Object.entries(target.parts).map(([part, spec]) => {
       const editing = this._innerEdit === part;
       // The last measurement while the text is being typed into: see
       // `_editRect`. Only then - a part switched off has no frame, and one
@@ -6007,7 +6067,9 @@ class ScCanvasEditor extends LitElement {
              style="left:${r.l}%; top:${r.t}%; width:${r.w}%; height:${r.h}%;"
              title=${`Drag the ${spec.label.toLowerCase()}, or its corner to resize it`}
              @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'move')}>
-          <span class="inner-tag">
+          <span class="inner-tag"
+                title=${`Take the ${spec.label.toLowerCase()} in hand, or drag it from here`}
+                @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'move')}>
             ${spec.label}
             ${spec.weight && this._innerSel === part
               ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
@@ -6796,7 +6858,7 @@ class ScCanvasEditor extends LitElement {
     const clear = (/** @type {any} */ w) => !keep
       || l + w.x >= keep.right - 0.5 || l + w.x + b.width <= keep.left + 0.5
       || t + w.y >= keep.bottom - 0.5 || t + w.y + b.height <= keep.top + 0.5;
-    let best = held({ x: 0, y: 0 });
+    let best = held(this._stepsHome(b, l, t));
     if (!clear(best)) {
       const ways = [
         { x: 0, y: keep.bottom + M - t },
@@ -6832,6 +6894,39 @@ class ScCanvasEditor extends LitElement {
     box.style.setProperty('--sc-steps-dx', best.x + 'px');
     box.style.setProperty('--sc-steps-dy', best.y + 'px');
     return true;
+  }
+
+  /**
+   * Where the panel would stand if nothing pushed it about.
+   *
+   * Beside the chip that opened it, for everything that has an edge to stand
+   * beside - and in the middle of the dial for a gauge, which has none. A
+   * gauge is read as a ring, and a panel resting on one arc of it covers the
+   * very stretch being judged while the rows are turned; the middle is the
+   * one place a ring never passes through. It is the largest clear space on a
+   * dial as well, so a tall panel needs no scrolling where it would need some
+   * beside the drawing.
+   *
+   * The dial's own square rather than the element's box, because a gauge
+   * letterboxes inside it - on a wide card the box's middle is not the
+   * dial's. The rule below still applies from here: a panel set on the value
+   * or the label steps off the number it is setting, which is the one thing
+   * the middle cannot be for those two.
+   *
+   * @param {DOMRect} b the panel's own box
+   * @param {number} l where its left edge lies with no nudge
+   * @param {number} t the same for its top
+   * @returns {{x: number, y: number}}
+   */
+  _stepsHome(b, l, t) {
+    if (this._innerTarget?.k?.noun !== 'gauge') return { x: 0, y: 0 };
+    const el = this.shadowRoot?.querySelector(`.el[data-item-id="${this._inner}"]`);
+    const r = el?.getBoundingClientRect();
+    const svg = this._innerRects?.svg;
+    if (!r?.width || !r.height || !svg) return { x: 0, y: 0 };
+    const cx = r.left + (svg.l + svg.w / 2) / 100 * r.width;
+    const cy = r.top + (svg.t + svg.h / 2) / 100 * r.height;
+    return { x: cx - (l + b.width / 2), y: cy - (t + b.height / 2) };
   }
 
   /**
@@ -8290,6 +8385,11 @@ class ScCanvasEditor extends LitElement {
     // The switch says what the card is set to; while an element is open the
     // preview is on over the top of it, and the tip is what says so - a
     // switch that reads "on" and cannot be thrown explains nothing on its own.
+    // Only while a gauge's own parts are in hand: it is a guide for placing
+    // the four texts on a dial and means nothing anywhere else, and a row of
+    // switches that are all there all the time is a row nobody reads.
+    const axisOn = this._innerOn && this._innerTarget?.k?.noun === 'gauge';
+    const axisTip = 'A line down the middle of the dial, and a pull onto it: the label, the value, the multiplier and the scale are taken by it as they come near, so centring one is a drag rather than a number. Everything else, and every other way of moving them, is untouched.';
     const liveHeld = this._innerOn && this.slot?.live_preview === false;
     const liveTip = liveHeld
       ? 'On for as long as this element\'s own parts are in hand - the frames sit on the drawing. Back to plain boxes when it is closed.'
@@ -8320,6 +8420,11 @@ class ScCanvasEditor extends LitElement {
         <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
         <ha-switch .checked=${this._hl}
                    @change=${(/** @type {any} */ e) => { this._hl = e.target.checked; }}></ha-switch>
+        ${axisOn ? html`
+          <span class="gap"></span>
+          <span class="settings-label">Middle axis ${SC.tipDot(axisTip, { right: true })}</span>
+          <ha-switch .checked=${this._axis}
+                     @change=${(/** @type {any} */ e) => { this._axis = e.target.checked; }}></ha-switch>` : ''}
       </div>`;
   }
 

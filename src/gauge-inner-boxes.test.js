@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { offsetsFromDrag, fontFromResize, estimateRect, clamp,
+import { offsetsFromDrag, fontFromResize, estimateRect, clamp, snapToCentre,
          ringRadius, ringPartRadius, offsetFromRadius,
          gaugeOuter, frameBand, gaugeScaleOf, migrateGaugeScale,
          OFFSET_LIMIT, FONT_MAX, FONT_MIN, GAUGE_CENTER,
@@ -486,5 +486,41 @@ describe("the frame ring's two edges", () => {
           .toEqual({ frame_ring_width: w });
       }
     }
+  });
+});
+
+describe('the middle axis takes a part that comes near it', () => {
+  it('is x = 0, which is what the guide draws', () => {
+    expect(snapToCentre(0.2, 10)).toBe(0);
+  });
+
+  it('measures the pull in screen pixels, not in units', () => {
+    // A unit is 10px here, so 0.2 units is 2px - near. On a gauge drawn ten
+    // times smaller the same 0.2 is a fifth of a pixel and nearer still.
+    expect(snapToCentre(0.8, 10)).toBe(0.8);
+    expect(snapToCentre(0.8, 1)).toBe(0);
+  });
+
+  it('takes a part from either side', () => {
+    expect(snapToCentre(-0.5, 10)).toBe(0);
+    expect(snapToCentre(-2, 10)).toBe(-2);
+  });
+
+  it('holds a part that is already on the axis', () => {
+    expect(snapToCentre(0, 10)).toBe(0);
+  });
+
+  it('lets go of everything when it is switched off', () => {
+    expect(snapToCentre(0.2, 10, false)).toBe(0.2);
+    expect(snapToCentre(0, 10, false)).toBe(0);
+  });
+
+  it('takes the pull it is given', () => {
+    expect(snapToCentre(3, 1, true, 2)).toBe(3);
+    expect(snapToCentre(3, 1, true, 4)).toBe(0);
+  });
+
+  it('survives a scale of nothing rather than taking everything', () => {
+    expect(snapToCentre(20, 0)).toBe(20);
   });
 });

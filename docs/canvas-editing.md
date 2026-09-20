@@ -359,6 +359,22 @@ Not everything fits on a chip. What worked:
 - **Not a free colour value, and no text that is not drawn.** An entity, an
   `rgba()` someone types out, a unit to substitute - those stay in the form:
   there is nothing on the drawing for them to be typed *into*.
+- **A part is taken in hand by its name.** The four texts a gauge draws are
+  the smallest marks on it - a scale label is a few pixels tall - and until
+  the head of their frame became a handle the only way to take one was to hit
+  the text itself. The head is already standing beside the thing it names and
+  is the bigger target, so a press on it selects, and a drag from it moves the
+  part with the pointer the way a press on the text does.
+- **The middle axis.** A guide rather than a mark: a dashed line down the
+  dial's own square, switched on beside the grid and the highlight, and only
+  offered while a gauge's parts are open. A part dragged within a few screen
+  pixels of it is taken by it - `snapToCentre`, and the tolerance is in
+  pixels, not units, or the same number would be half the dial on a small
+  gauge and nothing on a big one. Off by default, because a text nudged a hair
+  off centre on purpose would have no way to stay there; and never while
+  several parts are held, because a group that is being carried keeps its
+  arrangement. The line goes solid while something sits on it, which is the
+  whole of the feedback: what the hand wants to know is whether it took.
 - **A ramp is a picture.** The catalogue of ready-made ramps is a strip of
   swatches under a chip, not a menu of names: *Fresh to stuffy* means nothing
   until the purple at the top has been seen, which is why the form has always
