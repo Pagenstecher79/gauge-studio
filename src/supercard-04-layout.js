@@ -29,6 +29,8 @@ import { withoutElementConfig, TARGET_LISTS } from "./config-cleanup.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
 import { hitZones, radialDeg, radialCursor, captionSpot, sectorOf,
          sectorDeg } from "./ring-grab.js";
+import { SECTOR_DEFAULTS, sectorSweep, sectorAt, sectorRadii, arcPath, bandPath,
+         sectorRadiusPatch, sectorAnglePatch, sectorSlidePatch } from "./gauge-sector.js";
 import { BEND_SIDES, BEND_ROOM, bendKey, bendAtKey, BEND_AT_MID,
          bendsOf, bendEscapes, isBent,
          bendClipPath, bendOutlineSvg, bentBox,
@@ -1379,6 +1381,103 @@ const GAUGE_RINGS = Object.freeze({
 });
 
 /**
+ * The parts a gauge has several of, read off its own config.
+ *
+ * Every other part of a gauge is one of a kind and is written out in a table;
+ * a sector is a list, so its parts are made as they are found. The key carries
+ * the index - `sector:0` - which is what the chip, the frame and the form's
+ * own fold are all keyed by, and the only name a sector has.
+ *
+ * `lens` is where such a part's config lives. Everything under a chip reads
+ * and writes the gauge's own config; a sector's rows read the entry in the
+ * list instead, and hand back a patch of the whole list. One accessor rather
+ * than a `read` and a `patch` on every row, because every row of a sector
+ * needs the same two.
+ *
+ * @param {number} i @param {any} sec
+ */
+const sectorRing = (i, sec) => {
+  const key = 'sector:' + i;
+  const preset = (/** @type {any} */ s) => s.gradient_preset || (s.use_gradient ? 'classic' : 'none');
+  return {
+    label: 'Sector ' + (i + 1), section: '_section_sectors',
+    // What says this part is an arc of the scale rather than a ring round it:
+    // it has two ends as well as two edges, and all four are dragged.
+    sector: i,
+    hint: 'drag the arcs to size it, the ends to set what it covers, '
+        + 'the band itself to move it round',
+    on: () => true,
+    // Its chip stands on the middle of the band it names, which is the one
+    // place that is unmistakably this sector and not the one beside it.
+    polar: (/** @type {any} */ cfg, /** @type {number} */ scale) => {
+      const sec = (cfg.sectors || [])[i] || {};
+      const { a0, a1 } = sectorAt(sec, sectorSweep(cfg));
+      const { inner, outer } = sectorRadii(sec, scale);
+      return { r: (inner + outer) / 2, deg: (a0 + a1) / 2 };
+    },
+    lens: {
+      read: (/** @type {any} */ cfg) => (cfg.sectors || [])[i] || {},
+      write: (/** @type {any} */ cfg, /** @type {any} */ patch) => {
+        const next = structuredClone(cfg.sectors || []);
+        if (!next[i]) return null;
+        Object.assign(next[i], patch);
+        return { sectors: next };
+      },
+    },
+    // A sector is taken off by being taken out of the list, which is a patch
+    // of the whole list and not a field set back to nothing - so the button
+    // on the chip is handed the answer rather than a pair of keys.
+    turnOff: (/** @type {any} */ cfg) => {
+      const next = structuredClone(cfg.sectors || []);
+      next.splice(i, 1);
+      return { sectors: next };
+    },
+    steps: [
+      { key: 'opacity', icon: icon('contrast'), slide: true, by: 0.05, min: 0, max: 1,
+        dflt: SECTOR_DEFAULTS.opacity, what: 'opacity' },
+      { key: 'gradient_preset', icon: icon('blend'), what: 'colour mode',
+        picks: [{ value: 'none', label: 'Single colour', short: 'Single' },
+                { value: 'classic', label: 'Classic (2 colours)', short: '2 colours' },
+                { value: 'manual', label: 'Manual (list)', short: 'List' }],
+        read: preset,
+        // The older shape of the same answer is written alongside it: a card
+        // that has been read by a renderer looking for `use_gradient` must
+        // keep drawing what it drew.
+        patch: (/** @type {any} */ _s, /** @type {string} */ v) =>
+          ({ gradient_preset: v, use_gradient: v === 'classic' }) },
+      { icon: icon('paintbrush'), what: 'colour', paint: true,
+        condition: (/** @type {any} */ s) => preset(s) !== 'manual',
+        read: (/** @type {any} */ s) => markHex(s.color, SECTOR_DEFAULTS.color),
+        patch: (/** @type {any} */ _s, /** @type {string} */ v) => ({ color: v }) },
+      { icon: icon('paintbrush'), what: 'end colour', paint: true,
+        condition: (/** @type {any} */ s) => preset(s) === 'classic',
+        read: (/** @type {any} */ s) => markHex(s.color_end, '#ffeb3b'),
+        patch: (/** @type {any} */ _s, /** @type {string} */ v) => ({ color_end: v }) },
+      { note: 'Its list of colours is under Sectors, below the canvas',
+        condition: (/** @type {any} */ s) => preset(s) === 'manual' },
+    ],
+  };
+};
+
+/**
+ * The sector parts of one gauge, made once per list rather than once per read.
+ *
+ * `_innerTarget` is asked for the parts of the element in hand several times a
+ * render, and a fresh table of closures each time is garbage nobody needs. The
+ * list itself is the key: a commit writes a new array, and a new array is a
+ * new table.
+ */
+let sectorRingsFor = { list: null, rings: null };
+const sectorRings = (/** @type {any} */ cfg) => {
+  const list = Array.isArray(cfg?.sectors) ? cfg.sectors : null;
+  if (!list || !list.length) return NO_PARTS;
+  if (sectorRingsFor.list === list && sectorRingsFor.rings) return sectorRingsFor.rings;
+  const rings = Object.fromEntries(list.map((sec, i) => ['sector:' + i, sectorRing(i, sec)]));
+  sectorRingsFor = { list, rings };
+  return rings;
+};
+
+/**
  * The radius a ring part is drawn at, and the fields that would put it at a
  * radius - the two halves of what a ring frame does.
  *
@@ -2196,6 +2295,16 @@ const INNER_KINDS = Object.freeze({
     form: 'gauge',
     parts: GAUGE_PARTS,
     rings: GAUGE_RINGS,
+    // The parts a gauge may have several of. Read off the config rather than
+    // written in the table above, because how many there are is the card's
+    // answer and not the kind's.
+    listed: sectorRings,
+    // The one offer that is not about a part being off: a gauge can always
+    // have another sector, so the button stands whatever is already drawn.
+    adds: [{ label: 'Sector', sel: (/** @type {any} */ cfg) =>
+               'sector:' + ((cfg.sectors || []).length - 1),
+             add: (/** @type {any} */ cfg) =>
+               ({ sectors: [...(cfg.sectors || []), { ...SECTOR_DEFAULTS }] }) }],
     measure: measureGauge,
     partScale: gaugeScaleOf,
     config: (/** @type {any} */ slot, /** @type {string} */ _id, /** @type {number} */ idx) => {
@@ -3160,6 +3269,17 @@ class ScCanvasEditor extends LitElement {
         border: 1px dashed var(--sc-part); background: rgba(0,0,0,0.65); color: #fff;
         box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
       .inner-add:hover { background: var(--primary-color,#03a9f4); border-style: solid; }
+      /* The one offer that is not about something being off: a gauge can
+         always have another sector. Solid, because it adds rather than
+         switches on, and nothing is missing while it stands there. */
+      .inner-add.more { border-style: solid; }
+      /* A sector's frame: two arcs, two ends and the band between them. The
+         band takes presses and paints nothing - it is how a sector is moved
+         round the dial, and a filled shape over a gauge would swallow every
+         press meant for what is drawn under it. */
+      .sector-layer { z-index: 6; }
+      .sector-body { fill: transparent; stroke: none; pointer-events: fill;
+        cursor: move; touch-action: none; }
       /* A ring is a distance from the centre, so its frame is a ring too and
          the only gesture on it is in and out. Drawn in the gauge's own viewBox
          over the gauge's own square, which is what keeps it a circle whatever
@@ -4504,8 +4624,13 @@ class ScCanvasEditor extends LitElement {
       const idx = Number(m[1]);
       const cfg = k.config(slot, sel[0], idx);
       if (!cfg) return null;
+      // A kind with parts it may have several of has them merged in here, so
+      // every call site below still asks one table what the element is made of.
+      const listed = k.listed?.(cfg);
+      const rings = listed && Object.keys(listed).length
+        ? { ...(k.rings || NO_PARTS), ...listed } : (k.rings || NO_PARTS);
       return { id: sel[0], kind, k, idx, cfg, drawn: k.drawn(cfg),
-               parts: k.parts || NO_PARTS, rings: k.rings || NO_PARTS };
+               parts: k.parts || NO_PARTS, rings };
     }
     return null;
   }
@@ -4855,6 +4980,22 @@ class ScCanvasEditor extends LitElement {
     if (fresh) this._revealOnUp = part;
     // A ring is dragged in and out rather than about, so what the gesture
     // carries is the geometry it is measured against, not a pair of offsets.
+    // Four handles on one part: two arcs, two ends and the band between them.
+    // What the gesture carries is the geometry it is measured against and,
+    // for the band, where round the dial the hand took hold - a sector
+    // grabbed by its end must not jump its start to the pointer.
+    if (mode === 'sector') {
+      const geo = this._ringGeometry(part);
+      if (!geo) return;
+      const sec = target.rings[part]?.lens?.read(target.cfg) || {};
+      this._innerDrag = { part, mode, end, ...geo,
+                          deg0: radialDeg(geo.cx, geo.cy, e.clientX, e.clientY),
+                          from: SC.safeFloat(sec.start_percent, SECTOR_DEFAULTS.start_percent),
+                          startX: e.clientX, startY: e.clientY, started: false };
+      this._ptr = { x: e.clientX, y: e.clientY };
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
+      return;
+    }
     if (mode === 'ring' || mode === 'needle') {
       // A needle has no ring, so its chip names the part and nothing more -
       // the dragging is done by the handles on its two ends. Nor has a part
@@ -5062,6 +5203,26 @@ class ScCanvasEditor extends LitElement {
       d.started = true;
       return;
     }
+    if (d.mode === 'sector') {
+      const spec = this._innerTarget?.rings[d.part];
+      const cfg = this._innerTarget?.cfg || {};
+      if (!spec?.lens) return;
+      const sec = spec.lens.read(cfg);
+      const deg = radialDeg(d.cx, d.cy, p.x, p.y);
+      // The band is also what a press selects the sector by, so a hand that
+      // shook while pressing must not send it round the dial.
+      if (d.end === 'body'
+          && !d.started && Math.hypot(p.x - d.startX, p.y - d.startY) <= CHIP_DRAG_SLOP) return;
+      const patch = d.end === 'body'
+        ? sectorSlidePatch(deg, d.deg0, d.from, sec, sectorSweep(cfg))
+        : d.end === 'inner' || d.end === 'outer'
+        ? sectorRadiusPatch(d.end, Math.hypot(p.x - d.cx, p.y - d.cy) / d.pxPerUnit,
+                            sec, d.scale)
+        : sectorAnglePatch(/** @type {'start'|'end'} */ (d.end), deg, sec, sectorSweep(cfg));
+      this._writeInner(patch, d.started, spec);
+      d.started = true;
+      return;
+    }
     if (d.mode === 'ring') {
       const spec = this._innerTarget?.rings[d.part];
       if (!spec) return;
@@ -5141,13 +5302,40 @@ class ScCanvasEditor extends LitElement {
     } else if (this._innerSel === part) {
       this._innerSel = null;
     }
-    const patch = { ...((on ? spec.turnOn : spec.turnOff) || {}) };
+    // A part that is one of several is taken off by being taken out of the
+    // list, and every part after it is then called something else - so
+    // nothing can stay in hand, whichever of them the button was on.
+    if (!on && spec.sector != null) this._innerSel = null;
+    const off = typeof spec.turnOff === 'function' ? spec.turnOff(target.cfg) : spec.turnOff;
+    const patch = { ...((on ? spec.turnOn : off) || {}) };
     // The seed only where the card says nothing: a gauge that already has 21
     // ticks keeps them when its labels are switched on.
     if (on) for (const [k, v] of Object.entries(spec.seed || {})) {
       if (target.cfg[k] === undefined) patch[k] = v;
     }
     this._writeInner(patch, false);
+  }
+
+  /**
+   * Add another of a part there may be several of.
+   *
+   * The new one arrives in hand, the way a part switched on does - it is the
+   * one about to be placed. Which part that is has to be worked out from the
+   * config the patch is about to make, because the table of parts is read off
+   * the config and the config has not been written yet.
+   */
+  _addInner(add) {
+    const target = this._innerTarget;
+    if (!target) return;
+    const patch = add.add(target.cfg);
+    this._writeInner(patch, false);
+    const part = add.sel?.({ ...target.cfg, ...patch });
+    if (!part) return;
+    this._innerSel = part;
+    this._configOpen = true;
+    // After the commit has come back round: the fold this would scroll to is
+    // drawn by the editor from the list the patch has just added to.
+    this.updateComplete.then(() => this._revealPart(part));
   }
 
   /**
@@ -5160,11 +5348,15 @@ class ScCanvasEditor extends LitElement {
   _stepRing(st, dir) {
     const target = this._innerTarget;
     if (!target || !st) return;
-    const held = st.unit ? splitUnit(target.cfg[st.key], st.dflt) : null;
-    const was = held ? held.n : SC.safeFloat(target.cfg[st.key], st.dflt);
+    // Whichever config this part's rows are about - the element's own, or the
+    // entry in a list it keeps its settings in.
+    const spec = this._selSpec;
+    const cfg = spec?.lens ? spec.lens.read(target.cfg) : target.cfg;
+    const held = st.unit ? splitUnit(cfg[st.key], st.dflt) : null;
+    const was = held ? held.n : SC.safeFloat(cfg[st.key], st.dflt);
     const next = Math.min(st.max, Math.max(st.min, Math.round((was + dir * st.by) * 10) / 10));
     if (next === was) return;
-    this._writeInner({ [st.key]: held ? next + held.unit : next }, false);
+    this._writeInner({ [st.key]: held ? next + held.unit : next }, false, spec);
   }
 
   /**
@@ -5480,12 +5672,16 @@ class ScCanvasEditor extends LitElement {
     this._hlTimer = setTimeout(() => { this._hlHold = 0; }, HL_HOLD_MS);
   }
 
-  _writeInner(patch, quiet) {
+  _writeInner(patch, quiet, spec = null) {
     // A colour being chosen is the one thing the highlight must not sit on
-    // top of, so writing one puts it away for a while.
+    // top of, so writing one puts it away for a while. Read before the lens
+    // rather than after it: through one, every patch is called `sectors`.
     if (Object.keys(patch || {}).some(k => /colou?r$/.test(k))) this._holdHighlight();
     const t = this._innerTarget;
-    const out = t && t.k.write(this.slot || {}, t, patch);
+    // A part that keeps its config somewhere of its own - an entry in a list -
+    // hands back the patch of the whole list that says the same thing.
+    const written = spec?.lens && t ? spec.lens.write(t.cfg, patch) : patch;
+    const out = t && written && t.k.write(this.slot || {}, t, written);
     if (!out) return;
     const was = this._travelling;
     if (quiet) this._travelling = true;
@@ -5657,18 +5853,28 @@ class ScCanvasEditor extends LitElement {
       },
       {
         side: 'right',
-        offers: Object.entries(target.rings)
-          .filter(([, spec]) => partCan(spec, target.cfg) && !spec.on(target.cfg))
-          .map(([part, spec]) => ({ spec, on: () => this._setInnerRing(part, true) })),
+        // The standing offers first, at the top of the column: a gauge can
+        // always have another sector, and a button that is only sometimes
+        // there is one nobody learns where to find. The rest are the parts
+        // this element has not got, which is why they are below it.
+        offers: [
+          ...(target.k.adds || []).map((/** @type {any} */ add) =>
+            ({ spec: { label: add.label }, more: true, on: () => this._addInner(add) })),
+          ...Object.entries(target.rings)
+            .filter(([, spec]) => partCan(spec, target.cfg) && !spec.on(target.cfg))
+            .map(([part, spec]) => ({ spec, more: false, on: () => this._setInnerRing(part, true) })),
+        ],
       },
     ].filter((group) => group.offers.length);
     if (!groups.length) return '';
     return html`
       ${groups.map(({ side, offers }) => html`
         <div class="inner-adds ${side}">
-          ${offers.map(({ spec, on }) => html`
-            <button class="inner-add"
-                    title=${`Show ${spec.label.toLowerCase()} on this ${target.k.noun}`}
+          ${offers.map((/** @type {any} */ { spec, more, on }) => html`
+            <button class="inner-add ${more ? 'more' : ''}"
+                    title=${more
+                      ? `Add another ${spec.label.toLowerCase()} to this ${target.k.noun}`
+                      : `Show ${spec.label.toLowerCase()} on this ${target.k.noun}`}
                     @pointerdown=${swallow}
                     @click=${on}>+ ${spec.label}</button>`)}
         </div>`)}`;
@@ -5701,6 +5907,28 @@ class ScCanvasEditor extends LitElement {
     // whatever the element under it is shaped like.
     const r = el.getBoundingClientRect();
     if (!r.width) return;
+    const deg = radialDeg(r.left + r.width / 2, r.top + r.height / 2, e.clientX, e.clientY);
+    const cur = radialCursor(deg);
+    if (el.style.cursor !== cur) el.style.cursor = cur;
+    const sector = sectorOf(deg, CAPTION_SECTORS);
+    if (this._ringHot !== key) this._ringHot = key;
+    if (this._ringHotSector !== sector) this._ringHotSector = sector;
+  }
+
+  /**
+   * The same, for an arc.
+   *
+   * A sector's edge is a piece of a circle, and the box round a piece of one
+   * is not centred on the circle at all - so the centre is taken from the
+   * layer, which is laid exactly over the gauge's own square, rather than
+   * from the element under the hand.
+   *
+   * @param {any} e @param {string} key the sector and its edge, as `part:edge`
+   */
+  _sectorOver(e, key) {
+    const el = e.currentTarget;
+    const r = el.ownerSVGElement?.getBoundingClientRect();
+    if (!r?.width) return;
     const deg = radialDeg(r.left + r.width / 2, r.top + r.height / 2, e.clientX, e.clientY);
     const cur = radialCursor(deg);
     if (el.style.cursor !== cur) el.style.cursor = cur;
@@ -5753,7 +5981,12 @@ class ScCanvasEditor extends LitElement {
     // stay, so every ring can still be reached; the band is for the one being
     // moved, and the press on the chip is what brings it out.
     const bands = live.filter(([part, spec]) =>
-      !spec.needle && !spec.spot && this._innerSel === part);
+      !spec.needle && !spec.spot && spec.sector == null && this._innerSel === part);
+    // A sector is the one part with an inside, an outside and two ends, so it
+    // is drawn as the band it is rather than as a pair of circles - and only
+    // the one in hand, the same rule every other frame goes by.
+    const secs = live.filter(([part, spec]) =>
+      spec.sector != null && this._innerSel === part);
     const needles = live.filter(([, spec]) => spec.needle);
     const scale = gaugeScaleOf(cfg) || 1;
     const ring = ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale));
@@ -5830,6 +6063,71 @@ class ScCanvasEditor extends LitElement {
           })}`;
         })}
       </svg>`}
+      ${!secs.length ? '' : (() => {
+      const sweep = sectorSweep(cfg);
+      const gripR = unit > 0 ? 5 / unit : 1.1;
+      const on = (/** @type {number} */ r, /** @type {number} */ deg) => {
+        const t = deg * Math.PI / 180;
+        return { x: cen.x + r * Math.cos(t), y: cen.y + r * Math.sin(t) };
+      };
+      return html`
+      <svg class="ring-layer sector-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
+           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;
+                  --sc-band-w:${bandW}; --sc-cap-w:${capSize / 5};">
+        ${secs.map(([part, spec]) => {
+          const sec = spec.lens.read(cfg);
+          const { a0, a1 } = sectorAt(sec, sweep);
+          const { inner, outer } = sectorRadii(sec, scale);
+          // The same sharing of ground the two edges of a frame get: a sector
+          // dragged thin has its arcs a pixel apart, and two hit strokes of
+          // the same width would lie on top of one another.
+          const zones = hitZones([outer, inner]);
+          const edges = [{ edge: 'outer', r: outer, short: 'outer edge' },
+                         { edge: 'inner', r: inner, short: 'inner edge' }];
+          const mid = (inner + outer) / 2;
+          return svg`
+            <path class="sector-body" d=${bandPath(cen.x, cen.y, inner, outer, a0, a1)}
+                  @pointerdown=${(/** @type {any} */ e) =>
+                    this._innerDown(e, part, 'sector', 'body')}>
+              <title>Drag the sector round the dial</title>
+            </path>
+            ${edges.map((b, i) => {
+              if (b.r < 0.5) return '';
+              const key = part + ':' + b.edge;
+              const hot = this._ringHot === key;
+              const cap = hot
+                ? captionSpot(cen.x, cen.y, b.r,
+                              sectorDeg(this._ringHotSector, CAPTION_SECTORS), capGap)
+                : null;
+              return svg`
+                <path class="ring-band sel ${hot ? 'hot' : ''}"
+                      d=${arcPath(cen.x, cen.y, b.r, a0, a1)}></path>
+                ${!cap ? '' : svg`
+                <text class="ring-caption" x=${cap.x} y=${cap.y} font-size=${capSize}
+                      text-anchor=${cap.anchor}>${b.short}</text>`}
+                <path class="ring-hit" d=${arcPath(cen.x, cen.y, zones[i].r, a0, a1)}
+                      stroke-width=${zones[i].w}
+                      @pointerenter=${(/** @type {any} */ e) => this._sectorOver(e, key)}
+                      @pointermove=${(/** @type {any} */ e) => this._sectorOver(e, key)}
+                      @pointerleave=${() => this._ringOut(key)}
+                      @pointerdown=${(/** @type {any} */ e) =>
+                        this._innerDown(e, part, 'sector', b.edge)}>
+                  <title>${'Drag the ' + b.short + ' in or out'}</title>
+                </path>`;
+            })}
+            ${[{ end: 'start', deg: a0 }, { end: 'end', deg: a1 }].map(({ end, deg }) => {
+              const at = on(mid, deg);
+              return svg`
+                <circle class="ring-grip sel" cx=${at.x} cy=${at.y} r=${gripR}></circle>
+                <circle class="ring-grip-hit" cx=${at.x} cy=${at.y} r=${gripR * 2.2}
+                        @pointerdown=${(/** @type {any} */ e) =>
+                          this._innerDown(e, part, 'sector', end)}>
+                  <title>${'Drag the sector\'s ' + end + ' along the scale'}</title>
+                </circle>`;
+            })}`;
+        })}
+      </svg>`;
+      })()}
       ${!needles.length ? '' : (() => {
       // The needle's two handles are drawn in the gauge's own units, which
       // made them one size on a big gauge and another on a small one. The
@@ -5890,12 +6188,18 @@ class ScCanvasEditor extends LitElement {
                        y: (n.tail.y + n.tip.y) / 2 + 4 * Math.cos(a2) };
             })()
           : (() => {
+              // A part there may be several of cannot be given an angle in a
+              // table: where its chip belongs is where the part itself is, and
+              // two sectors are two different places. So it works its own out,
+              // and the fixed angles below stay what they are - the answer for
+              // the rings a gauge has exactly one of.
+              const own = spec.polar?.(cfg, scale);
               // Never nearer than this: the hub's ring is a couple of units
               // across, and a chip drawn on it stands on the pivot itself -
               // over the needle's own tail handle, which is dragged to exactly
               // there.
-              const r = Math.max(at(spec), RING_CHIP_MIN);
-              const a2 = (RING_CHIP_ANGLE[part] ?? -90) * Math.PI / 180;
+              const r = Math.max(own ? own.r : at(spec), RING_CHIP_MIN);
+              const a2 = (own ? own.deg : (RING_CHIP_ANGLE[part] ?? -90)) * Math.PI / 180;
               return { x: c.x + r * Math.cos(a2), y: c.y + r * Math.sin(a2) };
             })();
         const l = svgBox.l + svgBox.w * spot.x / GAUGE_VIEW;
@@ -6485,6 +6789,12 @@ class ScCanvasEditor extends LitElement {
     // nothing.
     if (!spec?.steps?.length || !target) return '';
     const cfg = target.cfg;
+    // Which config these rows are about. Most parts are settings of the
+    // element itself; one that is an entry in a list of its own reads and
+    // writes there instead, and says so with a lens rather than with a `read`
+    // and a `patch` on every row it has.
+    const view = spec.lens ? spec.lens.read(cfg) : cfg;
+    const put = (/** @type {any} */ patch) => this._writeInner(patch, false, spec);
     const swallow = (/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); };
     /**
      * The same, for a control the browser has to be left to open itself.
@@ -6498,9 +6808,9 @@ class ScCanvasEditor extends LitElement {
      */
     const keep = (/** @type {any} */ e) => e.stopPropagation();
     const now = (/** @type {any} */ st) =>
-      (st.read ? st.read(cfg)
-       : st.unit ? splitUnit(cfg[st.key], st.dflt).n
-       : SC.safeFloat(cfg[st.key], st.dflt));
+      (st.read ? st.read(view)
+       : st.unit ? splitUnit(view[st.key], st.dflt).n
+       : SC.safeFloat(view[st.key], st.dflt));
     // One sentence per row, on the icon and on the control alike: the icon
     // is the nearest thing to hand and used to name only the setting, so
     // hovering it said less than hovering the slider an inch to its right.
@@ -6512,7 +6822,7 @@ class ScCanvasEditor extends LitElement {
     const group = (/** @type {any} */ st) => {
       // A row that would set something this part has not got is not drawn: a
       // gradient has a list of colours, not a colour, so it has no swatch.
-      if (st.condition && !st.condition(cfg)) return '';
+      if (st.condition && !st.condition(view)) return '';
       // A row that sets nothing. Where a choice can be asked for and not
       // honoured - a pill on its end that the bar is too flat to hold - the
       // menu says so under the row that makes the choice, because that is
@@ -6529,7 +6839,7 @@ class ScCanvasEditor extends LitElement {
                  title=${tip(st)} @pointerdown=${keep}>
             <input type="color" .value=${now(st)}
                    @input=${(/** @type {any} */ e) =>
-                     this._writeInner(st.patch(cfg, e.target.value), false)}>
+                     put(st.patch(view, e.target.value))}>
           </label>
         </span>`;
       // A switch is neither a number nor a choice from a list: it is on or it
@@ -6539,9 +6849,9 @@ class ScCanvasEditor extends LitElement {
         <span class="ring-group">${stepIcon(st)}
           <label class="ring-wide ring-flag" title=${tip(st)}
                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}>
-            <input type="checkbox" .checked=${!!cfg[st.key]}
+            <input type="checkbox" .checked=${!!view[st.key]}
                    @change=${(/** @type {any} */ e) =>
-                     this._writeInner({ [st.key]: e.target.checked }, false)}>
+                     put({ [st.key]: e.target.checked })}>
             <span>${st.what}</span>
           </label>
         </span>`;
@@ -6563,10 +6873,10 @@ class ScCanvasEditor extends LitElement {
                    // its shown one has to translate, and `read` alone only
                    // gets it as far as the thumb.
                    const v = SC.safeFloat(e.target.value, st.dflt);
-                   this._writeInner(st.patch ? st.patch(cfg, v) : { [st.key]: v }, false);
+                   put(st.patch ? st.patch(view, v) : { [st.key]: v });
                  }}>
           <span class="ring-step-val">${st.unit
-            ? now(st) + splitUnit(cfg[st.key], st.dflt).unit : now(st)}</span>
+            ? now(st) + splitUnit(view[st.key], st.dflt).unit : now(st)}</span>
         </span>`;
       // Home Assistant's own icon dropdown, because an icon is picked by
       // looking at it and by typing a few letters of its name - neither of
@@ -6575,17 +6885,17 @@ class ScCanvasEditor extends LitElement {
       if (st.pickIcon) return html`
         <span class="ring-group">${stepIcon(st)}
           <ha-icon-picker class="ring-wide ring-iconpick" .hass=${this.hass}
-                          .value=${cfg[st.key] || ''}
+                          .value=${view[st.key] || ''}
                           title=${tip(st)}
                           @pointerdown=${keep}
                           @value-changed=${(/** @type {any} */ e) =>
-                            this._writeInner({ [st.key]: e.detail.value || undefined }, false)}></ha-icon-picker>
+                            put({ [st.key]: e.detail.value || undefined })}></ha-icon-picker>
         </span>`;
       if (st.picks) {
       // A list may be a function of the entry, the way a field array's
       // `options` already may: what a part can be told to be sometimes
       // depends on what it is. An option that cannot be drawn is not offered.
-      const picks = typeof st.picks === 'function' ? st.picks(cfg) : st.picks;
+      const picks = typeof st.picks === 'function' ? st.picks(view) : st.picks;
       return html`
         <span class="ring-group">${stepIcon(st)}
           <select class="ring-wide ring-pick" title=${tip(st)}
@@ -6595,9 +6905,9 @@ class ScCanvasEditor extends LitElement {
                     // design on the part - a ramp of colours - hands back the
                     // patch instead, and answers nothing for the line that is
                     // only the menu's own name for itself.
-                    const patch = st.patch ? st.patch(cfg, e.target.value)
+                    const patch = st.patch ? st.patch(view, e.target.value)
                                            : { [st.key]: e.target.value };
-                    if (patch) this._writeInner(patch, false);
+                    if (patch) put(patch);
                     // Nothing records which ramp was picked, so the menu goes
                     // back to saying what it is rather than what was last done
                     // with it.
@@ -6614,7 +6924,7 @@ class ScCanvasEditor extends LitElement {
                 title=${`${dir > 0 ? 'More' : 'Less'} ${st.what}`}
                 @pointerdown=${swallow}
                 @click=${() => this._stepRing(st, dir)}>${glyph}</button>`;
-      const shown = st.unit ? val + splitUnit(cfg[st.key], st.dflt).unit : val;
+      const shown = st.unit ? val + splitUnit(view[st.key], st.dflt).unit : val;
       return html`
         <span class="ring-group">${stepIcon(st)}
           ${btn(-1, '−')}<span class="ring-step-val">${shown}</span>${btn(1, '+')}

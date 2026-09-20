@@ -594,6 +594,51 @@ Two smaller lessons came with it:
   the part that turns a measurement into a render loop if it is wrong - is
   written once.
 
+## 11a. A part there may be several of
+
+Every part above is one of a kind: a gauge has one needle, one hub, one ring of
+ticks, and each of them is a line in a table. A sector is not - a gauge has as
+many as somebody has added, and they are a list in its config. That cost three
+things and nothing else.
+
+- **The table is read off the config.** `listed` on the kind answers the parts
+  it has several of, keyed by index - `sector:0` - and `_innerTarget` merges
+  that answer into the rings. The key is the only name such a part has, and the
+  chip, the frame and the form's own fold are all keyed by it. The answer is
+  memoised on the list itself, because a commit writes a new array and a new
+  array is a new table; anything else is a fresh set of closures several times
+  a render.
+- **Where its settings live is the part's own business.** Every other part's
+  rows read and write the element's config. A sector's read the entry in the
+  list, and write a patch of the whole list. That is a `lens` on the part -
+  one accessor, not a `read` and a `patch` on every row it has - and the
+  panel, the steppers and the drags all go through it. `_writeInner` takes the
+  part as its third argument for exactly this, and reads the colour-hold rule
+  *before* the lens, because through one every patch is called `sectors`.
+- **Taking one off renumbers the rest.** So `turnOff` may be a function of the
+  config - a sector's answers the list without it - and nothing can stay in
+  hand afterwards, whichever of them the button was on.
+
+The offer is the other way round too. Every other `+` on the right-hand side is
+for a part that is *off*; a gauge can always have another sector, so that
+button is permanent and stands at the top of the column, solid rather than
+dashed. It is `adds` on the kind, and the new part arrives in hand the way a
+part switched on does.
+
+**What a sector is dragged by** is four handles rather than one band: its two
+arcs are the radii, its two ends are what stretch of the scale it covers, and
+the band between them moves it round without changing either. The arcs are
+drawn as arcs and not as circles - a full circle round a quarter-sector is a
+frame round three quarters of nothing - and they share their hit zones through
+the same `hitZones` two edges of a frame do, because a thin sector puts them a
+pixel apart. The band is filled, takes presses and paints nothing, and is drawn
+only for the sector in hand: a filled shape over a dial swallows every press
+meant for what is under it.
+
+The arithmetic is `gauge-sector.js`, and it is the usual reason - a wrong
+number there moves a band on somebody's dashboard, and it is pure, so it is
+tested.
+
 ## 12. Grips on the frame: the corners and the sides
 
 A corner radius is set by a grip in a corner, and there are two of them, at the

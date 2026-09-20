@@ -1151,7 +1151,11 @@ class ScGauge extends LitElement {
 
           ${this._buildRingTemplate(data, startAngle, totalAngle, radius, stroke)}
           
-          ${this._get('sectors', []).map(sec => {
+          ${this._get('sectors', []).map((sec, secIdx) => {
+            // The canvas editor finds a part by this name and by nothing
+            // else, which is what lets a sector be taken hold of by pressing
+            // the paint rather than by hunting for its chip.
+            const secPart = 'sector:' + secIdx;
             const sStart = startAngle + safeFloat(sec.start_percent,75)/100*totalAngle;
             const sEnd = sStart + safeFloat(sec.length_percent,25)/100*totalAngle;
             if (Math.abs(sEnd-sStart)<0.01) return '';
@@ -1191,7 +1195,7 @@ class ScGauge extends LitElement {
                   const valAtSeg = val1 + midPct * valRange;
                   const rC = this._getColorAt(valAtSeg, secManualStops);
                   
-                  gradPaths.push(svg`<path class="layer-elm-base" d="${buildSectorPath(this.CENTER,this.CENTER,innerR,outerR,a1,a2)}" fill="rgb(${rC.join(',')})" opacity="${safeFloat(sec.opacity, 0.85)}"/>`);
+                  gradPaths.push(svg`<path class="layer-elm-base" data-sc-part="${secPart}" d="${buildSectorPath(this.CENTER,this.CENTER,innerR,outerR,a1,a2)}" fill="rgb(${rC.join(',')})" opacity="${safeFloat(sec.opacity, 0.85)}"/>`);
                 }
               } else {
                 const rgb1 = toRgbArray(resolveColor('fixed', sec.color||'#dc3232')) || [220,50,50];
@@ -1201,12 +1205,12 @@ class ScGauge extends LitElement {
                   const a1 = sStart + p1*secRange; 
                   const a2 = sStart + p2*secRange + (secRange > 0 ? 0.2 : -0.2); 
                   const rC = interpolateColor(rgb1, rgb2, p1 + (0.5/segs)); 
-                  gradPaths.push(svg`<path class="layer-elm-base" d="${buildSectorPath(this.CENTER,this.CENTER,innerR,outerR,a1,a2)}" fill="rgb(${rC.join(',')})" opacity="${safeFloat(sec.opacity, 0.85)}"/>`);
+                  gradPaths.push(svg`<path class="layer-elm-base" data-sc-part="${secPart}" d="${buildSectorPath(this.CENTER,this.CENTER,innerR,outerR,a1,a2)}" fill="rgb(${rC.join(',')})" opacity="${safeFloat(sec.opacity, 0.85)}"/>`);
                 }
               }
               return gradPaths;
             } else {
-              return svg`<path class="layer-elm-base" d="${buildSectorPath(this.CENTER,this.CENTER,innerR,outerR,sStart,sEnd)}" fill="${resolveColor('fixed', sec.color||'#dc3232')}" opacity="${safeFloat(sec.opacity, 0.85)}"/>`;
+              return svg`<path class="layer-elm-base" data-sc-part="${secPart}" d="${buildSectorPath(this.CENTER,this.CENTER,innerR,outerR,sStart,sEnd)}" fill="${resolveColor('fixed', sec.color||'#dc3232')}" opacity="${safeFloat(sec.opacity, 0.85)}"/>`;
             }
           })}
 
