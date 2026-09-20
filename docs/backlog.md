@@ -116,9 +116,24 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   same way: `show unit` then `replace unit` then the custom one. A card that
   typed a custom unit was replacing with it, and `stripDeadConfig` says so on
   the next edit, so nothing on a dashboard changes what it reads.
-- **30 / 48** - Gauge background options reachable from the gauge editor's
-  canvas, as a dropdown - the top edge is probably the right place for one.
-  If it works, the same for the progress bar.
+- **30 / 48** - ~~Gauge background options reachable from the gauge editor's
+  canvas, as a dropdown - the top edge is probably the right place for one.~~
+  Done for the gauge; the progress bar is what is left of this one. The
+  background is a `spot` part standing at the top of the box, `background` in
+  `GAUGE_RINGS`, and it carries the whole of what the disc is painted with:
+  the mode, the gradient's kind, a ready-made ramp, the two colours and the
+  balance between them, the angle, and the opacity as a per cent rather than
+  as the fraction it is stored in. The form lets go of every one of them in
+  the same change.
+  The list of stops came with it, which is the part that was an open question:
+  the surface's paint had been the one place a small editor stood under a
+  chip, and a gauge's ring was the counter-example. It is not one - a gradient
+  is what the thing it colours *is* - so the ring's list moved under its chip
+  too, each with the unit its positions are read in. `docs/canvas-editing.md`
+  §9 says so now rather than the opposite.
+  What stayed in the form is *when* the background changes: the two dozen
+  fields of the threshold and its animation are a condition, not a colour, and
+  the chip's panel points down at them the way every other part does.
 - **34** - ~~Glass FX for the pointer and the centre point~~; possibly a
   relief FX for ticks and texts. The glass half is done, and it was measured
   before it was built - see `docs/perf-cpu.md`. The cost of glass on a needle

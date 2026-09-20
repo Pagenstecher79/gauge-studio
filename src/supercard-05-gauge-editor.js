@@ -141,16 +141,16 @@ const STYLE_FIELDS = [
   { id: 'frame_ring_opacity',       label: 'Opacity',                    type: 'range',    min: 0, max: 1, step: 0.01,  placeholder: '1.0', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
 
   { id: '_section_bg',           icon: icon('image'), label: '── Background',             type: 'section' },
-  { id: 'bg_mode',               label: 'Background mode',          type: 'select', options: [ { value: 'none', label: 'None' }, { value: 'adaptive', label: 'Adaptive (theme)' }, { value: 'solid', label: 'Solid colour' }, { value: 'linear', label: 'Linear gradient' }, { value: 'radial', label: 'Radial gradient' } ] },
-  { id: 'bg_gradient_preset',    label: 'Gradient type',                type: 'select', options: [ { value: 'classic', label: 'Classic (2 colours)' }, { value: 'manual', label: 'Manual (list)' } ], condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) },
-  { id: 'bg_threshold_unit',     label: 'Threshold unit',          type: 'select',
+  { id: 'bg_mode',               framedBy: 'background', label: 'Background mode',          type: 'select', options: [ { value: 'none', label: 'None' }, { value: 'adaptive', label: 'Adaptive (theme)' }, { value: 'solid', label: 'Solid colour' }, { value: 'linear', label: 'Linear gradient' }, { value: 'radial', label: 'Radial gradient' } ] },
+  { id: 'bg_gradient_preset',    framedBy: 'background', label: 'Gradient type',                type: 'select', options: [ { value: 'classic', label: 'Classic (2 colours)' }, { value: 'manual', label: 'Manual (list)' } ], condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) },
+  { id: 'bg_threshold_unit',     framedBy: 'background', label: 'Threshold unit',          type: 'select',
     hint: 'Thresholds can be given as absolute values or in %.', options: [ { value: 'percent', label: 'Percent (%)' }, { value: 'absolute', label: 'Absolute' } ], condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset === 'manual' },
-  { id: 'bg_opacity',            label: 'Opacity',                  type: 'range',    min: 0, max: 1, step: 0.01, placeholder: '1.0' },
-  { id: 'bg_color1',             label: 'Colour 1 (inner / start)',    type: 'color',  condition: cfg => ['solid', 'linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
-  { id: 'bg_color2',             label: 'Colour 2 (outer / end)',     type: 'color',  condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
-  { id: 'bg_balance',            label: 'Balance (%)',                type: 'range',    min: 0, max: 100, step: 0.1, placeholder: '50', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
-  { id: 'bg_gradient_angle',     label: 'Angle (° linear only)',      type: 'range',    min: 0, max: 360, step: 1, placeholder: '135', condition: cfg => cfg.bg_mode === 'linear' },
-  { id: 'bg_manual_stops',       type: 'bg_manual_stops', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset === 'manual' },
+  { id: 'bg_opacity',            framedBy: 'background', label: 'Opacity',                  type: 'range',    min: 0, max: 1, step: 0.01, placeholder: '1.0' },
+  { id: 'bg_color1',             framedBy: 'background', label: 'Colour 1 (inner / start)',    type: 'color',  condition: cfg => ['solid', 'linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
+  { id: 'bg_color2',             framedBy: 'background', label: 'Colour 2 (outer / end)',     type: 'color',  condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
+  { id: 'bg_balance',            framedBy: 'background', label: 'Balance (%)',                type: 'range',    min: 0, max: 100, step: 0.1, placeholder: '50', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
+  { id: 'bg_gradient_angle',     framedBy: 'background', label: 'Angle (° linear only)',      type: 'range',    min: 0, max: 360, step: 1, placeholder: '135', condition: cfg => cfg.bg_mode === 'linear' },
+  { id: 'bg_manual_stops',       framedBy: 'background', type: 'bg_manual_stops', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset === 'manual' },
 
   // Last of the section's own fields, so it sits under the background colours
   // and above the two threshold folds. Only on a canvas: the pattern paints
@@ -198,12 +198,12 @@ const STYLE_FIELDS = [
   { id: 'gradient_mode', framedBy: 'gauge_ring',     label: 'Gradient type',           type: 'select', options: [ { value: 'smooth', label: 'Smooth' }, { value: 'stepped', label: 'Stepped' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
   { id: 'gradient_resolution', framedBy: 'gauge_ring', label: 'Gradient resolution', type: 'select', options: [ { value: 'auto', label: 'Automatic (size-dependent)' }, { value: 'coarse', label: 'Coarse (1× colour zones)' }, { value: 'medium', label: 'Medium (12× colour zones)' }, { value: 'fine', label: 'Fine (24×) — default' }, { value: 'superfine', label: 'Superfine (48×)' }, { value: 'ultrafine', label: 'Ultrafine (96×)' }, { value: 'megafine', label: 'Megafine (192×)' }  ]},
 
-  { id: 'threshold_unit',    label: 'Threshold unit',     type: 'select',
+  { id: 'threshold_unit',    framedBy: 'gauge_ring', label: 'Threshold unit',     type: 'select',
     hint: 'Thresholds can be given as absolute values or in %.', options: [ { value: 'percent', label: 'Percent (%)' }, { value: 'absolute', label: 'Absolute' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
   { id: 'gradient_start',    label: 'Gradient start',        type: 'number', placeholder: 'auto', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
   { id: 'gradient_end',      label: 'Gradient end',         type: 'number', placeholder: 'auto', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
 
-  { id: 'manual_stops',      type: 'manual_stops', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
+  { id: 'manual_stops',      framedBy: 'gauge_ring', type: 'manual_stops', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
 
   { id: 'color1',     label: 'Outer colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
   { id: 'color2',     label: 'Middle colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
@@ -865,9 +865,15 @@ class ScGaugeEditor extends LitElement {
     // dragged is the inner edge and the note has to say which.
     const how = part === 'gauge_ring'
       ? html`drag the ring's inner edge, which is the edge of it that moves,
-             and its colour stands under its chip. The list of stops stays
-             here: a row of colours to be dragged about is not a control that
-             fits on a dial.`
+             and what it is coloured with - the list of stops included -
+             stands under its chip.`
+      // The one part of a gauge with nothing to drag at all: the background
+      // is the whole of the box, so there is no edge to take hold of and the
+      // chip is all of it.
+      : part === 'background'
+      ? html`it is the whole of the box behind the dial, so there is nothing
+             to drag - what it is painted with stands under its chip, at the
+             top of the gauge. When it changes is still asked here.`
       : part === 'frame_ring'
       // Two edges that are two different settings, which is worth spelling
       // out: nothing else on a gauge is dragged by the outside of it, and a

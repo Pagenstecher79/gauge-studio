@@ -359,15 +359,19 @@ Not everything fits on a chip. What worked:
 - **Not a free colour value, and no text that is not drawn.** An entity, an
   `rgba()` someone types out, a unit to substitute - those stay in the form:
   there is nothing on the drawing for them to be typed *into*.
-- **A small editor, where the thing it edits is the whole object.** A list
-  edited by dragging its items about is not one control, and for a gauge's
-  ring it stays in the form - the ring is one of a dozen things a gauge
-  draws, and its stops are a menu's worth of rows among others. A surface is
-  the other case: it draws nothing but its paint, so its stop list *is* the
-  object, and leaving it below while the type, the ramp, the angle and the
-  effect are all on the drawing is exactly the split these frames exist to
-  end. So `<sc-gradient-stops>` stands under the surface's chip (`stops` on
-  a step), the one editor rather than a second one, and the panel's size grip
+- **A small editor, where it is what the part is.** A list edited by dragging
+  its items about is not one control, so it was at first the one thing left in
+  the form while everything around it moved. That did not hold: a gradient is
+  what the thing it colours *is*, and a chip carrying the type, the ramp, the
+  angle and the effect while the colours themselves sit five folds down is
+  exactly the split these frames exist to end - and it is the split the rule
+  below forbids. So the stop list goes under the chip wherever a part is
+  coloured from one: a surface's paint, a gauge's ring, and the disc a gauge
+  is drawn on. It takes its unit with it, because a position read on the
+  entity's scale and one read in per cent are the same number meaning two
+  things. `<sc-gradient-stops>` is the one editor rather than a second one
+  (`stops` on a step, with `absolute` and `blocks` where the reading of a
+  position is a question of the config), and the panel's size grip
   is what makes room for it - a panel at its default width is too narrow to
   drag a stop about in. Two things it needs: the panel is dark and the editor
   is the form's, so the host sets the half-dozen theme properties it reads;

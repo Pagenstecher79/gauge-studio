@@ -863,6 +863,20 @@ const RING_COLOUR_MODE = Object.freeze([
 const isStopList = (/** @type {any} */ cfg) =>
   ['manual', undefined, ''].includes(cfg.gradient_preset);
 
+/**
+ * Where the positions in a stop list are read on: the strip itself, or the
+ * entity's own scale.
+ *
+ * The one row of a gradient that is not about a colour. It stands with the
+ * list rather than in the form because it is the list's unit - a card set to
+ * absolute shows a threshold where the others show a per cent, and reading
+ * one while the other is set is how a ramp ends up looking wrong.
+ */
+const THRESHOLD_UNIT = Object.freeze([
+  { value: 'percent', label: 'Percent (%)', short: '%' },
+  { value: 'absolute', label: 'Absolute', short: 'Value' },
+]);
+
 /** Whether the ring is one of the two that are three colours and no list. */
 const isThreeColour = (/** @type {any} */ cfg) =>
   ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset);
@@ -1116,9 +1130,105 @@ const GAUGE_PARTS = Object.freeze({
  * size. Each carries the glyph that says which of them it is, because three
  * pairs of buttons in a row are otherwise three of the same thing.
  */
+/** The three background modes that are painted with a colour of their own. */
+const bgPainted = (/** @type {any} */ cfg) =>
+  ['solid', 'linear', 'radial'].includes(cfg.bg_mode);
+
+/** Those of them that are a gradient, and so have a second colour or a list. */
+const bgGradient = (/** @type {any} */ cfg) =>
+  ['linear', 'radial'].includes(cfg.bg_mode);
+
+/** A gradient mixed from a list of stops rather than from two colours. */
+const bgManual = (/** @type {any} */ cfg) =>
+  bgGradient(cfg) && cfg.bg_gradient_preset === 'manual';
+
+/** A gradient that is the two colours and the balance between them. */
+const bgClassic = (/** @type {any} */ cfg) =>
+  bgGradient(cfg) && cfg.bg_gradient_preset !== 'manual';
+
+/** What the background is painted with, as one pick between none and four kinds. */
+const BG_MODE = Object.freeze([
+  { value: 'none', label: 'None', short: 'None' },
+  { value: 'adaptive', label: 'Adaptive (theme)', short: 'Theme' },
+  { value: 'solid', label: 'Solid colour', short: 'Solid' },
+  { value: 'linear', label: 'Linear gradient', short: 'Linear' },
+  { value: 'radial', label: 'Radial gradient', short: 'Radial' },
+]);
+
+/** Two colours and a balance, or a list of stops. */
+const BG_GRADIENT_KIND = Object.freeze([
+  { value: 'classic', label: 'Classic (2 colours)', short: '2 colours' },
+  { value: 'manual', label: 'Manual (list)', short: 'List' },
+]);
+
 const GAUGE_RINGS = Object.freeze({
-  // The gauge's own ring, framed by the edge of it that moves. First in the
-  // list so every other band is drawn over it rather than under.
+  /**
+   * The disc the gauge is drawn on.
+   *
+   * Not a ring and not a mark: it is the whole of what is behind the dial, so
+   * it has no radius to drag and no edge to take hold of - the chip stands at
+   * the top of the box and holds all of it, the way a surface's paint does.
+   * That is the whole point of the item: the one thing a reader sees before
+   * anything else sat five folds down a dialog, and switching it on at all
+   * meant finding a select called "Background mode".
+   *
+   * `on` is always true for the same reason the ring's is. A background that
+   * is off is not a part that has been taken away - it is a mode this chip
+   * sets, so the chip has to be there to set it back.
+   *
+   * What is *not* here is when the background changes: the thresholds and the
+   * animation are two dozen fields about a condition, not about a colour, and
+   * they stay in the form with a line pointing at them.
+   *
+   * First in the list, so every band and every other chip is drawn over it
+   * rather than under.
+   */
+  background: {
+    label: 'Background', section: '_section_bg', spot: { l: 50, t: 4 },
+    on: () => true,
+    steps: [
+      { key: 'bg_mode', icon: icon('image'), what: 'background', picks: BG_MODE,
+        read: (/** @type {any} */ cfg) => cfg.bg_mode || 'none' },
+      { key: 'bg_gradient_preset', icon: icon('blend'), what: 'gradient type',
+        picks: BG_GRADIENT_KIND, condition: bgGradient,
+        read: (/** @type {any} */ cfg) => cfg.bg_gradient_preset || 'classic' },
+      // A ramp is not a mode and nothing remembers it was picked: it writes a
+      // list of stops and steps back out of the way, which is why this row
+      // reads its own name rather than a value.
+      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
+        condition: bgManual, read: () => '',
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
+          gradientPresetPatch(v, 'gauge_bg') },
+      { key: 'bg_threshold_unit', icon: icon('ruler'),
+        what: 'unit the positions are read in', condition: bgManual,
+        read: (/** @type {any} */ cfg) => cfg.bg_threshold_unit || 'percent',
+        picks: THRESHOLD_UNIT },
+      { stops: true, icon: icon('palette'), what: 'colours', condition: bgManual,
+        read: (/** @type {any} */ cfg) => normalizeStops(cfg.bg_manual_stops, { fill: false }),
+        absolute: (/** @type {any} */ cfg) =>
+          (cfg.bg_threshold_unit || 'percent') === 'absolute',
+        patch: (/** @type {any} */ _cfg, /** @type {any[]} */ list) =>
+          ({ bg_manual_stops: list }) },
+      ringColour('bg_color1', 'colour, inner or start', '#1e1e1e',
+                 (/** @type {any} */ cfg) => bgPainted(cfg) && !bgManual(cfg)),
+      ringColour('bg_color2', 'second colour, outer or end', '#3c3c3c', bgClassic),
+      { key: 'bg_balance', icon: icon('proportions'), slide: true, by: 1, min: 0, max: 100,
+        dflt: 50, what: 'balance between the two colours (%)', condition: bgClassic },
+      { key: 'bg_gradient_angle', icon: icon('compass'), slide: true, by: 1, min: 0, max: 360,
+        dflt: 135, what: 'angle',
+        condition: (/** @type {any} */ cfg) => cfg.bg_mode === 'linear' },
+      // Stored as a fraction and shown as a per cent, which is what every
+      // other opacity on the canvas reads as - a slider that runs from 0 to 1
+      // in hundredths says nothing to look at while it is being dragged.
+      { key: 'bg_opacity', icon: icon('contrast'), slide: true, by: 1, min: 0, max: 100,
+        dflt: 100, what: 'opacity (%)',
+        read: (/** @type {any} */ cfg) => Math.round(SC.safeFloat(cfg.bg_opacity, 1) * 100),
+        patch: (/** @type {any} */ _cfg, /** @type {number} */ v) =>
+          ({ bg_opacity: Math.round(v) / 100 }) },
+    ],
+  },
+  // The gauge's own ring, framed by the edge of it that moves. Drawn before
+  // every other band so they lie over it rather than under.
   gauge_ring: {
     label: 'Ring', section: '_section_color',
     on: () => true,
@@ -1140,6 +1250,20 @@ const GAUGE_RINGS = Object.freeze({
         read: (/** @type {any} */ cfg) => cfg.gradient_mode || 'smooth',
         picks: [{ value: 'smooth', label: 'Smooth', short: 'Smooth' },
                 { value: 'stepped', label: 'Stepped', short: 'Stepped' }] },
+      { key: 'threshold_unit', icon: icon('ruler'), what: 'unit the positions are read in',
+        condition: isStopList,
+        read: (/** @type {any} */ cfg) => cfg.threshold_unit || 'percent',
+        picks: THRESHOLD_UNIT },
+      // The colours themselves, under the chip that draws them. The ramp above
+      // writes this list and the mode beside it says how it is read, so a list
+      // left in the form would be the one part of a ring's colour that is
+      // somewhere else - see `docs/canvas-editing.md` §9.
+      { stops: true, icon: icon('palette'), what: 'colours', condition: isStopList,
+        read: (/** @type {any} */ cfg) => normalizeStops(cfg.manual_stops, { fill: false }),
+        absolute: (/** @type {any} */ cfg) => (cfg.threshold_unit || 'percent') === 'absolute',
+        blocks: (/** @type {any} */ cfg) => cfg.gradient_resolution === 'coarse',
+        patch: (/** @type {any} */ _cfg, /** @type {any[]} */ list) =>
+          ({ manual_stops: list }) },
       ringColour('color1', 'outer colour', '#4caf50', isThreeColour),
       ringColour('color2', 'middle colour', '#ffeb3b', isThreeColour),
       ringColour('color3', 'centre colour', '#f44336', isThreeColour),
@@ -7021,14 +7145,21 @@ class ScCanvasEditor extends LitElement {
         </span>`;
       // The one small editor that stands under a chip rather than in the
       // form. A list of colours dragged into order is not a control and §9
-      // says so - but a surface's gradient *is* the surface, and the type,
-      // the angle and the effect that go with it are all here. It takes the
-      // whole width of the panel, which is what the size grip is for: a
+      // used to say so - but a gradient *is* the thing it colours, and the
+      // type, the angle and the effect that go with it are all here. It takes
+      // the whole width of the panel, which is what the size grip is for: a
       // panel left at its default is too narrow to drag a stop about in.
+      //
+      // A gauge reads its positions on the entity's scale where it is asked
+      // to, and cuts its ring into bands rather than a blend where the
+      // resolution says so, so both are questions of the config rather than
+      // of the row - a surface has neither and answers no.
       if (st.stops) return html`
         <span class="ring-group">
           <sc-gradient-stops class="ring-stops"
             .stops=${st.read(view)} .previewCss=${st.preview ? st.preview(view) : ''}
+            .absolute=${st.absolute ? !!st.absolute(view) : false}
+            .blocks=${st.blocks ? !!st.blocks(view) : false}
             .onUpdate=${(/** @type {any[]} */ list) => put(st.patch(view, list))}
             title=${tip(st)}
             @pointerdown=${keep}></sc-gradient-stops>
