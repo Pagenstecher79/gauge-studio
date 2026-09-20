@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GAUGE_DEFAULT } from "./element-templates.js";
-import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
+import { gradientPresetPatch } from "./gradient-presets.js";
 import { icon } from "./icons.js";
 
 const SC = window.SupercardUtils;
@@ -394,14 +394,6 @@ class ScGaugeEditor extends LitElement {
          springs shut on the way. */
       details.inner-section.wanted { order: -1; border-color: var(--primary-color,#03a9f4); }
       .framed-note { font-size: 12px; color: var(--secondary-text-color); font-style: italic; }
-      .ramp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-      .ramp { display: flex; flex-direction: column; gap: 4px; padding: 4px;
-              border: 1px solid var(--divider-color,#444); border-radius: 6px;
-              background: none; color: inherit; cursor: pointer; font: inherit; }
-      .ramp:hover { border-color: var(--primary-color,#03a9f4); }
-      .ramp-bar { height: 10px; border-radius: 5px; }
-      .ramp-name { font-size: 11px; line-height: 1.2; color: var(--secondary-text-color);
-                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .inner-content { padding: 0 12px 12px 12px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--divider-color,#444); margin-top: 4px; padding-top: 12px; }
       ha-entity-picker, ha-selector { display: block; width: 100%; }
       .entity-row { display: flex; flex-direction: column; gap: 4px; }
@@ -914,26 +906,11 @@ class ScGaugeEditor extends LitElement {
         break;
       }
       case 'gradient_ramp': {
-        // Swatches rather than a menu of names: a ramp is a picture, and
-        // "Fresh to stuffy" only means something once the purple at the top
-        // has been seen. What each one is *for* is the balloon on it, because
-        // that line is read once and then never again.
-        content = html`
-          <div class="col" style="gap:6px;">
-            <label>Start from a ramp ${SC.tipDot('A set of colour stops that suit each other, written straight into the list below. Every stop stays yours to move, and nothing remembers which ramp you picked.')}</label>
-            <div class="ramp-grid">
-              ${GRADIENT_PRESETS.map(pr => html`
-                <button class="ramp" title=${pr.label + ' \u2013 ' + pr.hint}
-                        @click=${() => {
-                          const n = structuredClone(gauges);
-                          Object.assign(n[idx], gradientPresetPatch(pr.id));
-                          this.commitFn('gauges', n);
-                        }}>
-                  <span class="ramp-bar" style="background:${gradientPresetCss(pr)}"></span>
-                  <span class="ramp-name">${pr.label}</span>
-                </button>`)}
-            </div>
-          </div>`;
+        content = SC.rampGrid(id => {
+          const n = structuredClone(gauges);
+          Object.assign(n[idx], gradientPresetPatch(id));
+          this.commitFn('gauges', n);
+        });
         break;
       }
       case 'tick_preset': {

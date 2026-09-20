@@ -222,6 +222,23 @@ function glassFields() {
    */
   const isDirect = pat => !!pat.target && pat.target.startsWith('elm_');
   const manual = pat => !isDirect(pat) || pat.manual_override;
+  /**
+   * Whether the glass takes the corner of the thing it lies on.
+   *
+   * Without manual adjustments it always does, and that is the answer nearly
+   * everybody wants: a surface rounded to 20 and glass rounded to 8 is a
+   * bright square edge standing proud of the paint under it. But the radius
+   * used to be the one manual number with no way back - switching manual
+   * adjustments on for the edge distance took the corner off the object as
+   * well - so it is its own question now.
+   *
+   * Default on, except for a pattern that has a radius typed into it
+   * already: that one is drawing what somebody set, and a card must not
+   * change what it draws because the editor learned a new switch.
+   */
+  const linked = pat => pat.radius_linked === undefined
+    ? (pat.border_radius === undefined || pat.border_radius === '')
+    : !!pat.radius_linked;
 
   return [
     { type: 'details', icon: icon('ruler'), label: 'Dimensions & Shape', fields: [
@@ -233,7 +250,12 @@ function glassFields() {
         style: 'background:rgba(3,169,244,0.1); padding:8px; border-radius:6px;',
         labelStyle: 'color:var(--primary-color)' },
       { type: 'custom', condition: manual, render: ctx => paddingRow(ctx) },
-      { type: 'custom', condition: manual, render: ctx => radiusRow(ctx) },
+      { id: 'radius_linked', label: 'Link corner radius', type: 'checkbox',
+        condition: manual, value: linked,
+        hint: "The glass rounds its corners exactly as the object under it does, and follows when that changes. Turn this off to round the glass on its own." },
+      { id: 'border_radius', label: 'Corner radius (border-radius)', type: 'length',
+        unitId: 'border_radius_unit', placeholder: 'Auto', width: '60%',
+        condition: pat => manual(pat) && !linked(pat) },
     ] },
 
     { type: 'details', icon: icon('donut'), label: 'Ring / Donut Mask', fields: [
@@ -320,23 +342,6 @@ function paddingRow(ctx) {
         <select style="width:60px" @change=${e => ctx.set('padding_unit', e.target.value)}>
           <option value="px" ?selected=${pat.padding_unit === 'px' || !pat.padding_unit}>px</option>
           <option value="%" ?selected=${pat.padding_unit === '%'}>%</option>
-        </select>
-      </div>
-    </div>`;
-}
-
-/** The corner radius, and the unit it is in. */
-function radiusRow(ctx) {
-  const pat = ctx.entry;
-  return html`
-    <div class="row">
-      <label>Corner radius (border-radius)</label>
-      <div style="display:flex;width:60%;gap:4px">
-        <input type="number" style="flex:1" .value=${pat.border_radius ?? ''} placeholder="Auto"
-               @input=${e => ctx.set('border_radius', e.target.value)}>
-        <select style="width:60px" @change=${e => ctx.set('border_radius_unit', e.target.value)}>
-          <option value="px" ?selected=${pat.border_radius_unit === 'px'}>px</option>
-          <option value="%" ?selected=${pat.border_radius_unit === '%'}>%</option>
         </select>
       </div>
     </div>`;
@@ -693,11 +698,21 @@ function update({ hass, config }) {
       // the config and the glass went on fitting itself, so the edge distance
       // did nothing and the radius did nothing, on every element there is.
       const manual = !isDirectElement || !!pat.manual_override;
+      // The corner is its own question inside that switch: a pattern may want
+      // the edge distance by hand and still take its corner from the object
+      // it lies on, which is what `radius_linked` says and what the fallback
+      // below works out. Default on, except where a radius is already typed -
+      // see `linked` in the editor, which has to answer the same way.
+      const ownRadius = pat.radius_linked === undefined
+        ? !(pat.border_radius === undefined || pat.border_radius === '')
+        : !pat.radius_linked;
       if (manual) {
           padVal = pat.padding ?? 0;
           padUnit = pat.padding_unit ?? 'px';
-          brValue = pat.border_radius ?? '';
-          brUnit = pat.border_radius_unit ?? 'px';
+          if (ownRadius) {
+            brValue = pat.border_radius ?? '';
+            brUnit = pat.border_radius_unit ?? 'px';
+          }
       }
 
       let autoRadiusFallback = 'inherit';

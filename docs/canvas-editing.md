@@ -285,10 +285,27 @@ Not everything fits on a chip. What worked:
   there is no shadow, and the three colours of a symmetric ramp are not offered
   while the ring is being coloured from a list. A panel that is eight rows deep
   whatever the part is doing is a panel nobody reads to the bottom.
-- **Not a text field, not a free colour value.** A name, an entity, an
-  `rgba()` someone types out - those stay in the form. A list that is edited by
-  dragging its items about - a gradient's stops - stays there too: it is not
-  one control but a small editor, and it needs the room the form has.
+- **The text a part draws, typed in the part's own frame.** Not in the
+  stepper grid - a field is wider than the four cells and the grid stops
+  reading as a grid - but in the frame itself, where the words land. What a
+  label says and how much room it has are one question, and answering it in a
+  row of the form means reading the answer somewhere else. The pencil beside
+  the frame's drop button opens it, Enter and Escape close it, and every
+  keystroke is written straight through so the drawing answers as it is
+  typed. Two things this needs: the field keeps the *last* frame the part was
+  measured at, because a text cleared to be retyped is a text the card draws
+  nothing for and the frame would vanish under the caret; and the value goes
+  in as the `value` attribute rather than the `.value` property, or the render
+  that each keystroke asks for puts the caret back at the end. A part says it
+  has one with `text: '<the key>'`, and the form keeps the field as well -
+  a card written by hand has no frames, and for a bar it is also the name the
+  list is read by.
+- **Not a free colour value, and no text that is not drawn.** An entity, an
+  `rgba()` someone types out, a unit to substitute - those stay in the form:
+  there is nothing on the drawing for them to be typed *into*. A list that is
+  edited by dragging its items about - a gradient's stops - stays there too:
+  it is not one control but a small editor, and it needs the room the form
+  has.
 - **All of it, or the part will be looked for in both places.** Once a chip
   carries a part's settings it carries the whole of them, minus only what the
   frame already does by being dragged. A chip with three of a part's eight
@@ -390,6 +407,24 @@ two rules finish the job:
   axis, because a chip that goes round a corner reads as a chip that has
   wandered. Without the second half of that rule a chip that had dodged the
   panel landed on its neighbour, which is the same fault one step further on.
+- **Frames are obstacles too, and the one in hand is one whole.** A part's
+  frame is worked on the way the panel is read, so the chips give way to it as
+  well. The selected frame - or one being typed into - is protected entire: its
+  box, its head and its text field, because that is where both the eye and the
+  pointer are. Every other frame contributes only its head, which has to stay
+  legible but has no claim on the drawing under it.
+- **The dodge is animated, nothing else is.** A chip's own place is `left`/
+  `top` and a chip dragged by hand writes those; the stepping aside is a
+  `transform`. Transitioning only the transform glides a chip out of the way
+  and still lets a dragged one keep up with the finger.
+- **One chip, and its buttons at the right end.** A ring's chip and a frame's
+  head are the same surface: the name, then what the part reads (the pencil),
+  then the way back out (the bin), in that order wherever a chip is drawn. The
+  bin is last because it is the one press that pressing again does not undo,
+  and it is a bin rather than a minus sign - a minus in a row of steppers reads
+  as one fewer of something. The frame's two buttons used to be placed
+  separately at its right corner, which on a wide frame put a part's name and
+  the button acting on it half the drawing apart.
 - **The open element stops clipping.** An element's own box draws its chips,
   and a box with `overflow: hidden` cuts the chip it has just pushed outwards
   in half. Only the element being worked on gets `overflow: visible`, so

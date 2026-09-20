@@ -108,9 +108,19 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Bar
 
-- **4** - The gauge's colour presets for the bar too, and templates under
+- **4** - ~~The gauge's colour presets for the bar too, and templates under
   `+ add object`: first the bar type, then a second menu offering default or
-  a colour template.
+  a colour template.~~ Done, in all three places a bar's colour is chosen.
+  `gradientPresetPatch` in `gradient-presets.js` takes the kind it is writing
+  for, so one catalogue answers both shapes of key - the gauge's
+  `manual_stops` on a percent scale, the bar's `gradient_stops` - and the grid
+  of swatches moved into core as `SC.rampGrid`, which is what the gauge's form
+  already drew. So the bar's form has the same grid under its gradient switch,
+  the new `fill` chip on the canvas holds the same catalogue as a list of
+  names, and `+ add object` shows a second page: pick a bar type and it asks
+  which colours, with a live miniature per row and *Default* at the top. A
+  gauge still places straight from the first page - it has no colours to ask
+  about that its own template has not already set.
 - **5** - ~~A selected, zoomed bar should put its chips and their menus in the
   free space beside the bar where there is any - today the chip menu covers
   the pill it is meant to be setting. That means the canvas zoom must stop
@@ -135,7 +145,24 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   The value's `value_bold` went the same way in the same change, so the three
   texts of a bar are set the same way as a gauge's - it has no chip, being no
   part of the canvas, so its three weights are in the form alone.
-- **20** - The bar label cannot be dragged out and placed by hand.
+- **20** - ~~The bar label cannot be dragged out and placed by hand.~~ Done on
+  a straight bar, where there is somewhere to drag it to. The label is a part
+  now (`BAR_LABEL_PARTS`) rather than a chip, so it gets the gauge's frame:
+  dragged where it goes, sized by the corner, `+ Label` at the side when it is
+  switched off, and the two offset fields gone from the form while the frame
+  is up. What it travels in is the bar's own base unit, which is a length only
+  the drawing knows - `measureBar` reads `cqmin` and its siblings off the
+  track and a plain `px` off the box's own zoom. The gauge's 25-unit bound went
+  with it: that is 25 viewBox units, and the bound that means the same thing
+  on a bar is the bar's own box, so a part may now carry a `limit` and a type
+  range of its own. A ring keeps the chip - its label has a
+  `circular_label_offset_y` and no x at all, so there is nothing to drag it
+  sideways to, and `can` on both tables keeps exactly one of the two in the
+  editor at a time.
+  The frame brought the text with it: a part may now name the config key it
+  draws (`text`), and a pencil beside the frame's drop button opens a field
+  in the frame itself, so a label is typed where it is read. The gauge's own
+  label has one too. See `docs/canvas-editing.md` §9.
 - **35** - ~~Check the pill's automatic alignment, and make sure the pill never
   wraps to two lines - shrinking the font where it must.~~ Done. `auto` used to
   cross the pill with the bar, on the reasoning that a pill lying along the bar
@@ -160,7 +187,18 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   working them out. The cap is in `cqw`/`cqh` against the bar's own container,
   so it costs no measurement and no second layout pass on the one element that
   moves every frame.
-- **42** - The corner radius should be set exactly the way a surface's is.
+- **42** - ~~The corner radius should be set exactly the way a surface's is.~~
+  Done. The grips in the corners were already there; what a surface had and a
+  bar did not was the choice of unit, so the number-and-unit row became
+  `SC.lengthRow`/`SC.lengthField` and a `'length'` field, and the two
+  hand-written copies - the surface's and the glass's - were replaced by it.
+  A bar keeps its unit in the value the way every length it owns does, so
+  nothing had to be migrated and no renderer changed; the grip is told the
+  unit by the value it is about to write and hands it back untouched. The
+  glass got the other half of the question as a switch of its own, *Link
+  corner radius*: on, the pane rounds exactly as the object under it does and
+  follows when that changes; off, it rounds on its own. It defaults to
+  whatever the card was already doing, so nothing moved.
 - **49** - ~~The indicator line has no adaptive colour, or no switch for
   one.~~ Done. The line marks the fill's edge, so half of it lies on the
   fill and half on the track, and one ink has to be wrong on one of them.

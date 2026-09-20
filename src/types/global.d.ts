@@ -66,6 +66,18 @@ declare global {
     dynamicStep?: boolean;
   }
 
+  /** What `lengthRow` takes: which units are offered, and where the unit lives. */
+  interface LengthOpts {
+    units?: readonly string[];
+    /** The unit, where it has a key of its own rather than riding in the value. */
+    unit?: string;
+    onUnit?: (u: string) => void;
+    /** What the element is drawn at when nothing is set - it names the unit. */
+    dflt?: string;
+    placeholder?: string;
+    min?: number; max?: number; step?: number | string;
+  }
+
   /** Shared number/color/target helpers, set up once by supercard-01-core.js. */
   interface SupercardUtilsApi {
     safeFloat: (v: any, d: number) => number;
@@ -148,6 +160,18 @@ declare global {
     colorField: (label: string, value: string, onInput: (v: string) => void, opts?: {
       fallback?: string; placeholder?: string; hexOnly?: boolean; textFallback?: boolean;
     }) => any;
+    /**
+     * A length and the unit it is measured in - the number, and the menu
+     * beside it saying what the number means. Pass `unit`/`onUnit` where the
+     * unit has a key of its own; leave them out and it rides in the value.
+     */
+    lengthRow: (value: string | number | undefined, onInput: (v: string) => void, opts?: LengthOpts) => any;
+    /** `lengthRow` under its own label. */
+    lengthField: (label: any, value: string | number | undefined, onInput: (v: string) => void, opts?: LengthOpts) => any;
+    /** A stored length taken apart; the number comes back as typed. */
+    splitLength: (value: string | number | undefined | null, dflt?: string) => { n: string; unit: string };
+    /** The ready-made colour ramps as swatches; the caller says what a pick means. */
+    rampGrid: (onPick: (id: string) => void, opts?: { label?: string }) => any;
     /** The range input alone, for a row a module draws itself. */
     slider: (value: number, onInput: (v: number) => void, opts?: SliderOpts) => any;
     /** A slider beside its label. */

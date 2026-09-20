@@ -143,8 +143,9 @@ class ScColorEditor extends LitElement {
                + 'Double-click one to put that side straight again.' },
         { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox',
           value: autoBorder, framedBy: 'corners' },
-        { type: 'custom', condition: pat => !autoBorder(pat), framedBy: 'corners',
-          render: ctx => this._radiusRow(ctx) },
+        { id: 'border_radius', label: 'Corner radius (manual)', type: 'length',
+          unitId: 'border_radius_unit', width: '60%', framedBy: 'corners',
+          condition: pat => !autoBorder(pat) },
 
         { id: 'wave_count', label: 'Count (density)', type: 'range', min: 1, max: 20, int: true,
           placeholder: 3, condition: waveColors,
@@ -263,23 +264,6 @@ class ScColorEditor extends LitElement {
         { type: 'custom', render: ctx => this._conditionSelector(ctx, 'anim_condition') },
       ] },
     ];
-  }
-
-  /** The corner radius, and the unit it is in. */
-  _radiusRow(ctx) {
-    const pat = ctx.entry;
-    return html`
-      <div class="row">
-        <label>Corner radius (manual)</label>
-        <div style="display:flex;width:60%;gap:4px">
-          <input type="number" style="flex:1" .value=${pat.border_radius ?? ''}
-                 @input=${e => ctx.set('border_radius', e.target.value)}>
-          <select style="width:60px" @change=${e => ctx.set('border_radius_unit', e.target.value)}>
-            <option value="px" ?selected=${pat.border_radius_unit === 'px'}>px</option>
-            <option value="%" ?selected=${pat.border_radius_unit === '%'}>%</option>
-          </select>
-        </div>
-      </div>`;
   }
 
   /** What an effect's two colours look like where they meet. */
