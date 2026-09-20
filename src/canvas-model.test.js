@@ -33,6 +33,7 @@ import {
   sectionColumns,
   sectionWidthPx,
   markDialogClean,
+  dialogHasUnsavedWork,
   editingDialog,
   gridSize,
   canvasFromGrid,
@@ -1807,6 +1808,42 @@ describe('markDialogClean', () => {
     expect(markDialogClean(nest([{ _dirtyStateContext: { markClean: 'yes' } }, {}]))).toBe(false);
     expect(markDialogClean(null)).toBe(false);
     expect(markDialogClean({})).toBe(false);
+  });
+});
+
+describe('dialogHasUnsavedWork', () => {
+  const nest = (tags) => {
+    const nodes = tags.map(t => ({ ...t, getRootNode: () => ({ host: null }) }));
+    for (let i = nodes.length - 1; i > 0; i--) nodes[i].getRootNode = () => ({ host: nodes[i - 1] });
+    return nodes[nodes.length - 1];
+  };
+  const dialog = (ctx) => nest([{ _dirtyStateContext: { markClean() {}, ...ctx } }, {}, {}]);
+
+  it('answers the dialog it found, however deep the editor sits', () => {
+    expect(dialogHasUnsavedWork(dialog({ isEffectiveDirty: true }))).toBe(true);
+    expect(dialogHasUnsavedWork(dialog({ isEffectiveDirty: false }))).toBe(false);
+  });
+
+  // It is the one Home Assistant gates its own light dismiss on, and it
+  // accounts for a nested editor's state as well as this one's.
+  it('prefers the effective flag where both are there', () => {
+    expect(dialogHasUnsavedWork(dialog({ isEffectiveDirty: true, isDirty: false }))).toBe(true);
+    expect(dialogHasUnsavedWork(dialog({ isEffectiveDirty: false, isDirty: true }))).toBe(false);
+  });
+
+  it('falls back to isDirty where there is no effective flag', () => {
+    expect(dialogHasUnsavedWork(dialog({ isDirty: true }))).toBe(true);
+    expect(dialogHasUnsavedWork(dialog({ isDirty: false }))).toBe(false);
+  });
+
+  // A grey button explains nothing; the click explains itself. So anything
+  // this cannot read leaves Apply alone.
+  it('leaves the button live when there is nothing to read', () => {
+    expect(dialogHasUnsavedWork(dialog({}))).toBe(true);
+    expect(dialogHasUnsavedWork(dialog({ isEffectiveDirty: 'yes' }))).toBe(true);
+    expect(dialogHasUnsavedWork(nest([{}, {}]))).toBe(true);
+    expect(dialogHasUnsavedWork(null)).toBe(true);
+    expect(dialogHasUnsavedWork({})).toBe(true);
   });
 });
 

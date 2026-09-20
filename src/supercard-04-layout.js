@@ -4,7 +4,8 @@ import { resolveSnap, gridToUnits, unitsToGrid, applyDrag, applyGroupDrag, distr
          isSquareLocked, isPinned, DEFAULT_CANVAS, DEFAULT_GRID,
          gridRowsToPx, gridColumnsToPx, gridSize, canvasFromGrid, canvasFromCard,
          pinnedToShape, rescaleCanvas, rowsForShape,
-         sectionColumns, sectionWidthPx, editingDialog, markDialogClean, HA_COLUMN_COUNT,
+         sectionColumns, sectionWidthPx, editingDialog, markDialogClean,
+         dialogHasUnsavedWork, HA_COLUMN_COUNT,
          canDuplicate, reorderElement, overlappingElements,
          alignElements, restorePatch,
          NEW_ELEMENT_KINDS, canAddKind, addElement, newElementPreview,
@@ -1992,6 +1993,7 @@ class ScCanvasEditor extends LitElement {
       _menu: { type: Boolean, state: true },
       _applyState: { type: String, state: true },
       _applyError: { type: String, state: true },
+      _canApply: { type: Boolean, state: true },
       _menuKind: { type: String, state: true },
       _placing: { type: String, state: true },
       _ghost: { type: Object, state: true },
@@ -2037,6 +2039,10 @@ class ScCanvasEditor extends LitElement {
     // knows the change it is about to see is not a user's edit.
     this._restoredGrid = false;
     this._configOpen = true;
+    // Live until the first render has asked the dialog. A button that starts
+    // grey and comes on a frame later reads as broken; one that starts live
+    // and goes grey reads as the answer arriving.
+    this._canApply = true;
     this._menu = false;
     // Which kind's template page the menu is showing, null for its front
     // page. State, because the menu is drawn from it.
@@ -2214,6 +2220,7 @@ class ScCanvasEditor extends LitElement {
     // wait for something to ask: the controls that read them sit in a fold,
     // and the Layout tab is often the first thing opened.
     if (this.isConnected) { void this._maxColumns; void this._sectionPx; }
+    this._refreshApply();
     // However a gauge's parts were left - the button, or a different element
     // selected - the canvas goes back to the zoom it was being arranged at,
     // and the gauge is properly let go of. Letting go matters: `_inner` holds
@@ -3636,8 +3643,28 @@ class ScCanvasEditor extends LitElement {
       return;
     }
     this._applyState = 'saved';
+    this._refreshApply();
     clearTimeout(this._appliedTimer);
     this._appliedTimer = setTimeout(() => { this._applyState = 'idle'; }, APPLY_SAVED_MS);
+  }
+
+  /**
+   * Whether Apply has anything to do, read off the dialog's dirty state.
+   *
+   * Read rather than tracked, because the dialog goes dirty for edits this
+   * editor never sees - a card's size set in the Layout tab is Home
+   * Assistant's own control writing Home Assistant's own key. Tracking our
+   * commits would grey the button out over work that really is unsaved, which
+   * is the one failure mode worth designing against; a button that is live
+   * with nothing to do merely writes the same config twice.
+   *
+   * So it is asked for at every render, and once more when the pointer
+   * arrives on the button - the render may be older than the last visit to
+   * another tab, and you cannot click it without going there first.
+   */
+  _refreshApply() {
+    const can = dialogHasUnsavedWork(this);
+    if (can !== this._canApply) this._canApply = can;
   }
 
   /** The window the canvas is zoomed and scrolled inside. */
@@ -6557,8 +6584,11 @@ class ScCanvasEditor extends LitElement {
           ${this._placing ? '' : SC.tipDot('Later in the list draws on top. A gauge and a '
                      + 'round bar stay square and fill their box.')}
           <button class="add-btn apply-btn" style="width:auto; padding:6px 12px;"
-                  ?disabled=${this._applyState === 'saving'}
-                  title="Put the card on the dashboard now and carry on - the dialog stays open"
+                  ?disabled=${this._applyState === 'saving' || !this._canApply}
+                  title=${this._canApply
+                    ? 'Put the card on the dashboard now and carry on - the dialog stays open'
+                    : 'Nothing to save - the dashboard already has this card'}
+                  @pointerenter=${() => this._refreshApply()}
                   @click=${() => this._apply()}>
             ${this._applyState === 'saved' ? html`${icon('check')} Saved`
               : this._applyState === 'saving' ? html`${icon('save')} Saving…`

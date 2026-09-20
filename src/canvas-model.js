@@ -1071,6 +1071,33 @@ export function editingDialog(node) {
 }
 
 /**
+ * Whether the card edit dialog is holding work that is not on the dashboard.
+ *
+ * The other side of `markDialogClean`: the same bookkeeping, read rather than
+ * written. Apply writes the dialog's config to the dashboard, so a dialog that
+ * has nothing the dashboard does not already have has nothing for Apply to do,
+ * and the button says so by going grey.
+ *
+ * `isEffectiveDirty` is the one to ask - it is what Home Assistant itself
+ * gates the light dismiss on, and it accounts for a nested editor's own state
+ * as well as this one's. `isDirty` stands in where a version does not have it.
+ *
+ * Not finding a dialog answers `true`, which looks like the wrong way round
+ * and is not: no dialog means Apply cannot work at all, and the click already
+ * explains that in place (`APPLY_UNAVAILABLE`). A grey button explains
+ * nothing. Not knowing is not a reason to take a button away.
+ *
+ * @param {any} node the dialog itself, or an element inside it
+ * @returns {boolean}
+ */
+export function dialogHasUnsavedWork(node) {
+  const ctx = editingDialog(node)?._dirtyStateContext;
+  if (!ctx) return true;
+  const dirty = ctx.isEffectiveDirty ?? ctx.isDirty;
+  return typeof dirty === 'boolean' ? dirty : true;
+}
+
+/**
  * The first element of this tag whose `config` is that very object.
  *
  * Identity, not equality: two cards can carry configurations that compare
