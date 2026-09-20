@@ -83,7 +83,20 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   from the tip, in two columns because half a gauge is not tall enough for
   eight rows of one. The needle's two handles are now ten pixels across
   whatever the gauge's size, which is what the label box's grip is.
-- **28** - Scale label: repair or rework.
+- **28** - ~~Scale label: repair or rework.~~ Repaired, as it was meant. What
+  it says is the prefix the card has auto-scaled to, and the unit behind it if
+  it is asked for - and both of those can be nothing, so a gauge that is not
+  auto-scaling and shows no unit drew a `<text>` with nothing in it. Invisible
+  is the smaller half of that: an empty text measures 0x0, so on the canvas it
+  was a part with no frame to grab and, because the switch said it was drawn,
+  no offer to switch it back on either - a setting that had gone somewhere
+  there was no way back from. Now nothing is drawn where there is nothing to
+  say, the canvas counts the part as drawn only where it is, and switching it
+  on from a chip brings the unit with it the way the multiplier brings ticks.
+  Its unit is also the value's question in the same words, so it is asked the
+  same way: `show unit` then `replace unit` then the custom one. A card that
+  typed a custom unit was replacing with it, and `stripDeadConfig` says so on
+  the next edit, so nothing on a dashboard changes what it reads.
 - **30 / 48** - Gauge background options reachable from the gauge editor's
   canvas, as a dropdown - the top edge is probably the right place for one.
   If it works, the same for the progress bar.
@@ -339,7 +352,7 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **29** - ~~Scale label, label, multiplier and value: their option boxes must
   not cover the element they belong to.~~ Done with 5: the same rule covers
   every part, because it is read off the drawing rather than off a list of
-  parts. The scale label has no menu to place yet - see 28.
+  parts. The scale label has its own menu since 28.
 - **31** - New feature: an interactive glass FX editor for the canvas.
 - **32** - ~~"Layers (3) - the top of the list is drawn on top" - the list seems
   to work the other way round.~~ Done, though not as a fix to the order: the

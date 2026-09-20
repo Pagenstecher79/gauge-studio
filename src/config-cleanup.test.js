@@ -299,3 +299,35 @@ describe("stripDeadConfig: the bar text weights", () => {
     expect(out.progressbars[0]).toEqual({ value_font_weight: '500' });
   });
 });
+
+describe("a scale label's custom unit", () => {
+  it('says it replaces, because that is what it was doing', () => {
+    const out = stripDeadConfig({ gauges: [{ scale_label_custom_unit: 'kWh' }] });
+    expect(out.gauges[0])
+      .toEqual({ scale_label_custom_unit: 'kWh', scale_label_replace_unit: true });
+  });
+
+  it('leaves a gauge that carries no custom unit alone', () => {
+    expect(stripDeadConfig({ gauges: [{ scale_label_show_raw_unit: true }] })).toBe(null);
+    expect(stripDeadConfig({ gauges: [{ scale_label_custom_unit: '' }] })).toBe(null);
+  });
+
+  it('leaves a gauge that already answers the question', () => {
+    expect(stripDeadConfig({ gauges: [
+      { scale_label_custom_unit: 'kWh', scale_label_replace_unit: false },
+    ] })).toBe(null);
+  });
+
+  it('finds the one gauge a card written before the list keeps on the slot', () => {
+    const out = stripDeadConfig({ scale_label_custom_unit: 'W' });
+    expect(out).toEqual({ scale_label_custom_unit: 'W', scale_label_replace_unit: true });
+  });
+
+  it('rewrites the gauges the dead-key pass already rebuilt', () => {
+    const out = stripDeadConfig({ gauges: [
+      { pivot_offset_x: 4, scale_label_custom_unit: 'A' },
+    ] });
+    expect(out.gauges[0])
+      .toEqual({ scale_label_custom_unit: 'A', scale_label_replace_unit: true });
+  });
+});

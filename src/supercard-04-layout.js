@@ -998,14 +998,30 @@ const GAUGE_PARTS = Object.freeze({
                  // rather than copied.
                  place: { scale_label_offset_x: 0, scale_label_offset_y: -4.4,
                           scale_label_font_size: 2.4 },
+                 // What the label says is a prefix and a unit, and a gauge
+                 // that is not auto-scaling has no prefix: switched on there
+                 // with the unit off, it is a label that says nothing, which
+                 // the renderer then does not draw at all. So the unit is
+                 // what it stands on where the prefix cannot be counted on -
+                 // written only in that case, so a card that already shows a
+                 // unit, or already auto-scales, is left alone.
+                 needs: (/** @type {any} */ cfg) => !!cfg.value_autoscale
+                                                 || !!cfg.scale_label_show_raw_unit,
+                 seed: { scale_label_show_raw_unit: true },
                  // The prefix is the card's own and is not text anybody types;
                  // whether the unit follows it is, and that switch had no
-                 // control at all until it got a chip.
+                 // control at all until it got a chip. Which unit follows it
+                 // is the value's own question in the same words, so it is
+                 // asked the same way - and a custom unit is text, which
+                 // stays in the form.
                  steps: [
                    ...colourRows('scale_label_color_type', 'scale_label_color', 'scale',
                                  '#ffffff', 'adaptive'),
                    { key: 'scale_label_show_raw_unit', icon: icon('link'), flag: true,
                      what: 'show the unit' },
+                   { key: 'scale_label_replace_unit', icon: icon('arrow-right-left'), flag: true,
+                     what: 'replace the unit',
+                     condition: (/** @type {any} */ cfg) => !!cfg.scale_label_show_raw_unit },
                  ] },
   multiplier: { label: 'Multiplier', x: 'multiplier_offset_x', y: 'multiplier_offset_y',
                 size: 'multiplier_font_size', dx: 0, dy: -30, dsize: 10,
@@ -2144,7 +2160,13 @@ const INNER_KINDS = Object.freeze({
       const on = [];
       if (cfg.gauge_label_text && cfg.gauge_label_active !== false) on.push('gauge_label');
       if (cfg.show_value) on.push('value');
-      if (cfg.show_scale_label) on.push('scale_label');
+      // Not the switch alone: with nothing to say the renderer draws no
+      // label, and a part that is held to be drawn but has no rect is one
+      // the canvas will neither frame nor offer back - a dead end. A gauge
+      // that auto-scales counts as having something to say even while the
+      // value is small enough for the prefix to be empty, because that is a
+      // reading passing through rather than a label nobody configured.
+      if (cfg.show_scale_label && (cfg.value_autoscale || cfg.scale_label_show_raw_unit)) on.push('scale_label');
       if (cfg.show_multiplier_label && SC.safeFloat(cfg.tick_count, 0) > 1) on.push('multiplier');
       return on;
     },
