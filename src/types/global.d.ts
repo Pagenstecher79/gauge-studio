@@ -200,6 +200,8 @@ declare global {
     /** The fold a part took rows from, named, and what is left in it. */
     menuFor: (fields: any[], entry: any, slot: any, part: string)
       => { id: string, title: string, rest: number } | null;
+    /** The list a select field offers, whether it is a list or a function. */
+    fieldOptions: (field: any, entry: any, ctx?: any) => any[];
     /** Shared chrome for the card-list module editors (ha-switch family). */
     editorStyles: CSSResult;
     /** Shared chrome for the compact config forms (.toggle family). */

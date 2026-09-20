@@ -1233,7 +1233,7 @@ class ScGaugeEditor extends LitElement {
           <div class="row">
             <label>${label}</label>
             <select @change=${e => updateDirect(e.target.value)}>
-              ${(field.options || []).map(o => html`<option value=${o.value} ?selected=${String(val ?? '') === String(o.value)}>${o.label}</option>`)}
+              ${SC.fieldOptions(field, entry, this).map(o => html`<option value=${o.value} ?selected=${String(val ?? '') === String(o.value)}>${o.label}</option>`)}
             </select>
           </div>
         `;
