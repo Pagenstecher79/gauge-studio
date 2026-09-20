@@ -126,7 +126,57 @@ export function liquidPillCSS(effect, filterId) {
  * @returns {{ padding: string, clampEm: number }}
  */
 export function liquidPadding(effect) {
-  if (effect === 'glass_liquid_heavy') return { padding: '0.55em 1.15em', clampEm: 0.35 };
-  if (effect === 'glass_liquid') return { padding: '0.42em 0.95em', clampEm: 0.15 };
-  return { padding: '0.3em 0.8em', clampEm: 0 };
+  const [yEm, xEm, clampEm] =
+    effect === 'glass_liquid_heavy' ? [0.55, 1.15, 0.35] :
+    effect === 'glass_liquid' ? [0.42, 0.95, 0.15] :
+    [0.3, 0.8, 0];
+  return { padding: `${yEm}em ${xEm}em`, clampEm, xEm, yEm };
+}
+
+/**
+ * How much of an em one character of the reading takes.
+ *
+ * The reading is digits, a space and a short unit, set bold: a bold digit in
+ * the fonts Home Assistant ships advances a little under 0.6em, and the
+ * widest thing that regularly stands beside one - a per cent sign - a little
+ * over 0.8em. 0.62 is the digits with enough left over for the sign, and it
+ * is within a hundredth of an em of the 0.6 the end-of-bar clamp has always
+ * estimated a pill's width with, so the two cannot disagree by a pixel.
+ *
+ * Measuring the text instead would be exact and is not worth it: the reading
+ * changes with every state, and a measurement means a second layout pass per
+ * frame on the one element that moves every frame.
+ */
+export const PILL_GLYPH_EM = 0.62;
+
+/** A line of that text, from the top of the digits to the bottom. */
+export const PILL_LINE_EM = 1.25;
+
+/**
+ * The pill's font size, capped so the reading fits the bar it rides.
+ *
+ * The pill is set `nowrap`, because a reading broken across two lines is not
+ * a reading - so where the bar is too narrow for it something has to give,
+ * and the only thing that can is the type size. Both axes are asked: the line
+ * of text has to fit along its own direction, and the pill's one line has to
+ * fit across it, or the bar's `overflow: hidden` takes the rounded ends off.
+ *
+ * The two extents are given as CSS lengths - the caller knows which screen
+ * axis the text runs along once the pill's rotation is applied, and passes
+ * the bar's own measure for each. The padding is in em and so grows with the
+ * size, which is why it is divided out rather than subtracted.
+ *
+ * @param {string} size the configured size, a CSS length
+ * @param {number} chars characters in the reading
+ * @param {{ xEm: number, yEm: number }} pad from `liquidPadding`
+ * @param {string} along the bar's extent in the direction the text runs
+ * @param {string} across the bar's extent at right angles to it
+ * @returns {string} a CSS length, never larger than `size`
+ */
+export function pillFontSize(size, chars, pad, along, across) {
+  const n = Number.isFinite(chars) && chars > 1 ? chars : 1;
+  const wide = n * PILL_GLYPH_EM + 2 * pad.xEm;
+  const tall = PILL_LINE_EM + 2 * pad.yEm;
+  const r = (/** @type {number} */ v) => Number(v.toFixed(3));
+  return `min(${size}, calc(${along} / ${r(wide)}), calc(${across} / ${r(tall)}))`;
 }

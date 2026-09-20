@@ -2,7 +2,7 @@ import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
 import { squareBarOnCanvas } from "./canvas-model.js";
 import { lightParams, reliefPattern, reliefShadow, reliefLayers } from "./glass-light.js";
-import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding } from "./pill-glass.js";
+import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, pillFontSize } from "./pill-glass.js";
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
@@ -534,14 +534,27 @@ class ScProgressbar extends LitElement {
            glassCSS = `box-shadow: 0 2px 2px rgba(0,0,0,0.25); border: none;`;
          }
 
-         const pSize = parseDim(this._get('indicator_value_font_size', 10), `10${u}`, u);
          const pRot = (this._get('indicator_value_rotation', 'auto') === 'auto') ? (isHoriz ? -90 : 0) : parseInt(this._get('indicator_value_rotation'));
          const isVertRot = Math.abs(pRot) === 90;
-         
+
          // A liquid pill stands further off the text than a flat one, and the
          // clamp that keeps it inside the bar has to know by how much or the
          // rim hangs over the end at 100 %.
          const pad = liquidPadding(glassEffect);
+
+         // The size the card asks for, and the size that fits. `auto` crosses
+         // the pill with the bar, so the reading runs across the narrow way of
+         // it - on a slim bar that used to break the reading over two lines,
+         // and a rotated one had its ends cut off by the bar's own clipping
+         // instead. The pill is `nowrap` now, and the size gives way where the
+         // bar is too narrow to hold the reading whole. Rotation is a
+         // transform and so happens after layout: which screen axis the text
+         // ends up running along is known here and nowhere else, which is why
+         // the two extents are handed over rather than worked out inside.
+         const pSizeSet = parseDim(this._get('indicator_value_font_size', 10), `10${u}`, u);
+         const pSize = pillFontSize(pSizeSet, indDisplayValue.length, pad,
+                                    isVertRot ? '100cqh' : '100cqw',
+                                    isVertRot ? '100cqw' : '100cqh');
 
          // NEW: Dynamic width calculation based on text length so the pill never overflows
          const halfWidth = `calc(${pSize} * (0.8 + ${indDisplayValue.length} * 0.3 + ${pad.clampEm}))`;
@@ -562,14 +575,14 @@ class ScProgressbar extends LitElement {
 
          // 1. The real layer
          realPillHtml = html`
-            <div class="sc-pb-pill" data-sc-part="pill" style="position:absolute; z-index:${ELM_FLOAT + 50}; background:${finalBg}; color:${pCol}; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; font-weight:bold; display:flex; align-items:center; justify-content:center; ${glassCSS} ${pPosStyle}">
+            <div class="sc-pb-pill" data-sc-part="pill" style="position:absolute; z-index:${ELM_FLOAT + 50}; background:${finalBg}; color:${pCol}; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; font-weight:bold; white-space:nowrap; display:flex; align-items:center; justify-content:center; ${glassCSS} ${pPosStyle}">
               ${indDisplayValue}
             </div>`;
 
          // 2. The goo clone
          if (isGooey) {
             indicatorGooeyHtml = html`
-              <div style="position:absolute; z-index:${ELM_DYNAMIC}; background:${exactHexColor}; color:transparent; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; display:flex; pointer-events:none; ${pPosStyle}">
+              <div style="position:absolute; z-index:${ELM_DYNAMIC}; background:${exactHexColor}; color:transparent; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; white-space:nowrap; display:flex; pointer-events:none; ${pPosStyle}">
                 ${indDisplayValue}
               </div>`;
          }

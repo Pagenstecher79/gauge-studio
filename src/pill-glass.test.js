@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, LIQUID_EFFECTS } from './pill-glass.js';
+import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, pillFontSize,
+         PILL_GLYPH_EM, PILL_LINE_EM, LIQUID_EFFECTS } from './pill-glass.js';
 
 describe('isLiquidEffect', () => {
   it('knows the two effects that carry a displacement map', () => {
@@ -59,13 +60,53 @@ describe('liquidPillCSS', () => {
 
 describe('liquidPadding', () => {
   it('keeps the flat pill exactly as it was', () => {
-    expect(liquidPadding('glass_lens')).toEqual({ padding: '0.3em 0.8em', clampEm: 0 });
-    expect(liquidPadding('none')).toEqual({ padding: '0.3em 0.8em', clampEm: 0 });
+    expect(liquidPadding('glass_lens'))
+      .toEqual({ padding: '0.3em 0.8em', clampEm: 0, xEm: 0.8, yEm: 0.3 });
+    expect(liquidPadding('none'))
+      .toEqual({ padding: '0.3em 0.8em', clampEm: 0, xEm: 0.8, yEm: 0.3 });
   });
 
   it('widens the end-of-bar clamp by whatever it added to the padding', () => {
     for (const e of LIQUID_EFFECTS) expect(liquidPadding(e).clampEm).toBeGreaterThan(0);
     expect(liquidPadding('glass_liquid_heavy').clampEm)
       .toBeGreaterThan(liquidPadding('glass_liquid').clampEm);
+  });
+});
+
+describe('pillFontSize', () => {
+  const flat = liquidPadding('none');
+
+  it('never asks for more than the size the card set', () => {
+    expect(pillFontSize('10px', 3, flat, '100cqw', '100cqh'))
+      .toMatch(/^min\(10px, /);
+  });
+
+  it('divides each extent by the pill it has to hold, in em', () => {
+    // Three characters: 3 x 0.62 across the glyphs, plus 0.8em of padding on
+    // each side; one line of 1.25em, plus 0.3em above and below.
+    const wide = 3 * PILL_GLYPH_EM + 2 * flat.xEm;
+    const tall = PILL_LINE_EM + 2 * flat.yEm;
+    expect(pillFontSize('10px', 3, flat, '40px', '20px'))
+      .toBe(`min(10px, calc(40px / ${Number(wide.toFixed(3))}), calc(20px / ${Number(tall.toFixed(3))}))`);
+  });
+
+  it('gives a wider pill a smaller cap, character by character', () => {
+    const cap = (/** @type {number} */ n) =>
+      Number(/calc\(100px \/ ([\d.]+)\)/.exec(pillFontSize('10px', n, flat, '100px', '100px'))[1]);
+    expect(cap(6)).toBeGreaterThan(cap(3));
+    expect(cap(6) - cap(3)).toBeCloseTo(3 * PILL_GLYPH_EM, 3);
+  });
+
+  it('asks for room for one character when the reading has none to count', () => {
+    const one = pillFontSize('10px', 1, flat, '100px', '100px');
+    for (const n of [0, -2, NaN, undefined])
+      expect(pillFontSize('10px', /** @type {any} */ (n), flat, '100px', '100px')).toBe(one);
+  });
+
+  it('carries the extra padding of a liquid rim into the fit', () => {
+    const heavy = liquidPadding('glass_liquid_heavy');
+    const capOf = (/** @type {any} */ pad) =>
+      Number(/calc\(100px \/ ([\d.]+)\)/.exec(pillFontSize('10px', 4, pad, '100px', '100px'))[1]);
+    expect(capOf(heavy)).toBeGreaterThan(capOf(flat));
   });
 });

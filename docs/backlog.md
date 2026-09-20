@@ -136,8 +136,21 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   texts of a bar are set the same way as a gauge's - it has no chip, being no
   part of the canvas, so its three weights are in the form alone.
 - **20** - The bar label cannot be dragged out and placed by hand.
-- **35** - Check the pill's automatic alignment, and make sure the pill never
-  wraps to two lines - shrinking the font where it must.
+- **35** - ~~Check the pill's automatic alignment, and make sure the pill never
+  wraps to two lines - shrinking the font where it must.~~ Done. The automatic
+  alignment is right and stays: it crosses the pill with the bar, so the pill
+  only ever covers a thin slice of the bar's length and can travel the whole
+  range. What it costs is that the reading runs across the *narrow* way of the
+  bar - which broke it over two lines on a slim vertical bar, and on a
+  horizontal one had its ends cut off by the bar's own `overflow: hidden`. The
+  pill is `nowrap` now, and `pillFontSize` in `pill-glass.js` caps the type
+  size against both of the bar's measures: the line of text along its own
+  direction, the pill's one line across it. Rotation is a transform, so which
+  screen axis the text ends up on is known only in the renderer, which is why
+  it hands the two extents over rather than the helper working them out. The
+  cap is in `cqw`/`cqh` against the bar's own container, so it costs no
+  measurement and no second layout pass on the one element that moves every
+  frame.
 - **42** - The corner radius should be set exactly the way a surface's is.
 - **49** - ~~The indicator line has no adaptive colour, or no switch for
   one.~~ Done. The line marks the fill's edge, so half of it lies on the
