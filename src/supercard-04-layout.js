@@ -2947,6 +2947,15 @@ class ScCanvasEditor extends LitElement {
       /* Which of the two the middle-axis buttons would act on. */
       .inner-frame.sel { outline: 2px solid var(--sc-part-sel);
         background: rgba(242,181,68,0.22); }
+      /* A frame nobody has taken hold of shows nothing but its head. Every
+         text a gauge draws has one - the label, the value, the multiplier,
+         the scale - and four boxes drawn over a drawing is a drawing you
+         cannot judge any more. The frame is still there to be grabbed: the
+         box keeps its size and the 8px its ::after adds, so a part is taken
+         hold of by pressing where it is drawn, and it shows itself the
+         moment it is. */
+      .inner-frame.bare { outline: none; background: none; box-shadow: none; }
+      .inner-frame.bare .inner-grip { display: none; }
       /* One surface, with the name at its left and the buttons at its right,
          so a frame's head reads the way a ring's chip does. They used to be
          three things placed separately - the name at the frame's left corner
@@ -5366,7 +5375,8 @@ class ScCanvasEditor extends LitElement {
       const r = rects?.[part] || (editing ? this._editRect : null);
       if ((!drawn.has(part) && !editing) || !r) return '';
       return html`
-        <div class="inner-frame ${this._isHeld(part) ? 'sel' : ''}" data-part=${part}
+        <div class="inner-frame ${this._isHeld(part) ? 'sel' : ''}${
+             this._innerSel === part || editing ? '' : ' bare'}" data-part=${part}
              style="left:${r.l}%; top:${r.t}%; width:${r.w}%; height:${r.h}%;"
              title=${`Drag the ${spec.label.toLowerCase()}, or its corner to resize it`}
              @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'move')}>
@@ -5959,10 +5969,27 @@ class ScCanvasEditor extends LitElement {
       ].map(held).filter(clear)
         .sort((/** @type {any} */ p, /** @type {any} */ q) =>
           (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
+      // And no further than the panel's own size. A step beside something is
+      // on the order of the thing stepping: past a pill it is a few pixels,
+      // past a tick ring it is the width of the gauge, and a panel that has
+      // travelled that far has lost its chip - the ticks' numbers ended up in
+      // the far corner from the chip that opened them. A ring is also the
+      // mark that suffers it least: it is drawn all the way round, so a panel
+      // resting on one arc of it hides nothing that cannot be read elsewhere.
+      // Measured from where the panel comes to rest inside the canvas, not
+      // from where it would hang: being brought inside is not wandering, and
+      // counting it made the step past a value box read as far as the step
+      // round a tick ring. Half as much again as the panel's own size tells
+      // the two apart with room to spare - measured on the big gauge, the
+      // value's way out is 126px against a cap of 180, the tick ring's 329
+      // against 159.
+      const reach = Math.max(b.width, b.height) * 1.5;
+      const near = ways.filter((/** @type {any} */ w) =>
+        Math.abs(w.x - best.x) + Math.abs(w.y - best.y) <= reach);
       // Nowhere clear inside the canvas leaves it where it was: a mark that
       // fills the view has no beside, and a panel shoved off the edge to
       // honour the rule would be worse than one lying over it.
-      if (ways.length) best = ways[0];
+      if (near.length) best = near[0];
     }
     if (Math.abs(best.x - was.x) < 0.5 && Math.abs(best.y - was.y) < 0.5) return false;
     box.style.setProperty('--sc-steps-dx', best.x + 'px');
@@ -6059,6 +6086,8 @@ class ScCanvasEditor extends LitElement {
     // right to be clear of chips: its drawing, and the field it is being
     // typed into. Its head is not in this list - a head steps aside like any
     // other chip, below.
+    // A bare frame counts too: the outline is gone, but the text it holds is
+    // still drawn there, and that is what a chip must not land on.
     for (const f of /** @type {any[]} */ ([...root.querySelectorAll('.inner-frame')])) {
       for (const el of /** @type {any[]} */ ([f, ...f.querySelectorAll('.inner-text')])) {
         const r = el.getBoundingClientRect();

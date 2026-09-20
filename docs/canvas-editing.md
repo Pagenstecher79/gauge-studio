@@ -421,6 +421,15 @@ two rules finish the job:
   themselves have none and want none: a tick ring is spread over the whole
   circle, and a chip resting on one arc of it hides nothing that cannot be
   read somewhere else.
+- **A frame is drawn only while its part is held.** The label, the value, the
+  multiplier and the scale each have one, and four dashed boxes with four
+  tinted fills over a gauge is a drawing nobody can judge any more. An unheld
+  frame shows nothing but its head: no outline, no fill, no shadow, no grip.
+  It is still all there to be taken hold of - the box keeps its size and the
+  8 px its `::after` adds, so a part is held by pressing where it is drawn, and
+  it shows itself the moment it is held. It stays an obstacle while bare, too:
+  the outline is gone, but the text is still drawn in that box, and that is
+  what a chip must not land on.
 - **Frames are obstacles too, and a frame's head is a chip.** A part's frame is
   worked on the way the panel is read, so the chips give way to its drawing and
   to the field it is being typed into. Its head is not an obstacle but a chip
