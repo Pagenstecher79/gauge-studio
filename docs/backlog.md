@@ -556,5 +556,24 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **33** - Tidy the code: the bundle is approaching 750 kB. Fold blocks that
   do the same job back together, and write the function that covers several
   similar ones where there is one. See the *v3.0.0 redundancy audit* note.
+
+  Measured first, and the premise turned out to be wrong. Two clone
+  detectors over the whole of `src`, one textual and one token-normalised so
+  that the same block under different names still matches, found **6 kB** of
+  duplication in 45 tiny groups - the largest being the stylesheet the gauge
+  editor and the bar editor almost entirely share. The code is not big
+  because a thing is written twice; it is big because it does a great deal.
+
+  So the weight was somewhere else. The bundle was never minified: Vite
+  leaves an `es` library alone and Home Assistant serves what it is handed.
+  That is done - 857 kB to 564 kB, 232 kB to 157 kB gzipped, see
+  `build/slim-bundle.js`.
+
+  What is left of this item is the one large thing: **64 % of the bundle is
+  editor code** that a dashboard only drawing the card never needs. Splitting
+  it into a chunk that `getConfigElement()` imports on demand would cut what
+  a viewer loads to about 190 kB. It needs `zip_release` in `hacs.json` and
+  a reinstall, which is only affordable while the card has the one user it
+  has.
 - **47** - Glass FX: markedly better spherical distortion and refraction
   towards the edges. After the bugs above.
