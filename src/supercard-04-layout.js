@@ -1323,7 +1323,7 @@ const GAUGE_RINGS = Object.freeze({
     // would be a second answer to a question already asked.
     steps: [
       ...SWEEP_STEPS,
-      { key: 'pointer_type', icon: icon('triangle'), what: 'shape', picks: POINTER_SHAPE,
+      { key: 'pointer_type', icon: icon('needle'), what: 'shape', picks: POINTER_SHAPE,
         read: (/** @type {any} */ cfg) => cfg.pointer_type || 'needle' },
       { key: 'pointer_width', icon: THICK, slide: true, by: 0.1, min: 0.1, max: 10,
         dflt: 2, what: 'pointer width' },
