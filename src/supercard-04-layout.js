@@ -1032,11 +1032,13 @@ const GAUGE_PARTS = Object.freeze({
            ] },
   // The two that say what scale the number is being read on: the k/M/G the
   // card has auto-scaled to, and how much of the range one tick interval is
-  // worth. Both are baselined like the value, and neither has a weight of its
-  // own - they are drawn at 500 and always have been.
+  // worth. Both are baselined like the value. They were drawn at 500 and
+  // nothing else for as long as they existed, so 500 is what a card that says
+  // nothing still gets - the button starts where the drawing already is.
   scale_label: { label: 'Scale', x: 'scale_label_offset_x', y: 'scale_label_offset_y',
                  size: 'scale_label_font_size', dx: 0, dy: -18, dsize: 10,
                  section: '_section_labels', baseline: true, active: 'show_scale_label',
+                 weight: textWeights('scale_label_font_weight', '500'),
                  // A line under the multiplier and in the same type: these two
                  // say the same kind of thing and are read together. The dial
                  // the other places come from has no scale label of its own,
@@ -1072,6 +1074,7 @@ const GAUGE_PARTS = Object.freeze({
   multiplier: { label: 'Multiplier', x: 'multiplier_offset_x', y: 'multiplier_offset_y',
                 size: 'multiplier_font_size', dx: 0, dy: -30, dsize: 10,
                 section: '_section_labels', baseline: true, active: 'show_multiplier_label',
+                weight: textWeights('multiplier_font_weight', '500'),
                 // A multiplier is the range shared between tick intervals, so
                 // a gauge with fewer than two ticks has nothing to divide and
                 // the renderer draws none. Switching it on brings ticks with

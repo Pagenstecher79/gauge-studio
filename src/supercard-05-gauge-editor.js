@@ -355,6 +355,7 @@ const STYLE_FIELDS = [
   { id: 'scale_label_font_size', framedBy: 'scale_label',  label: 'Label font size',         type: 'range',    min: 0, max: 20, step: 0.1,  placeholder: '10',  condition: cfg => !!cfg.show_scale_label },
   { id: 'scale_label_offset_x', framedBy: 'scale_label',   label: 'Label offset X',             type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0', condition: cfg => !!cfg.show_scale_label },
   { id: 'scale_label_offset_y', framedBy: 'scale_label',   label: 'Label offset Y',             type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '-18', condition: cfg => !!cfg.show_scale_label },
+  { id: 'scale_label_font_weight', framedBy: 'scale_label', label: 'Label weight',           type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => !!cfg.show_scale_label },
   { id: 'scale_label_color_type', framedBy: 'scale_label', label: 'Label colour mode',           type: 'select',  options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_scale_label },
   { id: 'scale_label_color', framedBy: 'scale_label',      label: 'Label colour (fixed)',          type: 'color',   condition: cfg => !!cfg.show_scale_label && cfg.scale_label_color_type !== 'adaptive' },
   { id: 'scale_label_show_raw_unit', framedBy: 'scale_label', label: 'Show unit',        type: 'checkbox', condition: cfg => !!cfg.show_scale_label },
@@ -366,6 +367,7 @@ const STYLE_FIELDS = [
   { id: 'multiplier_font_size', framedBy: 'multiplier',  label: 'Font size',               type: 'range',    min: 0, max: 20, step: 0.1,  placeholder: '10',  condition: cfg => !!cfg.show_multiplier_label },
   { id: 'multiplier_offset_x', framedBy: 'multiplier',   label: 'Offset X',                   type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '0',   condition: cfg => !!cfg.show_multiplier_label },
   { id: 'multiplier_offset_y', framedBy: 'multiplier',   label: 'Offset Y',                   type: 'range',    min: -25, max: 25, step: 0.1,  placeholder: '-30', condition: cfg => !!cfg.show_multiplier_label },
+  { id: 'multiplier_font_weight', framedBy: 'multiplier',  label: 'Weight',                  type: 'select',   options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => !!cfg.show_multiplier_label },
   { id: 'multiplier_color_type', framedBy: 'multiplier', label: 'Colour mode',                 type: 'select',  options: [ { value: 'adaptive', label: 'Adaptive' }, { value: 'fixed', label: 'Fixed' } ], condition: cfg => !!cfg.show_multiplier_label },
   { id: 'multiplier_color', framedBy: 'multiplier',      label: 'Colour (fixed)',                type: 'color',   condition: cfg => !!cfg.show_multiplier_label && cfg.multiplier_color_type !== 'adaptive' },
 
