@@ -566,17 +566,26 @@ const ZOOM_STEPS = Object.freeze([0.5, 0.75, 1, 1.5, 2, 3, 4]);
  * the eye can follow and the hand can stop - and it falls off across the
  * strip to a crawl where the pointer only grazes it.
  */
-/**
- * The zoom a canvas of a given shape was last looked at, for as long as the
- * page lives.
+/*
+ * The zoom is not remembered between two openings of the dialog, and that is
+ * on purpose.
  *
- * The editor is built anew every time the card dialog opens, so without this
- * a glance at something else costs the magnification you had set up. It is
- * not config - it is never written, never shared, and gone with the tab - and
- * it is keyed by the canvas' shape rather than by a card id, because a card
- * config has no id of its own and the shape is what the zoom was chosen for.
+ * It used to be, keyed by the canvas' shape and kept for as long as the page
+ * lived, on the reasoning that a glance at something else should not cost the
+ * magnification you had set up. In use it was the other way round: the zoom
+ * that was right for the corner being worked on is exactly the wrong thing to
+ * be handed when the card is opened the next time for something else, and a
+ * view nobody set, restored from a session that is over, is a view nobody can
+ * account for. Opening the editor shows the whole card, which is what the
+ * editor is for.
+ *
+ * It costs nothing inside one dialog: Home Assistant renders one tab at a
+ * time and takes this editor out of the document for the Layout tab, but it
+ * keeps the element and puts the same instance back, so the zoom is still
+ * whatever it was. Measured, not assumed - the tab switch gives back an
+ * element identical to the one that left, while a second opening of the
+ * dialog builds a new one.
  */
-const zoomMemory = new Map();
 
 /**
  * Whether leaving an element's own parts takes the canvas back to the zoom it
@@ -2103,8 +2112,6 @@ class ScCanvasEditor extends LitElement {
     // languages are both on screen rather than one replacing the other. Like
     // the zoom, it belongs to the open editor and is never committed.
     this._names = true;
-    // The layer panel, folded away until somebody has elements stacked and
-    // goes looking for them. Editor state like the zoom, never committed.
     // A layer being carried through the list: where it was picked up and
     // which row it is over now, both indices into the element array. Null
     // whenever nothing is in hand.
@@ -2207,12 +2214,6 @@ class ScCanvasEditor extends LitElement {
    * null when there is nothing to do, which is what stops the commit this
    * causes from causing another.
    */
-  /** The shape this canvas is, which is what a remembered zoom belongs to. */
-  get _zoomKey() {
-    const c = this.slot?.canvas;
-    return c ? c.w + 'x' + c.h : null;
-  }
-
   updated(changed) {
     super.updated(changed);
     // Reading the section while this editor is in the document is what fills
@@ -2246,9 +2247,6 @@ class ScCanvasEditor extends LitElement {
     this._placeNeedle();
     this._followInner();
     this._settleFloating();
-    // The first canvas to arrive brings back the zoom this shape was last
-    // looked at. Only the first: afterwards the zoom is whatever the person
-    // at the keyboard has made it.
     // A canvas nobody sees is the one broken state this editor can be opened
     // in: `layout_active` gates the renderer, so a card carrying a canvas with
     // the switch off draws its plain content row while this editor happily
@@ -2262,11 +2260,6 @@ class ScCanvasEditor extends LitElement {
       const dialog = editingDialog(this);
       this.commitFn?.('__merge__', { layout_active: true });
       setTimeout(() => markDialogClean(dialog));
-    }
-    if (changed.has('slot') && !this._zoomRestored && this._zoomKey) {
-      this._zoomRestored = true;
-      const was = zoomMemory.get(this._zoomKey);
-      if (was && was !== this._zoom) this._applyZoom(was);
     }
     if (!changed.has('cardConfig')) return;
     const was = changed.get('cardConfig');
@@ -3869,7 +3862,6 @@ class ScCanvasEditor extends LitElement {
                y: (view.scrollTop + inY) / view.scrollHeight };
     }
     this._zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
-    if (this._zoomKey) zoomMemory.set(this._zoomKey, this._zoom);
     if (!hold) return;
     this.updateComplete.then(() => {
       view.scrollLeft = hold.x * view.scrollWidth - hold.inX;
@@ -3913,7 +3905,6 @@ class ScCanvasEditor extends LitElement {
                        margin * Math.min(c.w / Math.max(x1 - x0, 0.001),
                                          c.h * this._viewStretch / Math.max(y1 - y0, 0.001)));
     this._zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
-    if (this._zoomKey) zoomMemory.set(this._zoomKey, this._zoom);
     const mid = { x: (x0 + x1) / 2 / c.w, y: (y0 + y1) / 2 / c.h };
     this.updateComplete.then(() => {
       const view = this._view;

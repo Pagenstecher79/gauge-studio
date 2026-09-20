@@ -151,8 +151,20 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **10** - Show an object's edit button only in live-preview mode - or better,
   have the button switch to live preview for as long as the object editor is
   open.
-- **15** - Reset the canvas zoom to its default when the card editor is opened
-  again.
+- **15** - ~~Reset the canvas zoom to its default when the card editor is
+  opened again.~~ Done by taking the memory out. The zoom used to be kept for
+  the life of the page, keyed by the canvas' shape, so that a glance at
+  another card did not cost the magnification you had set up. The other half
+  of that bargain is what it actually felt like: the zoom that was right for
+  one corner is the wrong thing to be handed when the card is opened again for
+  something else, and a view nobody set is a view nobody can account for.
+  Opening the editor now shows the whole card.
+
+  It costs nothing inside one dialog, which was measured rather than assumed:
+  Home Assistant takes this editor out of the document for the Layout tab, but
+  it keeps the element and puts the same instance back, so the zoom survives a
+  tab switch by itself. A second opening of the dialog builds a new editor,
+  and that is the one case the memory ever covered.
 - **16** - In the ordinary canvas view, show each object's lock button
   permanently and make it toggle. Keep the lock button under the canvas for
   locking and unlocking whole groups.
