@@ -935,10 +935,22 @@ class ScGauge extends LitElement {
 
     const extraLabels = [];
     if (this._get('show_scale_label',false)) {
-      const lTxt = data.unitPrefix+(this._get('scale_label_show_raw_unit',false)?this._get('scale_label_custom_unit',stateObj?.attributes?.unit_of_measurement||''):'');
-      const lCol = resolveColor(this._get('scale_label_color_type','adaptive'),this._get('scale_label_color',null),
-        inkAtXY(safeFloat(this._get('scale_label_offset_x',0),0)*scale, safeFloat(this._get('scale_label_offset_y',-18),-18)*scale));
-      extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
+      // A prefix and a unit, and both of them can be nothing: a gauge that is
+      // not auto-scaling has no prefix, and the unit is a switch. An empty
+      // text draws nothing and measures 0x0, which on the canvas is a part
+      // that can neither be seen nor taken hold of - so where the label would
+      // say nothing, none is drawn and the canvas offers it back.
+      const lUnit = this._get('scale_label_show_raw_unit',false)
+        ? (this._get('scale_label_replace_unit',false)
+            ? this._get('scale_label_custom_unit', stateObj?.attributes?.unit_of_measurement||'')
+            : stateObj?.attributes?.unit_of_measurement||'')
+        : '';
+      const lTxt = data.unitPrefix+lUnit;
+      if (lTxt) {
+        const lCol = resolveColor(this._get('scale_label_color_type','adaptive'),this._get('scale_label_color',null),
+          inkAtXY(safeFloat(this._get('scale_label_offset_x',0),0)*scale, safeFloat(this._get('scale_label_offset_y',-18),-18)*scale));
+        extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
+      }
     }
     if (this._get('show_multiplier_label',false) && tCount > 1) {
       // The multiplier is what the printed numbers have to be multiplied by

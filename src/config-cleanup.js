@@ -176,6 +176,49 @@ function withLabelWeights(slot) {
 }
 
 /**
+ * A gauge's scale label with its unit written the one way it is read.
+ *
+ * The scale label asked two questions where the value asks three: a unit was
+ * shown or not, and a custom unit, where one was typed, always replaced the
+ * entity's own. The value's switch for that - `replace_unit` - is now the
+ * scale label's too, so one rule covers both texts. A card that carries a
+ * custom unit was replacing with it, and says so here; a card that carries
+ * none was not, and nothing is written, so the switch stays off.
+ *
+ * A gauge that already answers the question keeps its answer: the switch
+ * cannot have been what put the custom unit there.
+ *
+ * @param {any} gauge
+ * @returns {any} the rewritten gauge, or the gauge itself where nothing changed
+ */
+function withScaleLabelUnit(gauge) {
+  if (!gauge || typeof gauge !== 'object') return gauge;
+  if ('scale_label_replace_unit' in gauge) return gauge;
+  const custom = gauge.scale_label_custom_unit;
+  if (typeof custom !== 'string' || !custom) return gauge;
+  return { ...gauge, scale_label_replace_unit: true };
+}
+
+/**
+ * The slot with every gauge's scale label migrated, itself where none was.
+ *
+ * Both places a gauge can live: the `gauges` list, and - on a card written
+ * before that list existed - the slot itself.
+ *
+ * @param {any} slot
+ * @returns {any}
+ */
+function withScaleLabelUnits(slot) {
+  let next = slot;
+  const list = slot?.gauges;
+  if (Array.isArray(list)) {
+    const gauges = list.map(withScaleLabelUnit);
+    if (gauges.some((g, i) => g !== list[i])) next = { ...next, gauges };
+  }
+  return withScaleLabelUnit(next);
+}
+
+/**
  * The keys whose value is a list of gradient stops.
  *
  * All three used to be written `{value, color}` by the gauge and
@@ -307,7 +350,9 @@ export function stripDeadConfig(slot) {
     for (const k of deadSlotKeys) delete cleaned[k];
   }
   const shaped = withStopShapes(cleaned);
-  if (shaped !== cleaned) return shaped;
+  if (shaped !== cleaned) cleaned = shaped;
+  const united = withScaleLabelUnits(cleaned);
+  if (united !== cleaned) cleaned = united;
   return cleaned === slot ? null : cleaned;
 }
 
