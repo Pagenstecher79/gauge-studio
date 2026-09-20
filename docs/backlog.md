@@ -320,8 +320,19 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **38** - ~~A new card on a sections dashboard is one row high. It should try
   to come up roughly square.~~ Done: a new card starts as near a square as
   whole rows allow, at any width (`defaultShapeRows`).
-- **41** - The `+ add` button of *Global entities (alias)* should look like the
-  canvas's `+ add object` button.
+- **41** - ~~The `+ add` button of *Global entities (alias)* should look like
+  the canvas's `+ add object` button.~~ Done, and the rest of that editor with
+  it. The button was a blue `<div>` with its look written into it; it is the
+  `.add-btn` every other list uses, with the set's own `plus` beside the word -
+  which needed the rule adding to `formStyles`, because the two stylesheets are
+  different visual languages but an add button is not one of the things that
+  differs. The alias rows carried Material icons from Home Assistant's set - a
+  grip, a bin, a clear cross - and so did the colour editor's centre button and
+  the five action kinds in the interaction editor; all of them are the card's
+  own icons now. The one that could not be, the fold marker under the canvas,
+  was a `▶` character: a `::before` holds no element, so it is the same
+  chevron as a mask. `mdi:` is left in exactly one place, the icon a user picks
+  for the card, which is Home Assistant's to draw.
 - **43** - ~~After a card size change in the layout tab, the frames of a gauge
   and a circular bar are no longer square on the way back to the canvas - the
   circular bar is even re-rendered oval.~~ Done, same two causes as 36: the

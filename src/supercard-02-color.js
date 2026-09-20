@@ -393,7 +393,7 @@ class ScColorEditor extends LitElement {
         </div>
         <button class="icon-btn" title="Centre (50/50)"
           @click=${() => ctx.setMany({ radial_x: 50, radial_y: 50 })}>
-          <ha-icon icon="mdi:crosshairs-gps" style="--mdc-icon-size:20px"></ha-icon>
+          <span style="font-size:20px; display:inline-flex;">${icon('crosshair')}</span>
         </button>
       </div>`;
   }

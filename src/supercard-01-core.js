@@ -916,6 +916,13 @@ Object.assign(window.SupercardUtils, (() => {
     .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
     details.inner-section summary { padding: 10px 12px; font-weight: 600; font-size: 14px; cursor: pointer; outline: none; display: flex; justify-content: space-between; align-items: center; color: var(--primary-text-color); }
     details.inner-section summary::-webkit-details-marker { display: none; }
+    /* The same button as in \`editorStyles\`, so an add button is one button
+       whichever stylesheet the editor around it started from. */
+    .add-btn { background: transparent; border: 1px dashed var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; text-align: center; }
+    /* A button that is nothing but its icon: the icon is sized by the font
+       size here, the way every other icon in the editor is. */
+    .icon-btn { background: none; border: none; padding: 4px; cursor: pointer;
+                display: inline-flex; align-items: center; color: inherit; }
     ${tipStyles}
   `;
 
@@ -1817,9 +1824,10 @@ Object.assign(window.SupercardModules['core'], (() => {
                     + 'carries its attribute too, so a single entry can mean "the humidity of the '
                     + 'bedroom sensor" everywhere it is used, and the menus show the current value '
                     + 'beside the name so you pick the right one.')}</label>
-                  <div style="cursor: pointer; background: var(--primary-color, #03a9f4); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;" @click="${() => this._addGlobalEntity()}">
-                    + Add
-                  </div>
+                  <button type="button" class="add-btn" style="width:auto; padding:6px 12px;"
+                          @click=${() => this._addGlobalEntity()}>
+                    ${icon('plus')} Add
+                  </button>
                 </div>
 
                 <ha-sortable handle-selector=".handle" @item-moved=${this._handleSort}>
@@ -1828,7 +1836,7 @@ Object.assign(window.SupercardModules['core'], (() => {
                       <details class="inner-section" style="margin-bottom: 0;">
                         <summary style="display: flex; justify-content: space-between; align-items: center; padding: 8px;">
                           <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
-                            <ha-icon class="handle" icon="mdi:drag" style="cursor: grab; color: var(--secondary-text-color);"></ha-icon>
+                            <span class="handle" style="cursor: grab; color: var(--secondary-text-color); font-size: 18px; display: inline-flex;">${icon('grip-vertical')}</span>
                             <span style="font-weight: normal; font-size: 13px; line-height: 1.2;">
                               ${(() => {
                                 // 1. Get the state object from HA
@@ -1856,7 +1864,9 @@ Object.assign(window.SupercardModules['core'], (() => {
                               })()}
                             </span>
                           </div>
-                          <ha-icon icon="mdi:delete" style="cursor: pointer; color: var(--error-color, #db4437); --mdc-icon-size: 18px;" @click=${(e) => { e.preventDefault(); this._deleteGlobalEntity(index); }}></ha-icon>
+                          <button type="button" class="icon-btn" title="Delete"
+                                  style="color: var(--error-color, #db4437); font-size: 18px;"
+                                  @click=${(e) => { e.preventDefault(); e.stopPropagation(); this._deleteGlobalEntity(index); }}>${icon('trash-2')}</button>
                         </summary>
                         <div class="inner-content" style="padding-top: 8px;">
                           <div class="col">
@@ -1885,12 +1895,9 @@ Object.assign(window.SupercardModules['core'], (() => {
                               </ha-selector>
 
                               ${ge.attribute ? html`
-                                <ha-icon
-                                  icon="mdi:close-circle"
-                                  title="Clear attribute"
+                                <button type="button" class="icon-btn" title="Clear attribute"
                                   @click=${() => this._updateGlobalEntity(index, 'attribute', '')}
-                                  style="cursor: pointer; color: var(--secondary-text-color); --mdc-icon-size: 24px; padding: 4px;">
-                                </ha-icon>
+                                  style="color: var(--secondary-text-color); font-size: 20px;">${icon('x')}</button>
                               ` : ''}
 
                             </div>

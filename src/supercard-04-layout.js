@@ -3045,7 +3045,11 @@ class ScCanvasEditor extends LitElement {
       .el-config { border: 1px solid var(--divider-color,#444); border-radius: 6px; background: rgba(0,0,0,0.15); }
       .el-config > summary { padding: 7px 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--primary-color,#03a9f4); list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
       .el-config > summary::-webkit-details-marker { display: none; }
-      .el-config > summary::before { content: '▶'; font-size: 9px; transition: transform 0.15s; }
+      /* A pseudo-element holds no element, so the one icon in the editor that
+         cannot be an \`<svg>\` is this marker - it is the same drawing as a mask. */
+      .el-config > summary::before { content: ''; width: 11px; height: 11px; flex: none;
+        background: currentColor; mask: ${unsafeCSS(iconMask('chevron-right'))} center/contain no-repeat;
+        transition: transform 0.15s; }
       .el-config[open] > summary::before { transform: rotate(90deg); }
       .el-config-body { padding: 0 6px 6px; }
       /* The editor stacks against itself, not against the card SC_LAYERS

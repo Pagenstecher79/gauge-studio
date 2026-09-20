@@ -50,11 +50,11 @@ const BASIC_TARGETS = ['icon', 'name', 'state'];
 
 // --- ONE INTERACTION, AS FIELDS ---
 const ACTION_KINDS = [
-  { id: 'none', icon: 'mdi:cancel', label: 'None', title: 'No action' },
-  { id: 'toggle', icon: 'mdi:toggle-switch-outline', label: 'Toggle', title: 'Toggle' },
-  { id: 'more-info', icon: 'mdi:information-outline', label: 'Info', title: 'More info' },
-  { id: 'call-service', icon: 'mdi:lightning-bolt', label: 'Service', title: 'Call service' },
-  { id: 'navigate', icon: 'mdi:arrow-right-top', label: 'Path', title: 'Navigate' },
+  { id: 'none', icon: 'x', label: 'None', title: 'No action' },
+  { id: 'toggle', icon: 'arrow-right-left', label: 'Toggle', title: 'Toggle' },
+  { id: 'more-info', icon: 'info', label: 'Info', title: 'More info' },
+  { id: 'call-service', icon: 'zap', label: 'Service', title: 'Call service' },
+  { id: 'navigate', icon: 'corner-right-up', label: 'Path', title: 'Navigate' },
 ];
 
 /** The five-button grid that picks the kind of action. */
@@ -65,7 +65,7 @@ function actionPicker(key, ctx) {
       ${ACTION_KINDS.map(a => html`
         <div class="action-icon-btn ${current === a.id ? 'active' : ''}" title=${a.title}
              @click=${() => ctx.set(key, a.id)}>
-          <ha-icon icon=${a.icon}></ha-icon><span class="action-icon-label">${a.label}</span>
+          <span class="action-icon-glyph">${icon(a.icon)}</span><span class="action-icon-label">${a.label}</span>
         </div>`)}
     </div>`;
 }
@@ -138,7 +138,7 @@ const pushStyles = css`
   }
   .action-icon-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--primary-color); color: var(--primary-text-color); }
   .action-icon-btn.active { background: rgba(3,169,244,0.1); border-color: var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); }
-  .action-icon-btn ha-icon { --mdc-icon-size: 22px; }
+  .action-icon-glyph { font-size: 22px; display: inline-flex; }
   .action-icon-label { font-size: 10px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   ha-entity-picker { width: 100%; }
 `;
