@@ -138,25 +138,29 @@ export function framedIn(items, entry, slot, framed) {
 }
 
 /**
- * The fold a part has taken rows from, seen from the drawing: its name, and
- * whether anything is left in it.
+ * The folds a part has taken rows from, seen from the drawing: each one
+ * named, with what is left in it.
  *
- * This is what lets a chip's panel say that more of the same thing stands in
- * the form below - and say nothing where the part took the whole fold with
- * it, because then there is nothing below to go to.
+ * Folds, plural, because a part is usually in two of them. A gauge's needle
+ * takes its length and its offset from *Shape & Position* and its colour and
+ * its material from *Pointer*, and a panel that named only the first would
+ * send someone to the fold with none of what they were looking for. So it
+ * answers all of them, in the order the form has them, and the caller drops
+ * the ones with nothing left - a fold a part emptied is nowhere to be sent.
  *
  * @param {any[]} fields the editor's whole field array
  * @param {any} entry
  * @param {any} slot
  * @param {string} part
- * @returns {{ id: string, title: string, rest: number }|null}
+ * @returns {{ id: string, title: string, rest: number }[]}
  */
-export function menuFor(fields, entry, slot, part) {
+export function menusFor(fields, entry, slot, part) {
   const framed = new Set([part]);
+  const out = [];
   for (const menu of splitMenus(fields)) {
     if (!framedIn(menu.items, entry, slot, framed)) continue;
-    return { id: menu.id, title: menu.title,
-             rest: menuRest(menu.items, entry, slot, framed) };
+    out.push({ id: menu.id, title: menu.title,
+               rest: menuRest(menu.items, entry, slot, framed) });
   }
-  return null;
+  return out;
 }

@@ -440,10 +440,12 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   always shared and the counting is the same rule again. `framedIn` gives the
   note the part in hand and the number of rows still standing, so it names
   the fold and chooses between *the* settings and *parts of the* settings
-  rather than guessing; `menuFor` asks from the drawing, so a chip's panel
-  closes with the name of the menu below it - and closes with nothing where
-  the part took the whole fold, because then there is nothing down there to
-  send anyone to.
+  rather than guessing; `menusFor` asks from the drawing, so a chip's panel
+  closes with the names of the menus below it - and closes with nothing where
+  the part took them with it, because then there is nothing down there to
+  send anyone to. Plural: running it showed that a part is usually filed in
+  two folds, its geometry in one and its looks in another, and naming only
+  the first sent the reader to the one without what they wanted.
 - **36** - ~~A card made almost square through the layout tab keeps a
   rectangular canvas in the editor, so an object cannot be drawn out to the
   full card. *Match the card* should fire automatically after a size change

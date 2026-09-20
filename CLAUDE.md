@@ -340,10 +340,11 @@ publishes them, because the bar's editor draws its own fields and the rule has
 to be the same rule there. `SC.framedIn(items, entry, slot, framed)` says which
 part took a fold's rows and how many are left, so the line standing in names
 the menu and says *the* settings or *parts of the* settings accordingly.
-`SC.menuFor(fields, entry, slot, part)` is the same question from the drawing:
-which fold a part came out of and whether anything is still in it, so a chip's
-panel can point down at the rest - and say nothing where the part took the
-whole fold. A kind names the module whose form to ask with `form:` in
+`SC.menusFor(fields, entry, slot, part)` is the same question from the
+drawing: every fold a part came out of and what is left in each, so a chip's
+panel can point down at the rest - and say nothing where the part took those
+folds with it. Plural because a part is usually filed in two, its geometry in
+one and its looks in another. A kind names the module whose form to ask with `form:` in
 `INNER_KINDS`; the module hands it over as `formFields()`.
 
 Which elements can be worked on that way is `INNER_KINDS` in

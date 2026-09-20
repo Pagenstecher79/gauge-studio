@@ -6606,20 +6606,24 @@ class ScCanvasEditor extends LitElement {
     };
     // The other side of the note in the form: that one says settings have
     // come here, and without this the panel is silent about the ones that
-    // stayed. A part that took a whole fold with it says nothing, because
-    // then there is nothing below to be sent to.
-    const menu = target.k.form
-      ? SC.menuFor(window.SupercardModules?.[target.k.form]?.formFields?.() || [],
-                   cfg, this.slot, this._innerSel)
-      : null;
+    // stayed. Folds with nothing left are dropped - a part that took a whole
+    // fold with it has nowhere to send anyone - and what remains is usually
+    // two, because a part's geometry and its looks are rarely filed together.
+    const below = (target.k.form
+      ? SC.menusFor(window.SupercardModules?.[target.k.form]?.formFields?.() || [],
+                    cfg, this.slot, this._innerSel)
+      : []).filter((/** @type {any} */ m) => m.rest).map((/** @type {any} */ m) => m.title);
+    const where = below.length > 1
+      ? below.slice(0, -1).join(', ') + ' and ' + below[below.length - 1]
+      : below[0];
     return html`
       <div class="ring-steps ${opts?.up ? 'up' : ''} ${opts?.wide ? 'wide' : ''}"
            data-part=${this._innerSel}
            style="left:${left}%; top:${top}%;">
         ${spec.steps.map(group)}
-        ${menu && menu.rest ? html`
+        ${where ? html`
           <span class="ring-group ring-more">
-            ${icon('chevrons-down')} More under ${menu.title}, below the canvas
+            ${icon('chevrons-down')} More under ${where}, below the canvas
           </span>` : ''}
         <div class="steps-grip" title="Drag to make this menu bigger or smaller"
              @pointerdown=${(/** @type {any} */ e) => this._stepsResize(e)}></div>

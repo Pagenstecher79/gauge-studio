@@ -4,7 +4,7 @@ import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { rowsAsCanvas } from "./rows-compat.js";
 import { icon } from "./icons.js";
 import { GRADIENT_PRESETS, gradientPresetCss } from "./gradient-presets.js";
-import { framedPart, fieldFramed, framedIn, menuFor } from "./framed-fields.js";
+import { framedPart, fieldFramed, framedIn, menusFor } from "./framed-fields.js";
 
 // --- CENTRAL LAYER DICTIONARY ---
 export const SC_LAYERS = {
@@ -1098,7 +1098,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, lengthRow, lengthField, splitLength, rampGrid,
     slider, sliderRow, sliderField, tipDot,
-    renderField, renderFields, fieldFramed, framedPart, framedIn, menuFor,
+    renderField, renderFields, fieldFramed, framedPart, framedIn, menusFor,
     fieldOptions,
     editorStyles, formStyles, partHighlight
   });

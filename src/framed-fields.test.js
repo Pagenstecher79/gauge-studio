@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { framedPart, fieldFramed, fieldShown, splitMenus, menuRest,
-         framedIn, menuFor } from './framed-fields.js';
+         framedIn, menusFor } from './framed-fields.js';
 
 const sec = (id, label) => ({ id, label, type: 'section' });
 const sub = (id, label) => ({ id, label, type: 'subsection' });
@@ -136,27 +136,32 @@ describe('framedIn', () => {
   });
 });
 
-describe('menuFor', () => {
+describe('menusFor', () => {
   const fields = [
     sec('_shape', '── Shape & Position'), f('w'), f('h', { framedBy: 'frame_ring' }),
     sec('_ticks', '── Ticks'), f('count', { framedBy: 'ticks' }),
+    sec('_look', '── Colour'), f('hue', { framedBy: 'frame_ring' }), f('sat'),
   ];
 
   it('names the fold a part took from, and what is left in it', () => {
-    expect(menuFor(fields, {}, {}, 'frame_ring'))
-      .toEqual({ id: '_shape', title: 'Shape & Position', rest: 1 });
+    expect(menusFor(fields, {}, {}, 'ticks'))
+      .toEqual([{ id: '_ticks', title: 'Ticks', rest: 0 }]);
   });
 
-  it('reports a fold a part emptied as having nothing left', () => {
-    expect(menuFor(fields, {}, {}, 'ticks'))
-      .toEqual({ id: '_ticks', title: 'Ticks', rest: 0 });
+  // A part is usually in two folds - its geometry in one, its looks in
+  // another - and the first is not the interesting one.
+  it('names every fold a part took from, in the form order', () => {
+    expect(menusFor(fields, {}, {}, 'frame_ring')).toEqual([
+      { id: '_shape', title: 'Shape & Position', rest: 1 },
+      { id: '_look', title: 'Colour', rest: 1 },
+    ]);
   });
 
-  it('answers null for a part no fold gave anything to', () => {
-    expect(menuFor(fields, {}, {}, 'hub')).toBe(null);
+  it('answers nothing for a part no fold gave anything to', () => {
+    expect(menusFor(fields, {}, {}, 'hub')).toEqual([]);
   });
 
-  it('answers null for a form that is not there', () => {
-    expect(menuFor([], {}, {}, 'ticks')).toBe(null);
+  it('answers nothing for a form that is not there', () => {
+    expect(menusFor([], {}, {}, 'ticks')).toEqual([]);
   });
 });

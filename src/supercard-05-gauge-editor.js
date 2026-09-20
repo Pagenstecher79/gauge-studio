@@ -872,7 +872,7 @@ class ScGaugeEditor extends LitElement {
       // Two edges that are two different settings, which is worth spelling
       // out: nothing else on a gauge is dragged by the outside of it, and a
       // gauge with no frame drawn still has that outer edge to be sized by.
-      ? html`it has two edges - drag the outside to set how far the gauge
+      ? html`it has two edges: drag the outside to set how far the gauge
              reaches, and the inside to set how wide the frame is drawn. A
              gauge with no frame still shows the outer edge, faintly, because
              that is what its size is. The rest of what the frame is stands

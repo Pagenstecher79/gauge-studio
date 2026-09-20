@@ -32,9 +32,12 @@ that holds three rows of a menu says nothing about the eight still sitting
 below it. `framed-fields.js` answers both from the same rule: `framedIn` tells
 a fold which part took its rows and how many it has left, so the line standing
 in for them can name the menu and know whether to say *the* settings or
-*parts of the* settings; `menuFor` asks it from the drawing's side, naming the
-fold a part came out of and whether anything is still in it, so a panel points
-down at a menu that has something to show and stays quiet when it does not.
+*parts of the* settings; `menusFor` asks it from the drawing's side, naming
+every fold a part came out of and what is left in each, so a panel points down
+at the menus that have something to show and stays quiet when none has. Folds,
+plural, and that is the part worth knowing: a needle takes its length from
+*Shape & Position* and its material from *Pointer*, so a line that named only
+the first would send someone to the fold without what they were looking for.
 A note that says "this one is on the canvas" is true and useless: eight folds
 down a dialog, what the reader needs is the name of the thing that moved.
 

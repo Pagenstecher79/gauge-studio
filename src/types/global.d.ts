@@ -197,9 +197,9 @@ declare global {
     /** What a fold has lost to the canvas, and how many rows it still has. */
     framedIn: (items: any[], entry: any, slot: any, framed?: Set<string>)
       => { part: string, rest: number } | null;
-    /** The fold a part took rows from, named, and what is left in it. */
-    menuFor: (fields: any[], entry: any, slot: any, part: string)
-      => { id: string, title: string, rest: number } | null;
+    /** Every fold a part took rows from, named, with what is left in each. */
+    menusFor: (fields: any[], entry: any, slot: any, part: string)
+      => { id: string, title: string, rest: number }[];
     /** The list a select field offers, whether it is a list or a function. */
     fieldOptions: (field: any, entry: any, ctx?: any) => any[];
     /** Shared chrome for the card-list module editors (ha-switch family). */
