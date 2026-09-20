@@ -20,7 +20,7 @@ import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-t
 import { revealBy, scrollParent } from "./reveal-scroll.js";
 import { icon, iconMask } from "./icons.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
-import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
+import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
 import { isPointerGlass, lensFitsPointer } from "./pointer-glass.js";
 import { applyCardConfig } from "./card-apply.js";
@@ -881,13 +881,6 @@ const THRESHOLD_UNIT = Object.freeze([
 const isThreeColour = (/** @type {any} */ cfg) =>
   ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset);
 
-/** The ready-made ramps, as the menu reads them: a name and what it is for. */
-const RAMP_PICKS = Object.freeze([
-  { value: '', label: 'Ramp\u2026', short: 'Ramp\u2026' },
-  ...GRADIENT_PRESETS.map(pr => ({ value: pr.id, label: pr.label + ' \u2013 ' + pr.hint,
-                                   short: pr.label })),
-]);
-
 /**
  * How far the dial goes round, and where it begins.
  *
@@ -1195,8 +1188,8 @@ const GAUGE_RINGS = Object.freeze({
       // A ramp is not a mode and nothing remembers it was picked: it writes a
       // list of stops and steps back out of the way, which is why this row
       // reads its own name rather than a value.
-      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
-        condition: bgManual, read: () => '',
+      { ramps: true, what: 'ready-made ramp',
+        condition: bgManual,
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
           gradientPresetPatch(v, 'gauge_bg') },
       { key: 'bg_threshold_unit', icon: icon('ruler'),
@@ -1240,11 +1233,7 @@ const GAUGE_RINGS = Object.freeze({
       ...SWEEP_STEPS,
       { key: 'gradient_preset', icon: icon('palette'), what: 'colour mode', picks: RING_COLOUR_MODE,
         read: (/** @type {any} */ cfg) => cfg.gradient_preset || 'manual' },
-      // A ramp is not a mode and nothing remembers it was picked: it writes a
-      // list of stops and steps back out of the way, which is why this row
-      // reads its own name rather than a value.
-      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
-        condition: isStopList, read: () => '',
+      { ramps: true, what: 'ready-made ramp', condition: isStopList,
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => gradientPresetPatch(v) },
       { key: 'gradient_mode', icon: icon('blend'), what: 'gradient type', condition: isStopList,
         read: (/** @type {any} */ cfg) => cfg.gradient_mode || 'smooth',
@@ -1801,11 +1790,7 @@ const SURFACE_PARTS = Object.freeze({
         condition: patSolid,
         read: solidColorOf,
         patch: (/** @type {any} */ cfg, /** @type {string} */ v) => solidColorPatch(cfg, v) },
-      // A ramp is not a mode and nothing remembers it was picked: it writes a
-      // list of colours and steps back out of the way, which is why this row
-      // reads its own name rather than a value.
-      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
-        condition: patStopList, read: () => '',
+      { ramps: true, what: 'ready-made ramp', condition: patStopList,
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
           gradientPresetPatch(v, 'pattern') },
       { stops: true, icon: icon('palette'), what: 'colours', condition: patStopList,
@@ -1946,13 +1931,11 @@ const BAR_PARTS = Object.freeze({
     on: () => true,
     steps: [
       { key: 'use_gradient', icon: icon('blend'), flag: true, what: 'gradient fill' },
-      // The same catalogue the gauge's ring offers. Under a chip it is the
-      // list of names rather than the grid of swatches the form draws: a
-      // panel of numbers is one row high per setting, and nine pictures in it
+      // The same catalogue the gauge's ring offers, and the same pictures the
+      // form draws - laid in one strip rather than a grid, which under a chip
       // would be the panel.
-      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
+      { ramps: true, what: 'ready-made ramp',
         condition: (/** @type {any} */ cfg) => !!cfg.use_gradient,
-        read: () => '',
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
           gradientPresetPatch(v, 'bar') },
       // The list the ramp above writes into, and the one a hand-mixed fill is
@@ -3794,6 +3777,28 @@ class ScCanvasEditor extends LitElement {
         --card-background-color: rgba(0,0,0,0.5);
         --secondary-background-color: rgba(255,255,255,0.06);
         font-size: 11px; }
+      /* The ramps, as the pictures they are. Four cells across and a strip
+         that scrolls sideways rather than the form's grid, which at nine
+         swatches would be the panel rather than a row in it. The sideways drag
+         belongs to the strip and everything else to the canvas, which is what
+         pan-x says - without it the press is taken for a drag of the object
+         under the panel. */
+      .ring-ramps { grid-column: span 4; justify-self: stretch; display: flex;
+        gap: 4px; max-width: 190px; overflow-x: auto; overscroll-behavior-x: contain;
+        touch-action: pan-x; padding-bottom: 2px; }
+      .ring-ramps::-webkit-scrollbar { height: 4px; }
+      .ring-ramps::-webkit-scrollbar-thumb { border-radius: 2px;
+        background: rgba(255,255,255,0.25); }
+      .ring-ramp { flex: none; width: 52px; padding: 0; border: none; cursor: pointer;
+        background: none; display: flex; flex-direction: column; gap: 2px; }
+      .ring-ramp-bar { height: 13px; border-radius: 3px;
+        border: 1px solid rgba(255,255,255,0.28); }
+      .ring-ramp:hover .ring-ramp-bar { border-color: var(--sc-part-sel); }
+      /* The name at the size the panel's own last line is set in: a ramp says
+         what it looks like by itself, and what it is *for* only in words. */
+      .ring-ramp-name { font-size: 9px; line-height: 1.2; text-align: center;
+        color: rgba(255,255,255,0.72); white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; }
       /* Words, so they wrap: four cells across and a width of its own, or a
          sentence would stretch the columns every other row is measured by. */
       .ring-note { grid-column: span 4; justify-self: stretch; max-width: 190px;
@@ -7223,6 +7228,29 @@ class ScCanvasEditor extends LitElement {
                           @pointerdown=${keep}
                           @value-changed=${(/** @type {any} */ e) =>
                             put({ [st.key]: e.detail.value || undefined })}></ha-icon-picker>
+        </span>`;
+      // A ramp is a picture, and a list of names is not one: "Fresh to stuffy"
+      // says nothing until the purple at the top has been seen, which is why
+      // the form draws swatches rather than a menu. The form's three-by-three
+      // grid would be the whole panel, so the same pictures lie in a strip
+      // that scrolls sideways - and each keeps its name, because what a ramp
+      // is *for* is the one thing its colours do not say.
+      //
+      // Buttons rather than a select, and no value read back: a ramp is not a
+      // mode. It writes a list of stops and steps out of the way, and the
+      // list it wrote is the row below this one.
+      if (st.ramps) return html`
+        <span class="ring-ramps" title=${tip(st)} @pointerdown=${keep}>
+          ${GRADIENT_PRESETS.map((/** @type {any} */ pr) => html`
+            <button class="ring-ramp" title=${pr.label + ' \u2013 ' + pr.hint}
+                    @pointerdown=${swallow}
+                    @click=${() => {
+                      const patch = st.patch(view, pr.id);
+                      if (patch) put(patch);
+                    }}>
+              <span class="ring-ramp-bar" style="background:${gradientPresetCss(pr)}"></span>
+              <span class="ring-ramp-name">${pr.label}</span>
+            </button>`)}
         </span>`;
       if (st.picks) {
       // A list may be a function of the entry, the way a field array's

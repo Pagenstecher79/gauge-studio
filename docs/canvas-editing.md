@@ -359,6 +359,15 @@ Not everything fits on a chip. What worked:
 - **Not a free colour value, and no text that is not drawn.** An entity, an
   `rgba()` someone types out, a unit to substitute - those stay in the form:
   there is nothing on the drawing for them to be typed *into*.
+- **A ramp is a picture.** The catalogue of ready-made ramps is a strip of
+  swatches under a chip, not a menu of names: *Fresh to stuffy* means nothing
+  until the purple at the top has been seen, which is why the form has always
+  drawn them. What a chip cannot take is the form's three-by-three grid - that
+  is the panel rather than a row in it - so the same pictures lie in one strip
+  that scrolls sideways, each with its name under it, because what a ramp is
+  *for* is the one thing its colours do not say. `ramps` on a step; it reads
+  nothing back, since a ramp is not a mode but a list of stops written into
+  the row below.
 - **A small editor, where it is what the part is.** A list edited by dragging
   its items about is not one control, so it was at first the one thing left in
   the form while everything around it moved. That did not hold: a gradient is
