@@ -172,8 +172,27 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   every part, because it is read off the drawing rather than off a list of
   parts. The scale label has no menu to place yet - see 28.
 - **31** - New feature: an interactive glass FX editor for the canvas.
-- **32** - "Layers (3) - the top of the list is drawn on top" - the list seems
-  to work the other way round.
+- **32** - ~~"Layers (3) - the top of the list is drawn on top" - the list seems
+  to work the other way round.~~ Done, though not as a fix to the order: the
+  order was measured and is right. Every element on the canvas computes the
+  same `z-index: 2` and sits in one stacking parent, so what is drawn on top
+  is simply what comes last in the array, the rendered DOM order is that array
+  order, and the list reverses it - the top row really is the front. What was
+  wrong is that the grip beside each row was decoration: the whole row was an
+  HTML5 `draggable`, which has no touch at all, so on a tablet the list could
+  not be reordered by hand and the chevrons were the only way. The grip now
+  carries the row through the list on pointer events, and dragging past
+  either end means the front or the back.
+
+  The confusion had a second half, and it is gone too: there were *two* lists
+  over the same objects, the folded stack list and the list of boxes under it,
+  in opposite orders, both with a pair of chevrons - so the same button meant
+  "forward" in one and "back" in the other, and the fold meant the one you saw
+  without opening anything was the one running the wrong way. They are now one
+  list, front at the top, unfolded, carrying the grip and the four order
+  buttons of the stack list and the numbers and the lock of the other. It no
+  longer hides the rows that are not selected either: a stack list that shows
+  one object is not a stack list.
 - **39** - ~~A circular bar placed through `+ add object` appears at about 63%
   of the box it was drawn in.~~ Done. The ghost under the crosshair and the
   click sized the box from different slots: the click asks the slot *with* the

@@ -2021,7 +2021,7 @@ class ScCanvasEditor extends LitElement {
       // is what the render walks.
       _innerAlso: { type: Array, state: true },
       _names: { type: Boolean, state: true },
-      _layers: { type: Boolean, state: true },
+      _layerDrag: { type: Object, state: true },
       _undoStack: { type: Array, state: true },
       _redoStack: { type: Array, state: true },
     };
@@ -2105,10 +2105,10 @@ class ScCanvasEditor extends LitElement {
     this._names = true;
     // The layer panel, folded away until somebody has elements stacked and
     // goes looking for them. Editor state like the zoom, never committed.
-    this._layers = false;
-    // Which row a layer drag started on. Not reactive: the row it lands on
-    // renders the drop, and the list re-renders from the commit anyway.
-    this._layerFrom = null;
+    // A layer being carried through the list: where it was picked up and
+    // which row it is over now, both indices into the element array. Null
+    // whenever nothing is in hand.
+    this._layerDrag = null;
     // The way back, and the way forward again. They live as long as the open
     // editor does: what came before it is Home Assistant's own undo.
     this._undoStack = [];
@@ -2407,19 +2407,40 @@ class ScCanvasEditor extends LitElement {
 
       /* The stack, front at the top - the way a layer list reads everywhere
          else, and the other way round from the elements array, where the last
-         one is the one drawn last. */
-      .layers { border: 1px solid var(--divider-color,#444); border-radius: 6px; margin-top: 6px; background: rgba(255,255,255,0.02); }
-      .layers > summary { padding: 6px 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--primary-color,#03a9f4); list-style: none; user-select: none; }
-      .layers > summary::-webkit-details-marker { display: none; }
+         one is the one drawn last. Not a fold: it is the editor's only list
+         of what is on the canvas, and a list you have to open first is a list
+         half the people never see. */
+      .objects { border: 1px solid var(--divider-color,#444); border-radius: 6px; margin-top: 6px; background: rgba(255,255,255,0.02); }
+      .objects-head { padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--primary-color,#03a9f4); user-select: none; display: flex; align-items: center; gap: 6px; }
       .layer-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px 6px; }
-      .layer { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 6px; border-radius: 4px; background: rgba(255,255,255,0.03); }
+      /* Only the selected row wraps, and it has to: its number inputs and the
+         four order buttons need more than 500px, and Home Assistant's card
+         editor is nowhere near that wide. There the name takes a line of its
+         own so the numbers below it line up. Every other row is a name and
+         four buttons and fits on one line, which is what makes a long list
+         readable. */
+      .layer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; padding: 3px 6px; border-radius: 4px; background: rgba(255,255,255,0.03); }
       .layer.sel { background: rgba(3,169,244,0.18); box-shadow: inset 0 0 0 1px var(--primary-color,#03a9f4); }
+      .layer.co { background: rgba(3,169,244,0.09); }
+      .layer .nums { flex: 1 0 100%; display: flex; gap: 6px; padding-left: 20px; }
+      .layer .nums .num { width: 68px; box-sizing: border-box; }
+      .layer .lock { font-size: 11px; opacity: 0.8; }
+      /* touch-action, or a finger on the grip scrolls the dialog instead of
+         carrying the layer - the pointer events never arrive. */
       .layer .grip { color: var(--secondary-text-color); cursor: grab; font-size: 14px;
-                     display: inline-flex; align-items: center; }
+                     display: inline-flex; align-items: center; touch-action: none; }
+      .layer .grip:active { cursor: grabbing; }
       .layer.dragging { opacity: 0.4; }
+      .layer.dragging .grip { cursor: grabbing; }
       .layer.drop { outline: 2px dashed var(--primary-color,#03a9f4); outline-offset: -2px; }
       .layer .who { flex: 1; min-width: 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .layer .who .id { color: var(--secondary-text-color); font-size: 11px; margin-left: 4px; }
+      /* The id stays visible next to the name, quietly: it is what every
+         other list in this editor calls the element - a glass pattern, a
+         colour rule, an interaction all name gauge_0 - so a row that showed
+         only the friendly name would leave nothing to match them against. */
+      .layer .who .id { font-family: monospace; color: var(--secondary-text-color); font-size: 11px; margin-left: 6px; }
+      /* Alone, the id is the name, and it reads as the row's own text. */
+      .layer .who .id.only { font-family: inherit; color: inherit; font-size: 12px; margin-left: 0; }
       .layer .over { color: var(--warning-color,#ffc107); cursor: help; }
       .layer button { background: none; border: none; color: var(--secondary-text-color); cursor: pointer; font-size: 13px; padding: 1px 3px; border-radius: 3px; }
       .layer button:hover:not([disabled]) { color: var(--primary-text-color); background: rgba(255,255,255,0.08); }
@@ -2915,29 +2936,6 @@ class ScCanvasEditor extends LitElement {
          number would otherwise slide its unit under the number of the row
          above it. */
       .ctl > .hint { grid-column: 3; }
-      /* Only the selected row wraps, and it has to: its number inputs and four
-         buttons need more than 500px, and Home Assistant's card editor is
-         nowhere near that wide - unwrapped, the remove button sat outside the
-         dialog. There the name takes a line of its own so the controls below
-         it line up. Every other row is a name and four buttons and fits on one
-         line, which is what makes a long list readable. */
-      .el-row .lock { font-size: 11px; opacity: 0.8; }
-      .el-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; padding: 4px 6px; border-radius: 4px; background: rgba(255,255,255,0.03); }
-      .el-row.sel { background: rgba(3,169,244,0.18); }
-      .el-row.co { background: rgba(3,169,244,0.09); }
-      .el-name { flex: 1; cursor: pointer; }
-      /* The id stays visible next to the name, quietly: it is what every
-         other list in this editor calls the element - a glass pattern, a
-         colour rule, an interaction all name gauge_0 - so a row that showed
-         only the friendly name would leave nothing to match them against. */
-      .el-name .id { font-family: monospace; color: var(--secondary-text-color); font-size: 11px; margin-left: 6px; }
-      /* Alone, the id is the name, and it reads as the row's own text. */
-      .el-name .id.only { color: inherit; font-size: 12px; margin-left: 0; }
-      .el-row.sel .el-name { flex: 1 0 100%; }
-      .icon-btn { background: none; border: none; color: var(--secondary-text-color); cursor: pointer; padding: 2px 4px; font-size: 13px; }
-      .icon-btn:hover { color: var(--primary-color); }
-      .icon-btn[disabled] { opacity: 0.3; cursor: default; }
-      .icon-btn[disabled]:hover { color: var(--secondary-text-color); }
       .hint { font-size: 11px; color: var(--secondary-text-color); }
       /* While one of a gauge's own parts is in hand its settings belong right
          under the canvas, not below a list of sixteen layers - the two have to
@@ -2945,8 +2943,7 @@ class ScCanvasEditor extends LitElement {
          the order property, not by rendering it somewhere else: lit would build the
          editor afresh at the new place and every fold in it would spring
          shut. */
-      .col.part-in-hand > .layers,
-      .col.part-in-hand > .el-rows,
+      .col.part-in-hand > .objects,
       .col.part-in-hand > .hint { order: 1; }
       .el-config { border: 1px solid var(--divider-color,#444); border-radius: 6px; background: rgba(0,0,0,0.15); }
       .el-config > summary { padding: 7px 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--primary-color,#03a9f4); list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
@@ -6206,65 +6203,118 @@ class ScCanvasEditor extends LitElement {
     if (next) this._commit(next);
   }
 
-  _move(idx, dir) { this._reorder(idx, idx + dir); }
+  /**
+   * Carry one layer through the list, from its grip.
+   *
+   * Pointer events rather than HTML5 drag and drop: that API has no touch at
+   * all, and Home Assistant is driven from a tablet as often as from a desk.
+   * The capture means the grip keeps receiving the move even when the pointer
+   * has left the narrow column it started in, which is most of the gesture.
+   *
+   * Only the grip starts it, so the name beside it stays a click that selects
+   * and the buttons stay buttons - a whole row that is draggable swallows
+   * both.
+   *
+   * @param {PointerEvent} e
+   * @param {number} idx index into the element array, not the row on screen
+   */
+  _layerGrab(e, idx) {
+    e.preventDefault();
+    e.stopPropagation();
+    const grip = /** @type {HTMLElement} */ (e.currentTarget);
+    grip.setPointerCapture(e.pointerId);
+    this._layerDrag = { from: idx, to: idx };
+
+    const move = (/** @type {PointerEvent} */ ev) => {
+      const to = this._layerAt(ev.clientY);
+      if (to !== null && to !== this._layerDrag?.to) this._layerDrag = { from: idx, to };
+    };
+    const up = () => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointercancel', up);
+      const drag = this._layerDrag;
+      this._layerDrag = null;
+      if (drag && drag.to !== drag.from) this._reorder(drag.from, drag.to);
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
+  }
 
   /**
-   * The stack, front at the top.
+   * The row the pointer is over, as an index into the element array.
    *
-   * The canvas draws its elements in array order, so the one at the end is
-   * the one on top - which makes this list the same array read backwards. It
-   * exists because a canvas with things lying over each other is exactly the
-   * canvas where clicking the one you mean is hardest: here they are all
-   * named, the ones sharing a place are marked, and each can be sent a step
-   * or all the way in either direction.
+   * Nearest rather than strictly inside, so carrying a layer past either end
+   * of the list means the front or the back - which is what the gesture looks
+   * like it should mean, and saves reaching for the chevrons to finish.
+   *
+   * @param {number} y
+   * @returns {number | null}
    */
-  _renderLayers(els, selected) {
+  _layerAt(y) {
+    let best = null, near = Infinity;
+    for (const row of this.shadowRoot?.querySelectorAll('.layer-list .layer') ?? []) {
+      const r = row.getBoundingClientRect();
+      const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+      if (d < near) { near = d; best = Number(/** @type {HTMLElement} */ (row).dataset.layerIdx); }
+    }
+    return Number.isInteger(best) ? best : null;
+  }
+
+  /**
+   * The objects on the canvas, front at the top.
+   *
+   * One list, because there used to be two. A stack list and a list of boxes
+   * grew side by side over the same objects, in opposite orders, and both
+   * could reorder - so the same pair of chevrons meant "up" in one and "down"
+   * in the other. Nobody could have read that, and the fold in front of the
+   * stack list meant the one you saw first was the one that was wrong way up.
+   *
+   * Front at the top, because that is the only order a stack may be shown in
+   * and the grip is what explains it. A row carries everything that is about
+   * the object as a box: where it sits in the stack, whether it is locked,
+   * whether it shares its place with another - and, for the one object that
+   * is selected alone, its numbers. Not folded away: it is the only list now.
+   *
+   * @param {any[]} els the canvas elements, in array order
+   * @param {string[]} selected the ids currently in hand
+   * @param {number} step the snap, which the number fields step by
+   */
+  _renderObjects(els, selected, step) {
     if (!els.length) return '';
     const last = els.length - 1;
     const rows = els.map((el, idx) => ({ el, idx })).reverse();
+    const drag = this._layerDrag;
     return html`
-      <details class="layers" ?open=${this._layers} @toggle=${e => { this._layers = e.target.open; }}>
-        <summary>${icon('layers')} Layers (${els.length}) - the top of the list is drawn on top</summary>
+      <div class="objects">
+        <div class="objects-head">${icon('layers')} Objects (${els.length}) - the top of the list is drawn on top</div>
         <div class="layer-list">
           ${rows.map(({ el, idx }) => {
             const over = overlappingElements(this._canvas, el.id);
             const name = this._label(el.id);
+            const mine = selected.includes(el.id);
+            // The numbers belong to one object at a time: with several in hand
+            // a single box's x is not what anybody is editing.
+            const alone = mine && selected.length === 1;
             return html`
-              <div class="layer ${selected.includes(el.id) ? 'sel' : ''}" draggable="true"
-                   @dragstart=${e => {
-                     e.dataTransfer.effectAllowed = 'move';
-                     // A drag inside one list needs no payload, but a drag with
-                     // nothing on it never starts in Firefox.
-                     e.dataTransfer.setData('text/plain', String(idx));
-                     this._layerFrom = idx;
-                     e.currentTarget.classList.add('dragging');
-                   }}
-                   @dragover=${e => {
-                     if (this._layerFrom === null || this._layerFrom === idx) return;
-                     e.preventDefault();
-                     e.dataTransfer.dropEffect = 'move';
-                     e.currentTarget.classList.add('drop');
-                   }}
-                   @dragleave=${e => e.currentTarget.classList.remove('drop')}
-                   @drop=${e => {
-                     e.preventDefault();
-                     e.currentTarget.classList.remove('drop');
-                     // The row it was dropped on is the place it takes, which
-                     // is what dropping something on a list means.
-                     if (this._layerFrom !== null) this._reorder(this._layerFrom, idx);
-                     this._layerFrom = null;
-                   }}
-                   @dragend=${e => {
-                     e.currentTarget.classList.remove('dragging');
-                     this._layerFrom = null;
-                   }}>
-                <span class="grip" title="Drag to move it through the stack">${icon('grip-vertical')}</span>
+              <div class="layer ${mine ? (selected.length > 1 ? 'co' : 'sel') : ''}
+                          ${drag?.from === idx ? 'dragging' : ''}
+                          ${drag && drag.to === idx && drag.from !== idx ? 'drop' : ''}"
+                   data-layer-idx=${idx}>
+                <span class="grip" title="Drag to move it through the stack"
+                      @pointerdown=${e => this._layerGrab(e, idx)}>${icon('grip-vertical')}</span>
                 <span class="who" title=${el.id} @click=${e => {
+                        // The same modifiers as on the canvas, so a selection
+                        // can be built from either place.
                         if (e.shiftKey || e.ctrlKey || e.metaKey) this._toggleSel(el.id);
                         else this._selectOnly(el.id);
-                      }}>${name || el.id}${name ? html`<span class="id">${el.id}</span>` : ''}</span>
+                      }}>${name ? html`<span class="named">${name}</span>` : ''}<span
+                          class="id ${name ? '' : 'only'}">${el.id}</span></span>
                 ${over.length ? html`<span class="over"
                   title="Shares its place with ${over.join(', ')}">${icon('layers')}</span>` : ''}
+                ${isPinned(el) ? html`<span class="lock"
+                  title="Locked - unlock it with the lock under the canvas">${icon('lock')}</span>` : ''}
                 <button title="All the way to the front" ?disabled=${idx === last}
                         @click=${() => this._reorder(idx, 'front')}>${icon('chevrons-up')}</button>
                 <button title="One step forward" ?disabled=${idx === last}
@@ -6273,10 +6323,21 @@ class ScCanvasEditor extends LitElement {
                         @click=${() => this._reorder(idx, idx - 1)}>${icon('chevron-down')}</button>
                 <button title="All the way to the back" ?disabled=${idx === 0}
                         @click=${() => this._reorder(idx, 'back')}>${icon('chevrons-down')}</button>
+                ${alone ? html`
+                  <span class="nums">
+                    ${(isSquareLocked(el, this.slot) ? ['x', 'y', 'size'] : ['x', 'y', 'w', 'h']).map(k => html`
+                      <input class="num" type="number" step=${step}
+                             .value=${Math.round(k === 'size' ? Math.min(el.w, el.h) : el[k])}
+                             title=${k === 'size' ? 'size - this one is always square' : k}
+                             @change=${e => {
+                               const v = parseFloat(e.target.value) || 0;
+                               this._setEl(idx, k === 'size' ? { w: v, h: v } : { [k]: v });
+                             }}>`)}
+                  </span>` : ''}
               </div>`;
           })}
         </div>
-      </details>`;
+      </div>`;
   }
 
   /**
@@ -6766,38 +6827,7 @@ class ScCanvasEditor extends LitElement {
           </div>
         </div>
 
-        ${this._renderLayers(els, selected)}
-
-        <div class="col el-rows" style="gap:4px;">
-          ${els.map((el, idx) => [el, idx])
-               .filter(([el]) => !selected.length || selected.includes(el.id))
-               .map(([el, idx]) => {
-                 const name = this._label(el.id);
-                 return html`
-            <div class="el-row ${selected.length > 1 ? 'co' : (this._sel === el.id ? 'sel' : '')}">
-              <span class="el-name" @click=${e => {
-                      // The same modifiers as on the canvas, so a selection can
-                      // be built from either place.
-                      if (e.shiftKey || e.ctrlKey || e.metaKey) this._toggleSel(el.id);
-                      else this._selectOnly(el.id);
-                    }}>${name ? html`<span class="named">${name}</span>` : ''}<span
-                        class="id ${name ? '' : 'only'}">${el.id}</span></span>
-              ${selected.length === 1 && this._sel === el.id ? html`
-                ${(isSquareLocked(el, this.slot) ? ['x', 'y', 'size'] : ['x', 'y', 'w', 'h']).map(k => html`
-                  <input class="num" type="number" step=${step}
-                         .value=${Math.round(k === 'size' ? Math.min(el.w, el.h) : el[k])}
-                         title=${k === 'size' ? 'size - this one is always square' : k}
-                         @change=${e => {
-                           const v = parseFloat(e.target.value) || 0;
-                           this._setEl(idx, k === 'size' ? { w: v, h: v } : { [k]: v });
-                         }}>`)}
-              ` : ''}
-              ${isPinned(el) ? html`<span class="lock" title="Locked - unlock it with the lock under the canvas">${icon('lock')}</span>` : ''}
-              <button class="icon-btn" title="Backward" @click=${() => this._move(idx, -1)}>${icon('chevron-up')}</button>
-              <button class="icon-btn" title="Forward" @click=${() => this._move(idx, 1)}>${icon('chevron-down')}</button>
-            </div>`;
-               })}
-        </div>
+        ${this._renderObjects(els, selected, step)}
         <div class="hint">${selected.length > 1
           ? html`${selected.length} selected - dragging one moves them all, and the buttons under the canvas copy them or even out the gaps. An element's own settings are back when it is the only one selected.`
           : (sel

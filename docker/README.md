@@ -43,10 +43,16 @@ without any sign of it.
 
 `npm run build` takes care of that itself: `postbuild.mjs` runs afterwards,
 re-registers the URL and restarts the container, so a plain reload gets the
-build you just made. It does nothing at all where there is nothing to do - no
-`.storage` here (a fresh clone, and CI), the container not running, the bundle
-byte for byte the one already registered, or `SKIP_HA_SYNC=1` - and it never
-fails a build, because a build is also how the release workflow ships.
+build you just made. It then waits for the instance to answer the new URL
+before it says it is done - `docker restart` returns half a minute before
+Home Assistant is listening, and a reload into that gap looks exactly like a
+build that did not take. So `npm run build` now ends when the instance is
+ready, not when the restart was ordered.
+
+It does nothing at all where there is nothing to do - no `.storage` here (a
+fresh clone, and CI), the container not running, the bundle byte for byte the
+one already registered, or `SKIP_HA_SYNC=1` - and it never fails a build,
+because a build is also how the release workflow ships.
 
 `npm run watch` does not get that: `vite build --watch` never exits, so npm's
 `postbuild` never runs. That loop keeps the hard refresh above, and where the

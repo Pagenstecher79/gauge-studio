@@ -11,10 +11,15 @@
  *
  * Re-registering means writing `.storage`, which Home Assistant reads once at
  * startup, so the container has to come round again for the new URL to be
- * served. That is the twenty seconds this costs, and it is why the whole
- * thing is skipped when there is nothing to put it in front of - and why the
+ * served. That is the half minute this costs, and it is why the whole thing
+ * is skipped when there is nothing to put it in front of - and why the
  * restart waits on the URL having actually changed. A build that produced the
  * same bytes has nothing to show the browser it has not already got.
+ *
+ * It then waits for the instance to answer before it says it is done, because
+ * the alternative is a lie that costs an afternoon: `docker restart` returns
+ * long before Home Assistant is listening, and a reload into that window
+ * looks exactly like a build that did not take.
  *
  * Three ways to do nothing, all of them quiet:
  *   - no `.storage` to write into (a fresh clone, and CI)
@@ -28,6 +33,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,6 +83,37 @@ function containerRunning() {
   }
 }
 
+/**
+ * Wait until the restarted instance actually serves the bundle again.
+ *
+ * `docker restart` returns when the process has been started, not when Home
+ * Assistant is listening - that takes another twenty to forty seconds. Saying
+ * "done" at the first of those two moments is worse than saying nothing: you
+ * reload into a dead port, the browser shows you whatever it can, and the
+ * conclusion you draw is that the build did not take.
+ *
+ * The probe asks for the resource URL itself rather than the front page,
+ * because that is the thing that has to be right - a 200 on it means both
+ * that Home Assistant is up and that it is serving this build.
+ *
+ * @param {string | null} url the registered resource URL, or null if unknown
+ * @returns {Promise<boolean>} false if it never answered in time
+ */
+async function waitForHa(url) {
+  const deadline = Date.now() + 90_000;
+  const target = `http://localhost:8123${url ?? "/local/gauge-studio.js"}`;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(target, { method: "HEAD" });
+      if (res.ok) return true;
+    } catch {
+      // Connection refused while it boots, which is the normal case here.
+    }
+    await sleep(1000);
+  }
+  return false;
+}
+
 if (!containerRunning()) skip(`${CONTAINER} is not running, leaving the resource as it is.`);
 
 try {
@@ -90,7 +127,10 @@ try {
   }
   console.log(`postbuild: restarting ${CONTAINER} so it serves the new URL...`);
   execFileSync("docker", ["restart", CONTAINER], { stdio: ["ignore", "ignore", "inherit"] });
-  console.log("postbuild: done - a plain reload now gets the build you just made.");
+  const up = await waitForHa(after ?? before);
+  console.log(up
+    ? "postbuild: done - a plain reload now gets the build you just made."
+    : `postbuild: restarted, but ${CONTAINER} has not answered yet - give it a moment before reloading.`);
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);
   console.log(`postbuild: could not refresh the dev instance (${message}).`);
