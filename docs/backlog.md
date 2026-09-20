@@ -142,8 +142,14 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   covers a long stretch of it. On a horizontal bar that stood the reading on
   its end, where it has only the bar's *height* to fit into - so it shrank
   until it could not be read. `auto` is 0 degrees now, whichever way the bar
-  runs: upright is what a reading is for. A pill turned on its end by hand
-  still shrinks to fit, and that is the user's own arrangement.
+  runs: upright is what a reading is for. A pill turned on its end by hand is
+  the one arrangement that can be asked for and not fit, so the card answers
+  that where it is asked - a `@container` rule against the bar's own box,
+  written by `pillCrossExtent`, stands such a pill upright wherever the bar is
+  too flat to hold it and lets it lie back down when there is room. The
+  setting is kept, not rewritten, and the rule goes on answering as the
+  dashboard is resized, which nothing measured at render time could. The
+  rotation row says so, in the form and on the chip.
   The pill is `nowrap` as well, and `pillFontSize` in `pill-glass.js` caps the
   type size against both of the bar's measures: the line of text along its own
   direction, the pill's one line across it - which is what keeps a slim

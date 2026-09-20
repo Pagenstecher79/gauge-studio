@@ -2,7 +2,8 @@ import { LitElement, html, svg, css } from "https://cdn.jsdelivr.net/gh/lit/dist
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
 import { squareBarOnCanvas } from "./canvas-model.js";
 import { lightParams, reliefPattern, reliefShadow, reliefLayers } from "./glass-light.js";
-import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, pillFontSize } from "./pill-glass.js";
+import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, pillFontSize,
+         pillCrossExtent } from "./pill-glass.js";
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
@@ -457,6 +458,9 @@ class ScProgressbar extends LitElement {
     // backdrop to bend when the pill's own background is opaque. The flag is
     // set where that is known, in the pill itself.
     let lensFraction = 0;
+    // A rule, not a value: whether a pill turned on its end fits depends on
+    // how tall the bar is drawn, which is a layout result. See `pillAt`.
+    let pillUprightCSS = '';
 
     if (showInd) {
       const indColor = this._get('indicator_color', '#ffffff');
@@ -552,36 +556,78 @@ class ScProgressbar extends LitElement {
          // rim hangs over the end at 100 %.
          const pad = liquidPadding(glassEffect);
 
-         // The size the card asks for, and the size that fits. `auto` crosses
-         // the pill with the bar, so the reading runs across the narrow way of
-         // it - on a slim bar that used to break the reading over two lines,
-         // and a rotated one had its ends cut off by the bar's own clipping
-         // instead. The pill is `nowrap` now, and the size gives way where the
-         // bar is too narrow to hold the reading whole. Rotation is a
-         // transform and so happens after layout: which screen axis the text
-         // ends up running along is known here and nowhere else, which is why
-         // the two extents are handed over rather than worked out inside.
          const pSizeSet = parseDim(this._get('indicator_value_font_size', 10), `10${u}`, u);
-         const pSize = pillFontSize(pSizeSet, indDisplayValue.length, pad,
-                                    isVertRot ? '100cqh' : '100cqw',
-                                    isVertRot ? '100cqw' : '100cqh');
 
-         // NEW: Dynamic width calculation based on text length so the pill never overflows
-         const halfWidth = `calc(${pSize} * (0.8 + ${indDisplayValue.length} * 0.3 + ${pad.clampEm}))`;
-         const halfHeight = `calc(${pSize} * 1.1)`;
-         const pClampBase = isHoriz ? (isVertRot ? halfHeight : halfWidth) : (isVertRot ? halfWidth : halfHeight);
-         
-         // NEW: Smart indent add-on for the pill
-         let pClampMin = pClampBase;
-         let pClampMax = pClampBase;
-         if (isHoriz && hasCardRadius) {
-           if (this._isAtLeftEdge) pClampMin = `calc(${pClampBase} + ${edgeIndentStr})`;
-           if (this._isAtRightEdge) pClampMax = `calc(${pClampBase} + ${edgeIndentStr})`;
+         /**
+          * Everything about the pill that depends on which way it is turned:
+          * the size that fits, the clamp that keeps it off the ends of the bar
+          * and the transform that turns it.
+          *
+          * It is asked twice - once for the rotation the card sets, once for
+          * upright - because a pill on its end can be set on a bar that is too
+          * flat to hold it, and the card stands it up rather than shrink the
+          * reading out of legibility. Two answers built by one piece of
+          * arithmetic cannot drift apart, which a second copy of it would.
+          *
+          * `auto` used to cross the pill with the bar, and the reading then
+          * ran across the narrow way of it - two lines on a slim bar, or ends
+          * cut off by the bar's own clipping. The pill is `nowrap` now and the
+          * size gives way instead. Rotation is a transform and happens after
+          * layout, so which screen axis the text ends up running along is
+          * known here and nowhere else: hence the extents handed over.
+          */
+         const pillAt = (/** @type {number} */ rot) => {
+           const vert = Math.abs(rot) === 90;
+           const size = pillFontSize(pSizeSet, indDisplayValue.length, pad,
+                                     vert ? '100cqh' : '100cqw',
+                                     vert ? '100cqw' : '100cqh');
+           const halfWidth = `calc(${size} * (0.8 + ${indDisplayValue.length} * 0.3 + ${pad.clampEm}))`;
+           const halfHeight = `calc(${size} * 1.1)`;
+           const base = isHoriz ? (vert ? halfHeight : halfWidth) : (vert ? halfWidth : halfHeight);
+           let min = base, max = base;
+           if (isHoriz && hasCardRadius) {
+             if (this._isAtLeftEdge) min = `calc(${base} + ${edgeIndentStr})`;
+             if (this._isAtRightEdge) max = `calc(${base} + ${edgeIndentStr})`;
+           }
+           const decls = isHoriz
+             ? [`left: clamp(${min}, calc(${targetPct} * 100%), calc(100% - ${max}))`,
+                `top: 50%`,
+                `transform: translate(-50%, -50%) rotate(${rot}deg) translateZ(0)`,
+                `will-change: left, transform`,
+                `transition: background 0.1s linear, color 0.1s linear`]
+             : [`bottom: clamp(${base}, calc(${targetPct} * 100%), calc(100% - ${base}))`,
+                `left: 50%`,
+                `transform: translate(-50%, 50%) rotate(${rot}deg) translateZ(0)`,
+                `will-change: bottom, transform`,
+                `transition: background 0.1s linear, color 0.1s linear`];
+           return { size, decls };
+         };
+
+         const turned = pillAt(pRot);
+         const pSize = turned.size;
+         const pPosStyle = turned.decls.join('; ') + ';';
+
+         // The one arrangement a user can set that cannot be honoured: a pill
+         // on its end needs the bar to be as tall as the pill is long, and a
+         // flat bar is not. The card answers it where it is asked - in CSS,
+         // against the bar's own container - so it goes on answering as the
+         // dashboard is resized, which nothing measured at render time could.
+         // The setting is kept, not rewritten: widen the bar and the pill lies
+         // back down on its side.
+         //
+         // Only for a size in pixels, because the threshold is a pixel figure;
+         // a size written in any other unit keeps the plain shrink.
+         const pxSet = /^(\d+(?:\.\d+)?)px$/.exec(pSizeSet);
+         if (isVertRot && pxSet) {
+           const needs = pillCrossExtent(parseFloat(pxSet[1]), indDisplayValue.length, pad);
+           const up = pillAt(0);
+           pillUprightCSS = `@container (max-height: ${(needs - 0.01).toFixed(2)}px) {
+        .sc-pb-pill, .sc-pb-pill-ghost {
+          font-size: ${up.size} !important;
+          ${up.decls.map(d => d + ' !important').join(';\n          ')};
+        }
+      }`;
          }
-
-         const pPosStyle = isHoriz 
-           ? `left: clamp(${pClampMin}, calc(${targetPct} * 100%), calc(100% - ${pClampMax})); top: 50%; transform: translate(-50%, -50%) rotate(${pRot}deg) translateZ(0); will-change: left, transform; transition: background 0.1s linear, color 0.1s linear;` 
-           : `bottom: clamp(${pClampBase}, calc(${targetPct} * 100%), calc(100% - ${pClampBase})); left: 50%; transform: translate(-50%, 50%) rotate(${pRot}deg) translateZ(0); will-change: bottom, transform; transition: background 0.1s linear, color 0.1s linear;`;
 
          // 1. The real layer
          realPillHtml = html`
@@ -592,7 +638,7 @@ class ScProgressbar extends LitElement {
          // 2. The goo clone
          if (isGooey) {
             indicatorGooeyHtml = html`
-              <div style="position:absolute; z-index:${ELM_DYNAMIC}; background:${exactHexColor}; color:transparent; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; white-space:nowrap; display:flex; pointer-events:none; ${pPosStyle}">
+              <div class="sc-pb-pill-ghost" style="position:absolute; z-index:${ELM_DYNAMIC}; background:${exactHexColor}; color:transparent; font-size:${pSize}; padding:${pad.padding}; border-radius:100px; white-space:nowrap; display:flex; pointer-events:none; ${pPosStyle}">
                 ${indDisplayValue}
               </div>`;
          }
@@ -1087,7 +1133,7 @@ class ScProgressbar extends LitElement {
     const hostCSS = `width: ${w}; height: ${h}; --pb-radius: ${radius}; --pb-bg-color: ${bgColor};`;
 
     return html`
-      <style>:host { ${hostCSS} }</style>
+      <style>:host { ${hostCSS} } ${pillUprightCSS}</style>
       
       ${lensFraction ? html`
       <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
@@ -1314,6 +1360,12 @@ const STYLE_FIELDS = [
     { value: '-90', label: '-90°' },
     { value: '180', label: '180° (upside down)' }
   ], condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
+  // Said where the turn is chosen, because that is where it looks like a free
+  // choice. The card keeps the setting either way - it is the drawing that
+  // gives way, and it gives way back the moment there is room.
+  { type: 'note', framedBy: 'pill', label: 'On its end, the reading has to fit across the bar. Where the bar is too flat for it the pill stands itself upright instead of shrinking out of legibility, and lies back down when the bar is tall enough.',
+    condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value
+      && Math.abs(parseInt(cfg.indicator_value_rotation)) === 90 },
   { id: 'indicator_value_decimals', label: 'Pill decimal places', type: 'range', min: 0, max: 3, step: 1, placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
   { id: 'indicator_value_adaptive_mode', label: 'Adaptive behavior', type: 'select', framedBy: 'pill', options: [
     { value: 'none', label: 'None (manual colours)' },

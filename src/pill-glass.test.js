@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, pillFontSize,
-         PILL_GLYPH_EM, PILL_LINE_EM, LIQUID_EFFECTS } from './pill-glass.js';
+         pillCrossExtent, PILL_GLYPH_EM, PILL_LINE_EM, LIQUID_EFFECTS } from './pill-glass.js';
 
 describe('isLiquidEffect', () => {
   it('knows the two effects that carry a displacement map', () => {
@@ -108,5 +108,28 @@ describe('pillFontSize', () => {
     const capOf = (/** @type {any} */ pad) =>
       Number(/calc\(100px \/ ([\d.]+)\)/.exec(pillFontSize('10px', 4, pad, '100px', '100px'))[1]);
     expect(capOf(heavy)).toBeGreaterThan(capOf(flat));
+  });
+});
+
+describe('pillCrossExtent', () => {
+  const flat = liquidPadding('none');
+
+  it('is the pill lying down, which is what it measures standing up', () => {
+    expect(pillCrossExtent(10, 4, flat)).toBeCloseTo(10 * (4 * PILL_GLYPH_EM + 1.6), 6);
+  });
+
+  it('is the size at which the fit stops shrinking the type', () => {
+    // At exactly that height the cap and the set size are the same number, so
+    // the two answers meet where the pill is turned upright.
+    const needs = pillCrossExtent(10, 4, flat);
+    const cap = Number(/calc\(100cqh \/ ([\d.]+)\)/
+      .exec(pillFontSize('10px', 4, flat, '100cqh', '100cqw'))[1]);
+    expect(needs / cap).toBeCloseTo(10, 6);
+  });
+
+  it('grows with the reading and with a liquid rim', () => {
+    expect(pillCrossExtent(10, 6, flat)).toBeGreaterThan(pillCrossExtent(10, 3, flat));
+    expect(pillCrossExtent(10, 4, liquidPadding('glass_liquid_heavy')))
+      .toBeGreaterThan(pillCrossExtent(10, 4, flat));
   });
 });

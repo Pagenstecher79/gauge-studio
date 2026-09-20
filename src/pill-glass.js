@@ -180,3 +180,22 @@ export function pillFontSize(size, chars, pad, along, across) {
   const r = (/** @type {number} */ v) => Number(v.toFixed(3));
   return `min(${size}, calc(${along} / ${r(wide)}), calc(${across} / ${r(tall)}))`;
 }
+
+/**
+ * How much room a pill needs across the bar when it is turned on its end.
+ *
+ * Which is the same thing as how wide it is lying down, because turning it is
+ * a transform and a transform does not change what it measures - it only
+ * changes which way that measure points. Below this the reading cannot be
+ * shown on its end at the size it was set to, and the pill is better off
+ * upright than shrunk out of legibility.
+ *
+ * @param {number} sizePx the configured size, in px
+ * @param {number} chars characters in the reading
+ * @param {{ xEm: number }} pad from `liquidPadding`
+ * @returns {number} px
+ */
+export function pillCrossExtent(sizePx, chars, pad) {
+  const n = Number.isFinite(chars) && chars > 1 ? chars : 1;
+  return sizePx * (n * PILL_GLYPH_EM + 2 * pad.xEm);
+}

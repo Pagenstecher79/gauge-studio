@@ -1522,8 +1522,11 @@ const BAR_PARTS = Object.freeze({
         read: (/** @type {any} */ cfg) => String(cfg.indicator_value_rotation ?? 'auto'),
         picks: [{ value: 'auto', label: 'Upright, as it reads', short: 'Auto' },
                 { value: '0', label: 'Horizontal', short: '0\u00B0' },
-                { value: '90', label: 'Quarter turn', short: '90\u00B0' },
-                { value: '-90', label: 'Quarter turn back', short: '-90\u00B0' },
+                // The two that can be asked for and not fit: the card stands
+                // such a pill upright on a bar too flat to hold it, so the
+                // row says as much rather than the drawing surprising anyone.
+                { value: '90', label: 'Quarter turn - upright where the bar is flat', short: '90\u00B0' },
+                { value: '-90', label: 'Quarter turn back - upright where the bar is flat', short: '-90\u00B0' },
                 { value: '180', label: 'Upside down', short: '180\u00B0' }] },
       { key: 'indicator_value_decimals', icon: icon('decimals-arrow-right'), by: 1, min: 0, max: 3, dflt: 0,
         what: 'decimal places' },
