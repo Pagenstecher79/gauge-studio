@@ -22,6 +22,7 @@ import { icon, iconMask } from "./icons.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
+import { isPointerGlass, lensFitsPointer } from "./pointer-glass.js";
 import { applyCardConfig } from "./card-apply.js";
 import { highlightInk } from "./highlight-ink.js";
 import { withoutElementConfig, TARGET_LISTS } from "./config-cleanup.js";
@@ -787,6 +788,19 @@ const SHADOW_MODE = Object.freeze([
   { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
 ]);
 
+// Glass, as the two chips offer it. The liquid option is dropped from the
+// needle's list where the needle is too thin to bend anything - the same
+// rule the form's select follows, and for the same reason.
+const GLASS_MODE = Object.freeze([
+  { value: 'none', label: 'None', short: 'None' },
+  { value: 'glass', label: 'Glass', short: 'Glass' },
+  { value: 'glass_liquid', label: 'Liquid glass', short: 'Liquid' },
+]);
+
+const NEEDLE_GLASS_MODE = (/** @type {any} */ cfg) =>
+  lensFitsPointer(cfg?.pointer_width ?? 2)
+    ? GLASS_MODE : GLASS_MODE.filter(o => o.value !== 'glass_liquid');
+
 /** Whether there is a shadow for the four rows under it to shape. */
 const hasShadow = (/** @type {any} */ cfg) =>
   (cfg.pointer_shadow_type || 'none') !== 'none';
@@ -1258,7 +1272,13 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_width', icon: THICK, slide: true, by: 0.1, min: 0.1, max: 10,
         dflt: 2, what: 'pointer width' },
       ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
-      { key: 'pointer_3d_effect', icon: icon('axis-3d'), flag: true, what: 'plastic 3D' },
+      { key: 'pointer_3d_effect', icon: icon('axis-3d'), flag: true, what: 'plastic 3D',
+        condition: (/** @type {any} */ cfg) => !isPointerGlass(cfg.pointer_glass) },
+      { key: 'pointer_glass', icon: icon('gauge'), what: 'glass', picks: NEEDLE_GLASS_MODE,
+        read: (/** @type {any} */ cfg) => cfg.pointer_glass || 'none' },
+      { key: 'pointer_glass_blur', icon: icon('droplet'), slide: true, by: 0.5, min: 0, max: 6,
+        dflt: 0, what: 'glass blur',
+        condition: (/** @type {any} */ cfg) => isPointerGlass(cfg.pointer_glass) },
       { key: 'pointer_shadow_type', icon: icon('moon'), what: 'shadow', picks: SHADOW_MODE,
         read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
       { icon: icon('paintbrush'), what: 'shadow colour', paint: true,
@@ -1293,8 +1313,17 @@ const GAUGE_RINGS = Object.freeze({
       pointer_center_radius: offsetFromRadius(0, r, scale, 25),
     }),
     // Size is the circle being dragged, so colour is all that is left to say.
-    steps: colourRows('pointer_dot_color_type', 'pointer_dot_color', 'dot',
-                      '#ffffff', 'fixed'),
+    steps: [
+      ...colourRows('pointer_dot_color_type', 'pointer_dot_color', 'dot',
+                    '#ffffff', 'fixed'),
+      // No gate here: the hub does not move, and what does not move pays
+      // nothing for its glass.
+      { key: 'pointer_center_glass', icon: icon('gauge'), what: 'glass', picks: GLASS_MODE,
+        read: (/** @type {any} */ cfg) => cfg.pointer_center_glass || 'none' },
+      { key: 'pointer_center_glass_blur', icon: icon('droplet'), slide: true, by: 0.5,
+        min: 0, max: 6, dflt: 0, what: 'glass blur',
+        condition: (/** @type {any} */ cfg) => isPointerGlass(cfg.pointer_center_glass) },
+    ],
   },
 });
 
@@ -6360,7 +6389,12 @@ class ScCanvasEditor extends LitElement {
                           @value-changed=${(/** @type {any} */ e) =>
                             this._writeInner({ [st.key]: e.detail.value || undefined }, false)}></ha-icon-picker>
         </span>`;
-      if (st.picks) return html`
+      if (st.picks) {
+      // A list may be a function of the entry, the way a field array's
+      // `options` already may: what a part can be told to be sometimes
+      // depends on what it is. An option that cannot be drawn is not offered.
+      const picks = typeof st.picks === 'function' ? st.picks(cfg) : st.picks;
+      return html`
         <span class="ring-group">${stepIcon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
                   @pointerdown=${keep}
@@ -6377,10 +6411,11 @@ class ScCanvasEditor extends LitElement {
                     // with it.
                     if (st.patch) e.target.value = String(now(st));
                   }}>
-            ${st.picks.map((/** @type {any} */ o) => html`
+            ${picks.map((/** @type {any} */ o) => html`
               <option value=${o.value} ?selected=${o.value === now(st)}>${o.short || o.label}</option>`)}
           </select>
         </span>`;
+      }
       const val = now(st);
       const btn = (/** @type {number} */ dir, /** @type {string} */ glyph) => html`
         <button class="ring-step" ?disabled=${dir > 0 ? val >= st.max : val <= st.min}

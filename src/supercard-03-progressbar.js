@@ -1160,7 +1160,7 @@ class ScProgressbar extends LitElement {
       
       ${lensFraction ? html`
       <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
-        <defs>${lensFilterElement(LENS_FILTER_ID, 'dome', lensFraction, '.sc-pb-pill')}</defs>
+        <defs>${lensFilterElement(LENS_FILTER_ID, 'dome', lensFraction, '.sc-pb-pill', undefined, this)}</defs>
       </svg>` : ''}
 
       ${isGooey ? html`

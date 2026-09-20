@@ -4,6 +4,15 @@ import { autoStep, staggerRows, ROW_GAP, rowBox, boxReach } from "./tick-labels.
 import { gaugeScale, NO_TIER_STATE, tickMultiplier, multiplierParts } from "./gauge-scale.js";
 import { ringRadius, ringPartRadius, gaugeOuter, frameBand, gaugeScaleOf } from "./gauge-inner-boxes.js";
 import { adaptiveInk } from "./adaptive-ink.js";
+import { isPointerGlass, pointerBlurPx, pointerLensFraction,
+         pointerGlassStyle } from "./pointer-glass.js";
+import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
+import { watchModalSuspend } from "./glass-suspend.js";
+
+// One id each, not one per instance: a filter is looked up inside the
+// shadow root that holds it, and every gauge has its own.
+const PTR_LENS_ID = 'sc-ptr-lens';
+const HUB_LENS_ID = 'sc-hub-lens';
 
 const SC = window.SupercardUtils;
 
@@ -138,6 +147,17 @@ class ScGauge extends LitElement {
 
   firstUpdated() {
     setTimeout(() => { this._isInitialized = true; }, 50);
+  }
+
+  updated(changedProps) {
+    super.updated(changedProps);
+    // A lens map is a pixel length of a part whose size follows the gauge, so
+    // it can only be written once that part has been laid out - and again
+    // whenever it has been laid out differently.
+    applyLensGeometry(this.shadowRoot);
+    // A gauge can sit on a card that carries no fx-glass at all, so the
+    // watcher is armed from here too. It installs itself once per page.
+    watchModalSuspend();
   }
 
   _get(k, d) { return this.config[k] ?? d; }
@@ -1012,14 +1032,31 @@ class ScGauge extends LitElement {
     // land exactly on the pivot.
     // `needle` marks the one layer whose live angle the canvas editor reads off
     // the DOM, so the handles on its two ends can ride along with it.
-    const layer = (originX, originY, rotate, content, needle = false) => html`
+    // `overlay` is HTML drawn on the same layer as the SVG, for the one part
+    // that cannot be an SVG shape: `backdrop-filter` does not apply to one in
+    // any engine, so a glassed needle or hub is a <div>. The layer is the
+    // square the viewBox is letterboxed into, so a box given in per cent of
+    // it lands exactly where the shape would have been drawn.
+    const layer = (originX, originY, rotate, content, needle = false, overlay = '') => html`
       <div class="sc-gauge-layer" ?data-sc-needle=${needle}
            style="transform-origin: ${(originX / this.SIZE * 100).toFixed(4)}% ${(originY / this.SIZE * 100).toFixed(4)}%;${
              rotate ? ` transform: rotate(${renderAngle}deg); transition: transform ${this.frozen || !this._isInitialized ? 0 : dur}s ${easingCurve};` : ''}">
         <svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">
           ${content}
         </svg>
+        ${overlay}
       </div>`;
+
+    // Glass, and what each half of it costs. The lens is withheld from a
+    // needle too thin to show a bend and the blur is withheld at zero -
+    // `blur(0px)` is not a no-op, it makes the part a backdrop root and pays
+    // for the re-sampling. See `pointer-glass.js` and docs/perf-cpu.md.
+    const ptrGlass = this._get('pointer_glass', 'none');
+    const hubGlass = this._get('pointer_center_glass', 'none');
+    const ptrLens = pointerLensFraction(ptrGlass, this._get('pointer_width', 2));
+    const hubLens = pointerLensFraction(hubGlass);
+    const ptrBlur = pointerBlurPx(this._get('pointer_glass_blur', 0));
+    const hubBlur = pointerBlurPx(this._get('pointer_center_glass_blur', 0));
 
     const is3d = this._get('pointer_3d_effect', false);
     // The needle turns about the gauge's centre. It used to be movable off it,
@@ -1027,6 +1064,8 @@ class ScGauge extends LitElement {
     // is placed against it, and everything the needle draws is drawn from it.
     const pivot = this.CENTER;
     const dotR = safeFloat(this._get('pointer_center_radius',2),2) * scale;
+    const hubCol = resolveColor(this._get('pointer_dot_color_type','fixed'),
+                                this._get('pointer_dot_color',[255,255,255]), inkAt(dotR));
     const shape = (color, gradId) => this._get('pointer_type','needle') === 'triangle'
       ? svg`<polygon points="${rTip},0 ${xBase},${(-pW/2).toFixed(2)} ${xBase},${(pW/2).toFixed(2)}" fill="${color}"/>${
           gradId ? svg`<polygon points="${rTip},0 ${xBase},${(-pW/2).toFixed(2)} ${xBase},${(pW/2).toFixed(2)}" fill="url(#${gradId})"/>` : ''}`
@@ -1043,9 +1082,27 @@ class ScGauge extends LitElement {
 
     const pointerLayers = html`
       ${filterAttr ? shadowAt(svg`<circle cx="0" cy="0" r="${dotR}" fill="${sCol}"/>${is3d ? '' : shape(sCol, null)}`) : ''}
-      ${layer(pivot, pivot, false, svg`<circle data-sc-part="pointer_center" cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${resolveColor(this._get('pointer_dot_color_type','fixed'), this._get('pointer_dot_color',[255,255,255]), inkAt(dotR))}"/>`)}
+      ${isPointerGlass(hubGlass)
+        ? layer(pivot, pivot, false, '', false, html`<div data-sc-part="pointer_center" style="${
+            pointerGlassStyle({ effect: hubGlass, color: hubCol, shape: 'circle', size: this.SIZE,
+                                x: pivot - dotR, y: pivot - dotR, w: dotR * 2, h: dotR * 2,
+                                filterId: hubLens ? HUB_LENS_ID : '', blurPx: hubBlur })}"></div>`)
+        : layer(pivot, pivot, false, svg`<circle data-sc-part="pointer_center" cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${hubCol}"/>`)}
       ${(filterAttr && is3d) ? shadowAt(shape(sCol, null)) : ''}
-      ${layer(pivot, pivot, true, svg`
+      ${isPointerGlass(ptrGlass)
+        ? layer(pivot, pivot, true, '', true, html`<div data-sc-part="pointer" style="${
+            pointerGlassStyle({ effect: ptrGlass, color: pCol, size: this.SIZE,
+                                // A round cap reaches half the width past
+                                // either end of the line it finishes, and a
+                                // box does not - so the box is that much
+                                // longer at both ends, or the glass needle is
+                                // shorter than the one it replaces.
+                                ...(this._get('pointer_type','needle') === 'triangle'
+                                  ? { shape: 'triangle', x: pivot + xBase, w: rTip - xBase }
+                                  : { shape: 'round', x: pivot + xBase - pW / 2, w: rTip - xBase + pW }),
+                                y: pivot - pW / 2, h: pW,
+                                filterId: ptrLens ? PTR_LENS_ID : '', blurPx: ptrBlur })}"></div>`)
+        : layer(pivot, pivot, true, svg`
           ${is3d ? svg`<defs>
             <linearGradient id="sc-3d-pointer-grad" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stop-color="white" stop-opacity="0.8"/>
@@ -1060,6 +1117,12 @@ class ScGauge extends LitElement {
       <div class="sc-gauge-wrap" @touchstart=${this._handleTouch} style="${wrapStyle}">
         ${waveStyleBlock}
         ${waveDivNode}
+
+        ${(ptrLens || hubLens) ? html`
+        <svg style="position:absolute; width:0; height:0;" aria-hidden="true"><defs>
+          ${ptrLens ? lensFilterElement(PTR_LENS_ID, 'dome', ptrLens, '[data-sc-part="pointer"]', undefined, this) : ''}
+          ${hubLens ? lensFilterElement(HUB_LENS_ID, 'dome', hubLens, '[data-sc-part="pointer_center"]', undefined, this) : ''}
+        </defs></svg>` : ''}
         
         <svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">
           ${bgNode}
