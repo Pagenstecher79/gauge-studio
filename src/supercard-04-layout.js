@@ -6056,7 +6056,23 @@ class ScCanvasEditor extends LitElement {
       const r = chip.getBoundingClientRect();
       // Where it stands with no nudge, which is the only place worth asking
       // about: a chip that has been pushed aside is not where it belongs.
-      const h = { l: r.left - was.x, t: r.top - was.y, w: r.width, h: r.height };
+      //
+      // Read off what is on the screen *now*, not off the nudge it was last
+      // given: while the chip is gliding those are two different places, and
+      // taking the target for the truth makes every pass during a glide
+      // measure from somewhere the chip never was. Each such pass then wrote
+      // a new target, which restarted the glide - chips wandering for seconds
+      // before they came to rest. Untransformed the chip sits at its layout
+      // box; the rest of its transform is the centring, which is half its own
+      // box for a ring's chip and nothing for a column of add buttons.
+      const m = new DOMMatrixReadOnly(getComputedStyle(chip).transform);
+      const mid = chip.classList.contains('ring-tag');
+      const zoom = chip.offsetWidth ? r.width / chip.offsetWidth : 1;
+      const now = {
+        x: (m.e + (mid ? chip.offsetWidth / 2 : 0)) * zoom,
+        y: (m.f + (mid ? chip.offsetHeight / 2 : 0)) * zoom,
+      };
+      const h = { l: r.left - now.x, t: r.top - now.y, w: r.width, h: r.height };
       const at = (/** @type {any} */ w) => ({ l: h.l + w.x, t: h.t + w.y, w: h.w, h: h.h });
       const free = (/** @type {any} */ w) => !taken.some((/** @type {any} */ o) => hits(at(w), o));
       const inside = (/** @type {any} */ w) =>
@@ -6086,7 +6102,11 @@ class ScCanvasEditor extends LitElement {
       }
       taken.push(/** @type {any} */ ({ left: h.l + best.x, right: h.l + best.x + h.w,
                                        top: h.t + best.y, bottom: h.t + best.y + h.h }));
-      if (Math.abs(best.x - was.x) < 0.5 && Math.abs(best.y - was.y) < 0.5) continue;
+      // Wider than it needs to be for a still picture: measuring against a
+      // drawing that is itself laid out in fractions of a pixel, two passes
+      // can disagree by a pixel over nothing, and rewriting the nudge for
+      // that restarts a glide that lasts more than a second.
+      if (Math.abs(best.x - was.x) < 1.5 && Math.abs(best.y - was.y) < 1.5) continue;
       if (best.x || best.y) {
         chip.style.setProperty('--sc-chip-dx', best.x + 'px');
         chip.style.setProperty('--sc-chip-dy', best.y + 'px');
