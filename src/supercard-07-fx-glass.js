@@ -5,6 +5,7 @@ import { lensScaleFraction, lensFilterMarkup, applyLensGeometry } from "./glass-
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
 import { patternList, patternFor, patternRadiusCss } from "./color-pattern.js";
+import { ListReorder } from "./list-reorder.js";
 
 const SC = window.SupercardUtils;
 
@@ -480,6 +481,13 @@ class ScFxGlassEditor extends LitElement {
   constructor() {
     super();
     this._expanded = ScFxGlassEditor._expandedCache ?? {};
+    // Made here rather than in a render, or a redraw mid-drag would drop the
+    // card being carried. `list-reorder.js` says why this is not the
+    // browser's own drag and drop: that one answers a mouse and nothing else.
+    this._reorder = new ListReorder(this, {
+      rows: () => this.renderRoot?.querySelectorAll('.pattern-card') || [],
+      move: (from, to) => this._movePattern(from, to),
+    });
   }
 
   static get styles() {
@@ -494,6 +502,34 @@ class ScFxGlassEditor extends LitElement {
       input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
       input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
     `];
+  }
+
+  /**
+   * The patterns this editor draws, with the place each has in the stored
+   * list.
+   *
+   * Not every pattern is drawn here - one whose target carries its own switch
+   * is edited there - so a row's place on the screen is not its place in the
+   * config, and the drag has to translate between the two or it moves the
+   * wrong effect.
+   */
+  _visibleRows(patterns) {
+    return patterns
+      .map((pat, idx) => ({ pat, idx }))
+      .filter(({ pat }) => !hasOwnSwitch(pat.target, this.slot));
+  }
+
+  /** One card carried to another place, in rows on the screen. */
+  _movePattern(from, to) {
+    const patterns = readPatterns(this.slot);
+    const rows = this._visibleRows(patterns);
+    const src = rows[from];
+    const dst = rows[to];
+    if (!src || !dst || src.idx === dst.idx) return;
+    const next = structuredClone(patterns);
+    const [moved] = next.splice(src.idx, 1);
+    next.splice(dst.idx, 0, moved);
+    this._commit(next);
   }
 
   _commit(newList) {
@@ -528,9 +564,7 @@ class ScFxGlassEditor extends LitElement {
     // Each row carries its index in the stored list, because that is what every
     // edit below commits against, and is numbered by where it sits in this
     // list, because that is the only list the person reading it can see.
-    const rows = patterns
-      .map((pat, idx) => ({ pat, idx }))
-      .filter(({ pat }) => !hasOwnSwitch(pat.target, this.slot));
+    const rows = this._visibleRows(patterns);
 
     // Everything a card can point at is switched from its own editor now, so
     // on a healthy canvas this list has nothing left to offer and stays away.
@@ -563,25 +597,16 @@ class ScFxGlassEditor extends LitElement {
 
 
             return html`
-              <div class="pattern-card"
-                @dragstart=${e => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ idx })); e.target.style.opacity = '0.4'; }}
-                @dragover=${e => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderTop = '3px dashed var(--primary-color)'; }}
-                @dragleave=${e => e.currentTarget.style.borderTop = ''}
-                @drop=${e => {
-                  e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderTop = '';
-                  const data = JSON.parse(e.dataTransfer.getData('application/json') || '{}');
-                  if (data.idx !== undefined && data.idx !== idx) {
-                    const n = structuredClone(patterns);
-                    const [moved] = n.splice(data.idx, 1);
-                    n.splice(idx, 0, moved);
-                    this._commit(n);
-                  }
-                }}
-                @dragend=${e => e.target.style.opacity = '1'}
-              >
+              <div class="pattern-card ${this._reorder.lifted(n) ? 'drag-lifted' : ''} ${
+                  this._reorder.target(n) ? 'drag-target' : ''}">
                 <div class="pattern-header" @click=${e => this._toggle(pat.id, e)}>
                   <div>
-                    <span class="drag-handle" @mousedown=${e => { e.stopPropagation(); e.target.closest('.pattern-card').setAttribute('draggable', 'true'); }} @mouseup=${e => { e.stopPropagation(); e.target.closest('.pattern-card').removeAttribute('draggable'); }} @mouseleave=${e => e.target.closest('.pattern-card').removeAttribute('draggable')}>${icon('grip-vertical')}</span>
+                    <span class="drag-handle" title="Drag to move"
+                          @pointerdown=${e => this._reorder.down(e, n)}
+                          @pointermove=${this._reorder.over}
+                          @pointerup=${this._reorder.up}
+                          @pointercancel=${this._reorder.up}
+                          @click=${this._reorder.swallow}>${icon('grip-vertical')}</span>
                     <span class="toggle-icon">${icon(isExp ? 'chevron-down' : 'chevron-right')}</span>
                     <span style="color:${pat.enabled ? 'var(--primary-text-color)' : 'var(--secondary-text-color)'}">Glass effect ${n + 1}</span>
                     <span style="font-size:10px;color:${pat.target === 'none' ? '#f44' : 'var(--secondary-text-color)'};margin-left:8px;font-weight:normal;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;">(${targetLabel})</span>

@@ -4,6 +4,7 @@ import { GAUGE_DEFAULT } from "./element-templates.js";
 import { gradientPresetPatch } from "./gradient-presets.js";
 import { icon } from "./icons.js";
 import { isPointerGlass, lensFitsPointer, pointerBlurPx } from "./pointer-glass.js";
+import { ListReorder } from "./list-reorder.js";
 
 const SC = window.SupercardUtils;
 
@@ -141,16 +142,16 @@ const STYLE_FIELDS = [
   { id: 'frame_ring_opacity',       label: 'Opacity',                    type: 'range',    min: 0, max: 1, step: 0.01,  placeholder: '1.0', framedBy: 'frame_ring', condition: cfg => !!cfg.frame_ring_active },
 
   { id: '_section_bg',           icon: icon('image'), label: '── Background',             type: 'section' },
-  { id: 'bg_mode',               label: 'Background mode',          type: 'select', options: [ { value: 'none', label: 'None' }, { value: 'adaptive', label: 'Adaptive (theme)' }, { value: 'solid', label: 'Solid colour' }, { value: 'linear', label: 'Linear gradient' }, { value: 'radial', label: 'Radial gradient' } ] },
-  { id: 'bg_gradient_preset',    label: 'Gradient type',                type: 'select', options: [ { value: 'classic', label: 'Classic (2 colours)' }, { value: 'manual', label: 'Manual (list)' } ], condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) },
-  { id: 'bg_threshold_unit',     label: 'Threshold unit',          type: 'select',
+  { id: 'bg_mode',               framedBy: 'background', label: 'Background mode',          type: 'select', options: [ { value: 'none', label: 'None' }, { value: 'adaptive', label: 'Adaptive (theme)' }, { value: 'solid', label: 'Solid colour' }, { value: 'linear', label: 'Linear gradient' }, { value: 'radial', label: 'Radial gradient' } ] },
+  { id: 'bg_gradient_preset',    framedBy: 'background', label: 'Gradient type',                type: 'select', options: [ { value: 'classic', label: 'Classic (2 colours)' }, { value: 'manual', label: 'Manual (list)' } ], condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) },
+  { id: 'bg_threshold_unit',     framedBy: 'background', label: 'Threshold unit',          type: 'select',
     hint: 'Thresholds can be given as absolute values or in %.', options: [ { value: 'percent', label: 'Percent (%)' }, { value: 'absolute', label: 'Absolute' } ], condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset === 'manual' },
-  { id: 'bg_opacity',            label: 'Opacity',                  type: 'range',    min: 0, max: 1, step: 0.01, placeholder: '1.0' },
-  { id: 'bg_color1',             label: 'Colour 1 (inner / start)',    type: 'color',  condition: cfg => ['solid', 'linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
-  { id: 'bg_color2',             label: 'Colour 2 (outer / end)',     type: 'color',  condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
-  { id: 'bg_balance',            label: 'Balance (%)',                type: 'range',    min: 0, max: 100, step: 0.1, placeholder: '50', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
-  { id: 'bg_gradient_angle',     label: 'Angle (° linear only)',      type: 'range',    min: 0, max: 360, step: 1, placeholder: '135', condition: cfg => cfg.bg_mode === 'linear' },
-  { id: 'bg_manual_stops',       type: 'bg_manual_stops', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset === 'manual' },
+  { id: 'bg_opacity',            framedBy: 'background', label: 'Opacity',                  type: 'range',    min: 0, max: 1, step: 0.01, placeholder: '1.0' },
+  { id: 'bg_color1',             framedBy: 'background', label: 'Colour 1 (inner / start)',    type: 'color',  condition: cfg => ['solid', 'linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
+  { id: 'bg_color2',             framedBy: 'background', label: 'Colour 2 (outer / end)',     type: 'color',  condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
+  { id: 'bg_balance',            framedBy: 'background', label: 'Balance (%)',                type: 'range',    min: 0, max: 100, step: 0.1, placeholder: '50', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset !== 'manual' },
+  { id: 'bg_gradient_angle',     framedBy: 'background', label: 'Angle (° linear only)',      type: 'range',    min: 0, max: 360, step: 1, placeholder: '135', condition: cfg => cfg.bg_mode === 'linear' },
+  { id: 'bg_manual_stops',       framedBy: 'background', type: 'bg_manual_stops', condition: cfg => ['linear', 'radial'].includes(cfg.bg_mode) && cfg.bg_gradient_preset === 'manual' },
 
   // Last of the section's own fields, so it sits under the background colours
   // and above the two threshold folds. Only on a canvas: the pattern paints
@@ -198,12 +199,12 @@ const STYLE_FIELDS = [
   { id: 'gradient_mode', framedBy: 'gauge_ring',     label: 'Gradient type',           type: 'select', options: [ { value: 'smooth', label: 'Smooth' }, { value: 'stepped', label: 'Stepped' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
   { id: 'gradient_resolution', framedBy: 'gauge_ring', label: 'Gradient resolution', type: 'select', options: [ { value: 'auto', label: 'Automatic (size-dependent)' }, { value: 'coarse', label: 'Coarse (1× colour zones)' }, { value: 'medium', label: 'Medium (12× colour zones)' }, { value: 'fine', label: 'Fine (24×) — default' }, { value: 'superfine', label: 'Superfine (48×)' }, { value: 'ultrafine', label: 'Ultrafine (96×)' }, { value: 'megafine', label: 'Megafine (192×)' }  ]},
 
-  { id: 'threshold_unit',    label: 'Threshold unit',     type: 'select',
+  { id: 'threshold_unit',    framedBy: 'gauge_ring', label: 'Threshold unit',     type: 'select',
     hint: 'Thresholds can be given as absolute values or in %.', options: [ { value: 'percent', label: 'Percent (%)' }, { value: 'absolute', label: 'Absolute' } ], condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
   { id: 'gradient_start',    label: 'Gradient start',        type: 'number', placeholder: 'auto', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
   { id: 'gradient_end',      label: 'Gradient end',         type: 'number', placeholder: 'auto', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
 
-  { id: 'manual_stops',      type: 'manual_stops', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
+  { id: 'manual_stops',      framedBy: 'gauge_ring', type: 'manual_stops', condition: cfg => ['manual', undefined].includes(cfg.gradient_preset) },
 
   { id: 'color1',     label: 'Outer colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
   { id: 'color2',     label: 'Middle colour', framedBy: 'gauge_ring',    type: 'color',  condition: cfg => ['symmetric', 'symmetriccustom'].includes(cfg.gradient_preset) },
@@ -398,6 +399,60 @@ class ScGaugeEditor extends LitElement {
     super();
     this._expanded = {};
     this._timeouts = {};
+    // One controller for the three lists this editor draws, told which it is
+    // working on by a group name that is also the rows' `data-row`. Made here
+    // and not in a render, or a redraw mid-drag would drop the row being
+    // carried. See `list-reorder.js` for why this is not the browser's own
+    // drag and drop: that one answers a mouse and nothing else, and a
+    // dashboard is edited on a tablet.
+    this._reorder = new ListReorder(this, {
+      rows: (group) =>
+        this.renderRoot?.querySelectorAll(`[data-row="${group}"]`) || [],
+      move: (from, to, group) => this._moveRow(group, from, to),
+    });
+  }
+
+  /**
+   * One row of one of this editor's lists, carried to another place.
+   *
+   * The group says which list, and for the two that belong to a gauge it
+   * carries that gauge's index with it - the ticks of the third gauge are a
+   * different list from the ticks of the fourth.
+   */
+  _moveRow(group, from, to) {
+    if (!this.slot) return;
+    const gauges = this._gauges;
+    const [kind, which] = String(group).split(':');
+    const list = kind === 'gauge' ? gauges
+      : kind === 'tick' ? gauges[Number(which)]?.custom_ticks
+      : kind === 'sector' ? gauges[Number(which)]?.sectors
+      : null;
+    if (!Array.isArray(list) || from === to) return;
+    if (from < 0 || to < 0 || from >= list.length || to >= list.length) return;
+    const next = structuredClone(gauges);
+    const target = kind === 'gauge' ? next
+      : kind === 'tick' ? next[Number(which)].custom_ticks
+      : next[Number(which)].sectors;
+    const [moved] = target.splice(from, 1);
+    target.splice(to, 0, moved);
+    this.commitFn('gauges', next);
+  }
+
+  /** The grip that carries a row of `group`, as a row of event handlers. */
+  _grip(group, i, title) {
+    return html`
+      <span class="row-grip" title=${title || 'Drag to move'}
+            @pointerdown=${(/** @type {any} */ e) => this._reorder.down(e, i, group)}
+            @pointermove=${this._reorder.over}
+            @pointerup=${this._reorder.up}
+            @pointercancel=${this._reorder.up}
+            @click=${this._reorder.swallow}>${icon('grip-vertical')}</span>`;
+  }
+
+  /** What a row of `group` is called while it is being carried, or landed on. */
+  _rowState(group, i) {
+    return `${this._reorder.lifted(i, group) ? ' lifted' : ''}`
+      + `${this._reorder.target(i, group) ? ' drop-target' : ''}`;
   }
 
   /**
@@ -460,6 +515,18 @@ class ScGaugeEditor extends LitElement {
         background: var(--primary-color, #03a9f4);
         box-shadow: 0 0 4px rgba(3,169,244,0.5);
       }
+      /* The handle that carries a row of a list. touch-action:none is what
+         makes it work with a finger at all - without it the browser claims
+         the gesture for a scroll before the first move is delivered, and the
+         dialog slides away under the hand. */
+      .row-grip {
+        cursor: grab; padding: 0 12px 0 0; font-size: 16px; user-select: none;
+        touch-action: none; color: var(--secondary-text-color, #aaa);
+        display: inline-flex; align-items: center;
+      }
+      /* Where it is, and where it is going. */
+      details.lifted { opacity: 0.4; }
+      details.drop-target { border-top: 3px dashed var(--primary-color, #03a9f4); }
     `];
   }
 
@@ -578,45 +645,13 @@ class ScGaugeEditor extends LitElement {
     if (this._expanded[stateKey] === undefined) this._expanded[stateKey] = false;
 
     return html`
-      <details class="inner-section" 
+      <details class="inner-section${this._rowState('gauge', idx)}" data-row="gauge"
         ?open=${this._expanded[stateKey]} 
         @toggle=${e => this._expanded[stateKey] = e.target.open}
-        @dragstart=${(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', idx);
-          setTimeout(() => e.target.style.opacity = '0.3', 0);
-        }}
-        @dragover=${(e) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          e.currentTarget.style.borderTop = '3px dashed var(--primary-color, #03a9f4)';
-        }}
-        @dragleave=${(e) => { e.currentTarget.style.borderTop = ''; }}
-        @drop=${(e) => {
-          e.preventDefault();
-          e.currentTarget.style.borderTop = '';
-          const draggedIdx = parseInt(e.dataTransfer.getData('text/plain'));
-          if (draggedIdx !== idx && !isNaN(draggedIdx)) {
-            const n = structuredClone(gauges);
-            const [movedItem] = n.splice(draggedIdx, 1);
-            n.splice(idx, 0, movedItem);
-            this.commitFn('gauges', n);
-          }
-          e.currentTarget.removeAttribute('draggable');
-        }}
-        @dragend=${(e) => {
-          e.target.style.opacity = '1';
-          e.target.removeAttribute('draggable');
-        }}
       >
         <summary>
           <span style="display:flex;align-items:center;">
-            <span 
-              style="cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px; user-select: none;"
-              title="Move gauge"
-              @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
-              @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-            >${icon('grip-vertical')}</span>
+            ${this._grip('gauge', idx, 'Drag to move this gauge')}
             ${title}
           </span>
 
@@ -865,9 +900,15 @@ class ScGaugeEditor extends LitElement {
     // dragged is the inner edge and the note has to say which.
     const how = part === 'gauge_ring'
       ? html`drag the ring's inner edge, which is the edge of it that moves,
-             and its colour stands under its chip. The list of stops stays
-             here: a row of colours to be dragged about is not a control that
-             fits on a dial.`
+             and what it is coloured with - the list of stops included -
+             stands under its chip.`
+      // The one part of a gauge with nothing to drag at all: the background
+      // is the whole of the box, so there is no edge to take hold of and the
+      // chip is all of it.
+      : part === 'background'
+      ? html`it is the whole of the box behind the dial, so there is nothing
+             to drag - what it is painted with stands under its chip, at the
+             top of the gauge. When it changes is still asked here.`
       : part === 'frame_ring'
       // Two edges that are two different settings, which is worth spelling
       // out: nothing else on a gauge is dragged by the outside of it, and a
@@ -985,39 +1026,14 @@ class ScGaugeEditor extends LitElement {
             ${cTicks.map((ct, ctIdx) => {
               const foldKey = `g${idx}_tick:${ctIdx}`;
               return html`
-                <details class="inner-section" style="margin-bottom:0;" 
+                <details class="inner-section${this._rowState(`tick:${idx}`, ctIdx)}"
+                  style="margin-bottom:0;" data-row=${`tick:${idx}`}
                   ?open=${this._isUnfolded(foldKey) || framed} 
                   @toggle=${e => this._setUnfolded(foldKey, e.target.open)}
-                  @dragstart=${(e) => {
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('tickIdx', ctIdx);
-                    setTimeout(() => e.target.style.opacity = '0.3', 0);
-                  }}
-                  @dragover=${(e) => {
-                    e.preventDefault();
-                    e.currentTarget.style.borderTop = '3px dashed var(--primary-color, #03a9f4)';
-                  }}
-                  @dragleave=${(e) => e.currentTarget.style.borderTop = ''}
-                  @drop=${(e) => {
-                    e.preventDefault();
-                    e.currentTarget.style.borderTop = '';
-                    const dIdx = parseInt(e.dataTransfer.getData('tickIdx'));
-                    if (dIdx !== ctIdx && !isNaN(dIdx)) {
-                      const n = structuredClone(gauges);
-                      const [moved] = n[idx].custom_ticks.splice(dIdx, 1);
-                      n[idx].custom_ticks.splice(ctIdx, 0, moved);
-                      this.commitFn('gauges', n);
-                    }
-                  }}
-                  @dragend=${(e) => { e.target.style.opacity = '1'; e.target.removeAttribute('draggable'); }}
                 >
                   <summary style="padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
                     <div style="font-weight:600;color:var(--primary-color,#03a9f4); flex:1; display:flex; align-items:center;">
-                      <span 
-                        style="cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px;" 
-                        @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
-                        @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-                      >${icon('grip-vertical')}</span>
+                      ${this._grip(`tick:${idx}`, ctIdx, 'Drag to move this tick')}
                       Tick ${ctIdx+1}
                     </div>
                     <div @click=${e => e.stopPropagation()}>
@@ -1076,45 +1092,22 @@ class ScGaugeEditor extends LitElement {
               // in hand: where it is, how far it reaches and what it is
               // painted with are all on the drawing then, and two live
               // controls for one value is worse than one badly placed
-              // control. The list of colours stays - a row of stops to be
-              // dragged about is not a control that fits on a dial, which is
-              // the same reason the ring's own list stays here.
+              // control. The list of colours stays here for now: the ring's
+              // own list has since moved under its chip, and a sector's could
+              // follow it - but a sector is one of several and its chip holds
+              // where it reaches to, so that is a change to make deliberately
+              // rather than by analogy.
               const framed = this._framed.has(`sector:${sIdx}`);
 
               return html`
-                <details class="inner-section" style="margin-bottom:0;" 
+                <details class="inner-section${this._rowState(`sector:${idx}`, sIdx)}"
+                  style="margin-bottom:0;" data-row=${`sector:${idx}`}
                   ?open=${this._isUnfolded(foldKey)} 
                   @toggle=${e => this._setUnfolded(foldKey, e.target.open)}
-                  @dragstart=${(e) => {
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('secIdx', sIdx);
-                    setTimeout(() => e.target.style.opacity = '0.3', 0);
-                  }}
-                  @dragover=${(e) => {
-                    e.preventDefault();
-                    e.currentTarget.style.borderTop = '3px dashed var(--primary-color, #03a9f4)';
-                  }}
-                  @dragleave=${(e) => e.currentTarget.style.borderTop = ''}
-                  @drop=${(e) => {
-                    e.preventDefault();
-                    e.currentTarget.style.borderTop = '';
-                    const dIdx = parseInt(e.dataTransfer.getData('secIdx'));
-                    if (dIdx !== sIdx && !isNaN(dIdx)) {
-                      const n = structuredClone(gauges);
-                      const [moved] = n[idx].sectors.splice(dIdx, 1);
-                      n[idx].sectors.splice(sIdx, 0, moved);
-                      this.commitFn('gauges', n);
-                    }
-                  }}
-                  @dragend=${(e) => { e.target.style.opacity = '1'; e.target.removeAttribute('draggable'); }}
                 >
                   <summary style="padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
                     <div style="font-weight:600;color:var(--primary-color,#03a9f4); flex:1; display:flex; align-items:center;">
-                      <span 
-                        style="cursor: grab; padding: 0 12px 0 0; color: var(--secondary-text-color, #aaa); font-size: 16px;" 
-                        @mousedown=${(e) => e.target.closest('details').setAttribute('draggable', 'true')}
-                        @mouseup=${(e) => e.target.closest('details').removeAttribute('draggable')}
-                      >${icon('grip-vertical')}</span>
+                      ${this._grip(`sector:${idx}`, sIdx, 'Drag to move this sector')}
                       Sector ${sIdx+1}
                     </div>
                     <div @click=${e => e.stopPropagation()}>

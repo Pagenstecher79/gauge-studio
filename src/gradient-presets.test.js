@@ -58,6 +58,40 @@ describe('dropping one on a gauge', () => {
   });
 });
 
+describe("dropping one on a gauge's background", () => {
+  it("writes the ramp onto the background's own keys, and nothing else", () => {
+    const patch = gradientPresetPatch('temperature', 'gauge_bg');
+    expect(Object.keys(patch).sort())
+      .toEqual(['bg_gradient_preset', 'bg_manual_stops', 'bg_threshold_unit']);
+    expect(patch.bg_gradient_preset).toBe('manual');
+    expect(patch.bg_threshold_unit).toBe('percent');
+    expect(normalizeStops(patch.bg_manual_stops))
+      .toEqual([...gradientPreset('temperature').stops]);
+  });
+
+  it('leaves the ring it is not about alone', () => {
+    const patch = gradientPresetPatch('traffic', 'gauge_bg');
+    expect(patch.manual_stops).toBeUndefined();
+    expect(patch.gradient_preset).toBeUndefined();
+    expect(patch.threshold_unit).toBeUndefined();
+  });
+
+  it('says nothing about whether the gradient is linear or radial', () => {
+    expect(gradientPresetPatch('traffic', 'gauge_bg').bg_mode).toBeUndefined();
+  });
+
+  it('hands over a list that may be edited in place', () => {
+    const a = gradientPresetPatch('band', 'gauge_bg');
+    const b = gradientPresetPatch('band', 'gauge_bg');
+    a.bg_manual_stops[0].color = '#000000';
+    expect(b.bg_manual_stops[0].color).toBe(gradientPreset('band').stops[0].color);
+  });
+
+  it('answers nothing for a menu nobody chose from', () => {
+    expect(gradientPresetPatch('', 'gauge_bg')).toBe(null);
+  });
+});
+
 describe('dropping one on a colour pattern', () => {
   it('writes the list and nothing else - the type is not the ramp\'s to say', () => {
     const patch = gradientPresetPatch('traffic', 'pattern');
