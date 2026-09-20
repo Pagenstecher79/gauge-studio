@@ -100,20 +100,32 @@ export function percentFromDeg(deg, sweep) {
  * The per cent nearest a value, of the several that name the same point on a
  * dial that comes full circle.
  *
- * A sector ending at 100 per cent and one ending at nought are the same edge,
- * and which of the two a drag should write is whichever is nearer where the
- * edge already was - otherwise a sector nudged past the top jumps right round
- * the dial.
+ * A sector ending at 100 per cent and one ending at nought are the same edge
+ * *there*, and which of the two a drag should write is whichever is nearer
+ * where the edge already was - otherwise a sector nudged past the top jumps
+ * right round the dial.
  *
- * @param {number} pct @param {number} near
+ * On a dial that does not come full circle they are not the same edge at all:
+ * they are the two ends of the scale, with the dead space between them, and
+ * reading one as the other is what sent a sector dragged towards the end of a
+ * semicircle out the other side. So the wrapping is asked for rather than
+ * assumed.
+ *
+ * @param {number} pct @param {number} near @param {boolean} [round] whether
+ *   the dial comes full circle
  */
-export function nearestPercent(pct, near) {
+export function nearestPercent(pct, near, round = true) {
+  if (!round) return pct;
   let best = pct;
   for (const cand of [pct - 100, pct, pct + 100]) {
     if (Math.abs(cand - near) < Math.abs(best - near)) best = cand;
   }
   return best;
 }
+
+/** Whether a sweep comes full circle, where nought and a hundred are one place. */
+export const isRound = (/** @type {{total: number}} */ sweep) =>
+  Math.abs(sweep.total) >= 360;
 
 /**
  * What dragging one of a sector's two arcs writes.
@@ -147,22 +159,34 @@ export function sectorAnglePatch(end, deg, sec, sweep) {
   const start = num(sec?.start_percent, SECTOR_DEFAULTS.start_percent);
   const len = num(sec?.length_percent, SECTOR_DEFAULTS.length_percent);
   const raw = percentFromDeg(deg, sweep);
+  const round = isRound(sweep);
   if (end === 'start') {
-    const at = clamp(nearestPercent(raw, start), 0, 100);
+    const at = clamp(nearestPercent(raw, start, round), 0, 100);
     const stop = start + len;
     const next = Math.min(at, stop - SECTOR_MIN_LENGTH);
     return { start_percent: tenth(next), length_percent: tenth(stop - next) };
   }
-  const at = nearestPercent(raw, start + len);
+  const at = nearestPercent(raw, start + len, round);
   return { length_percent: tenth(clamp(at - start, SECTOR_MIN_LENGTH, 100)) };
 }
 
 /**
  * What dragging the sector itself writes: the same reach, further round.
  *
- * The travel from where the hand took hold rather than the angle it is at now,
- * so a sector grabbed by its end does not jump its start to the pointer - and
- * the length is left alone, which is the whole of what this gesture is for.
+ * Measured on the scale rather than in degrees, and as the travel from where
+ * the hand took hold rather than the angle it is at now. Both matter:
+ *
+ * - The travel, so a sector grabbed by its end does not jump its start to the
+ *   pointer.
+ * - The scale, because a dial that is not a full circle has degrees on it that
+ *   are not scale at all. A hand carried into that dead space is past one end,
+ *   and reading its angle as degrees of travel walked the sector straight
+ *   through the gap and out the far side - ninety degrees of nothing counted
+ *   as a third of the scale. `percentFromDeg` answers the nearer end out
+ *   there, so the sector stops at the end of the dial, which is where the hand
+ *   has actually gone.
+ *
+ * The length is left alone, which is the whole of what this gesture is for.
  *
  * @param {number} deg where the hand is @param {number} deg0 where it took hold
  * @param {number} from `start_percent` when the drag began
@@ -170,17 +194,41 @@ export function sectorAnglePatch(end, deg, sec, sweep) {
  */
 export function sectorSlidePatch(deg, deg0, from, sec, sweep) {
   const len = num(sec?.length_percent, SECTOR_DEFAULTS.length_percent);
-  const by = wrap(deg - deg0 + 180, 360) - 180;
-  const next = clamp(tenth(from + by / (sweep.total || 360) * 100), 0, Math.max(0, 100 - len));
+  const round = isRound(sweep);
+  const at0 = percentFromDeg(deg0, sweep);
+  const by = nearestPercent(percentFromDeg(deg, sweep), at0, round) - at0;
+  const next = clamp(tenth(from + by), 0, Math.max(0, 100 - len));
   return { start_percent: next };
+}
+
+/**
+ * What dragging the ring between its two arcs writes: the same band, nearer
+ * the centre or further from it.
+ *
+ * How far out a sector sits is the one thing about it that has two numbers and
+ * one meaning - move either radius and the band changes width instead. So it
+ * has a ring of its own, the way every other round part of a gauge is set by
+ * the ring it stands on, and the width rides along untouched.
+ *
+ * It stops at the centre rather than folding through it: a band whose inner
+ * edge has passed the pivot is drawn inside out.
+ *
+ * @param {number} r the radius the middle of the band has reached, in viewBox units
+ * @param {any} sec @param {number} scale
+ */
+export function sectorReachPatch(r, sec, scale) {
+  const inner = num(sec?.inner_radius, SECTOR_DEFAULTS.inner_radius);
+  const outer = num(sec?.outer_radius, SECTOR_DEFAULTS.outer_radius);
+  const width = outer - inner;
+  const mid = clamp(r / (scale || 1), width / 2, SECTOR_R_MAX - width / 2);
+  return { inner_radius: tenth(mid - width / 2), outer_radius: tenth(mid + width / 2) };
 }
 
 /**
  * The path of one arc of a sector - the shape its frame is drawn as.
  *
- * Not a closed band: each arc is one of the two edges being offered, and a
- * filled shape over the sector would swallow every press meant for what is
- * drawn under it.
+ * Not a closed band: each arc is one of the edges being offered, and a filled
+ * shape over the sector would swallow every press on what is drawn under it.
  *
  * @param {number} cx @param {number} cy @param {number} r
  * @param {number} a0 @param {number} a1 both in degrees

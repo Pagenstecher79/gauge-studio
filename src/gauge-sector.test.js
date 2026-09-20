@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { sectorSweep, sectorAt, sectorRadii, percentFromDeg, nearestPercent,
-         sectorRadiusPatch, sectorAnglePatch, sectorSlidePatch, arcPath, bandPath,
+         sectorRadiusPatch, sectorAnglePatch, sectorSlidePatch, sectorReachPatch,
+         arcPath, bandPath, isRound,
          SECTOR_DEFAULTS, SECTOR_MIN_LENGTH } from './gauge-sector.js';
 
 const FULL = { start: -90, total: 360 };
@@ -150,9 +151,52 @@ describe('sectorSlidePatch', () => {
     expect(p.length_percent).toBeUndefined();
   });
 
+  it('stops at the end of a dial that is not a full circle', () => {
+    const semi = { start_percent: 70, length_percent: 20 };
+    // Out in the 90 degrees a semicircle has no scale on: the hand is past
+    // the far end, and the sector belongs at the far end - not carried on
+    // through the gap and out of the other one.
+    const p = sectorSlidePatch(45, semiAsDeg(70), 70, semi, SEMI);
+    expect(p).toEqual({ start_percent: 80 });
+  });
+
+  it('carries a sector across the top of a dial that does come full circle', () => {
+    const sec2 = { start_percent: 50, length_percent: 4 };
+    // Six per cent forward over the top of the dial, not ninety-four back.
+    expect(sectorSlidePatch(percentAsDeg(3), percentAsDeg(97), 50, sec2, FULL))
+      .toEqual({ start_percent: 56 });
+  });
+
   it('measures the travel the short way round the dial', () => {
     // Two degrees anticlockwise of nought is two degrees, not 358 of them.
     expect(sectorSlidePatch(-92, -90, 40, sec, FULL).start_percent).toBe(39.4);
+  });
+});
+
+describe('sectorReachPatch', () => {
+  const sec = { inner_radius: 12, outer_radius: 22 };
+
+  it('carries both radii, keeping the width between them', () => {
+    expect(sectorReachPatch(20, sec, 1)).toEqual({ inner_radius: 15, outer_radius: 25 });
+  });
+
+  it('reads the radius in the gauge\'s own units', () => {
+    expect(sectorReachPatch(10, sec, 0.5)).toEqual({ inner_radius: 15, outer_radius: 25 });
+  });
+
+  it('stops at the centre rather than folding the band through it', () => {
+    expect(sectorReachPatch(0, sec, 1)).toEqual({ inner_radius: 0, outer_radius: 10 });
+  });
+
+  it('stops where the fields themselves stop', () => {
+    expect(sectorReachPatch(400, sec, 1)).toEqual({ inner_radius: 40, outer_radius: 50 });
+  });
+});
+
+describe('isRound', () => {
+  it('knows which dial has nought and a hundred in one place', () => {
+    expect(isRound(FULL)).toBe(true);
+    expect(isRound(SEMI)).toBe(false);
   });
 });
 
@@ -198,4 +242,9 @@ describe('bandPath', () => {
 /** A per cent of the default full dial, as the angle the hand would be at. */
 function percentAsDeg(pct) {
   return FULL.start + pct / 100 * FULL.total;
+}
+
+/** The same on a semicircle, which has ninety degrees of nothing below it. */
+function semiAsDeg(pct) {
+  return SEMI.start + pct / 100 * SEMI.total;
 }

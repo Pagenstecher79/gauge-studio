@@ -625,7 +625,7 @@ button is permanent and stands at the top of the column, solid rather than
 dashed. It is `adds` on the kind, and the new part arrives in hand the way a
 part switched on does.
 
-**What a sector is dragged by** is four handles rather than one band: its two
+**What a sector is dragged by** is five handles rather than one band: its two
 arcs are the radii, its two ends are what stretch of the scale it covers, and
 the band between them moves it round without changing either. The arcs are
 drawn as arcs and not as circles - a full circle round a quarter-sector is a
@@ -634,6 +634,22 @@ the same `hitZones` two edges of a frame do, because a thin sector puts them a
 pixel apart. The band is filled, takes presses and paints nothing, and is drawn
 only for the sector in hand: a filled shape over a dial swallows every press
 meant for what is under it.
+
+**The fifth is the distance from the centre**, which is a radius like any
+other and so is a dashed ring - drawn at the middle of the band and right
+across the dial, because that is what the measure is about and the sector is
+only the piece of it that is painted. It is grabbed *outside* the sector's own
+span, where the ring runs over free ground: inside the span the band is what
+the hand has hold of, and a hit stroke there would take the sideways gesture
+away. Dragging it carries both radii together, so the band keeps its width and
+stops at the centre rather than folding through it (`sectorReachPatch`).
+
+**Travel round the dial is measured on the scale, not in degrees.** A
+semicircle has ninety degrees below it that no value lives on, and a sector
+dragged out into that dead space would otherwise count a third of the dial as
+travel and come up the other side. `percentFromDeg` answers with the nearer end
+out there, and the wrap from a hundred back to nought is allowed only where the
+dial really does come full circle (`isRound`).
 
 The arithmetic is `gauge-sector.js`, and it is the usual reason - a wrong
 number there moves a band on somebody's dashboard, and it is pure, so it is

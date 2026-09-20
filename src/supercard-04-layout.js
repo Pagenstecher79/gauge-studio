@@ -28,9 +28,10 @@ import { highlightInk } from "./highlight-ink.js";
 import { withoutElementConfig, TARGET_LISTS } from "./config-cleanup.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
 import { hitZones, radialDeg, radialCursor, captionSpot, sectorOf,
-         sectorDeg } from "./ring-grab.js";
+         sectorDeg, GRAB_REACH } from "./ring-grab.js";
 import { SECTOR_DEFAULTS, sectorSweep, sectorAt, sectorRadii, arcPath, bandPath,
-         sectorRadiusPatch, sectorAnglePatch, sectorSlidePatch } from "./gauge-sector.js";
+         sectorRadiusPatch, sectorAnglePatch, sectorSlidePatch,
+         sectorReachPatch } from "./gauge-sector.js";
 import { BEND_SIDES, BEND_ROOM, bendKey, bendAtKey, BEND_AT_MID,
          bendsOf, bendEscapes, isBent,
          bendClipPath, bendOutlineSvg, bentBox,
@@ -3278,6 +3279,11 @@ class ScCanvasEditor extends LitElement {
          round the dial, and a filled shape over a gauge would swallow every
          press meant for what is drawn under it. */
       .sector-layer { z-index: 6; }
+      /* The ring that carries the whole band in and out. It runs across the
+         whole dial, where the sector is only a piece of it, so it is drawn
+         fainter than the two edges - it is a track, not a border. */
+      .ring-band.reach { opacity: 0.32; stroke-dasharray: 0.5 1.9; }
+      .ring-band.reach.hot { opacity: 0.9; stroke-dasharray: none; }
       .sector-body { fill: transparent; stroke: none; pointer-events: fill;
         cursor: move; touch-action: none; }
       /* A ring is a distance from the centre, so its frame is a ring too and
@@ -5218,6 +5224,8 @@ class ScCanvasEditor extends LitElement {
         : d.end === 'inner' || d.end === 'outer'
         ? sectorRadiusPatch(d.end, Math.hypot(p.x - d.cx, p.y - d.cy) / d.pxPerUnit,
                             sec, d.scale)
+        : d.end === 'reach'
+        ? sectorReachPatch(Math.hypot(p.x - d.cx, p.y - d.cy) / d.pxPerUnit, sec, d.scale)
         : sectorAnglePatch(/** @type {'start'|'end'} */ (d.end), deg, sec, sectorSweep(cfg));
       this._writeInner(patch, d.started, spec);
       d.started = true;
@@ -6115,6 +6123,38 @@ class ScCanvasEditor extends LitElement {
                   <title>${'Drag the ' + b.short + ' in or out'}</title>
                 </path>`;
             })}
+            ${(() => {
+              // The distance from the centre is a radius like any other, so it
+              // is set by a dashed ring - drawn right across the dial at the
+              // band's middle. The hand takes hold of it only outside the
+              // sector's own span: inside it, the band is what is dragged, and
+              // a hit stroke there would take the sideways gesture away.
+              if (mid < 0.5) return '';
+              const key = part + ':reach';
+              const hot = this._ringHot === key;
+              const free = [[sweep.start, a0], [a1, sweep.start + sweep.total]]
+                .filter(([f, t]) => t - f > 3);
+              const cap = hot
+                ? captionSpot(cen.x, cen.y, mid,
+                              sectorDeg(this._ringHotSector, CAPTION_SECTORS), capGap)
+                : null;
+              return svg`
+                <path class="ring-band sel reach ${hot ? 'hot' : ''}"
+                      d=${arcPath(cen.x, cen.y, mid, sweep.start, sweep.start + sweep.total)}></path>
+                ${!cap ? '' : svg`
+                <text class="ring-caption" x=${cap.x} y=${cap.y} font-size=${capSize}
+                      text-anchor=${cap.anchor}>distance</text>`}
+                ${free.map(([f, t]) => svg`
+                <path class="ring-hit" d=${arcPath(cen.x, cen.y, mid, f, t)}
+                      stroke-width=${GRAB_REACH}
+                      @pointerenter=${(/** @type {any} */ e) => this._sectorOver(e, key)}
+                      @pointermove=${(/** @type {any} */ e) => this._sectorOver(e, key)}
+                      @pointerleave=${() => this._ringOut(key)}
+                      @pointerdown=${(/** @type {any} */ e) =>
+                        this._innerDown(e, part, 'sector', 'reach')}>
+                  <title>Drag the sector in or out, keeping its width</title>
+                </path>`)}`;
+            })()}
             ${[{ end: 'start', deg: a0 }, { end: 'end', deg: a1 }].map(({ end, deg }) => {
               const at = on(mid, deg);
               return svg`
