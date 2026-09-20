@@ -153,9 +153,16 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Canvas
 
-- **10** - Show an object's edit button only in live-preview mode - or better,
-  have the button switch to live preview for as long as the object editor is
-  open.
+- **10** - ~~Show an object's edit button only in live-preview mode - or
+  better, have the button switch to live preview for as long as the object
+  editor is open.~~ Done, the better way. The frames sit on the drawing, so
+  with plain boxes there is nothing for them to sit on and the button used to
+  be greyed out with a note asking for the switch to be thrown first - a
+  button explaining what to do instead of doing it. Opening an element now
+  brings the drawing with it and closing it takes it away again. Nothing is
+  committed: `_live` answers yes while the parts are in hand, the switch goes
+  on and out of reach for as long as that lasts and says why, and the card
+  keeps whatever it was set to.
 - **15** - ~~Reset the canvas zoom to its default when the card editor is
   opened again.~~ Done by taking the memory out. The zoom used to be kept for
   the life of the page, keyed by the canvas' shape, so that a glance at
@@ -170,9 +177,19 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   it keeps the element and puts the same instance back, so the zoom survives a
   tab switch by itself. A second opening of the dialog builds a new editor,
   and that is the one case the memory ever covered.
-- **16** - In the ordinary canvas view, show each object's lock button
+- **16** - ~~In the ordinary canvas view, show each object's lock button
   permanently and make it toggle. Keep the lock button under the canvas for
-  locking and unlocking whole groups.
+  locking and unlocking whole groups.~~ Done. The lock in the top right
+  corner of a box was a badge that appeared once the box was locked, so it
+  answered "is this locked" and nothing else - shutting one meant selecting
+  it and pressing the button under the canvas, a long way round for one box.
+  It is a button now, on every box, and it toggles that box alone without
+  touching or taking the selection. The one under the canvas stays, because
+  a group is what it is good at. An open lock is drawn quietly and a shut one
+  is not: sixteen bright locks over sixteen gauges are a row of buttons with a
+  drawing behind them, and the state worth reading across the canvas is the
+  shut one. The frames own the drawing while an element's parts are in hand,
+  so the locks step aside for as long as that lasts.
 - **21** - The main icon should only be dragged out square, and be configured
   on the canvas through its own edit button (picking the icon from HA's
   dropdown).

@@ -2167,8 +2167,17 @@ class ScCanvasEditor extends LitElement {
    * Whether the canvas draws the real gauges or plain boxes. Kept in the card
    * rather than in this element, because the switch now sits in another menu -
    * two elements cannot share a field, and they do share the card.
+   *
+   * On regardless while an element's own parts are in hand. Those frames sit
+   * on the drawing - a pointer's frame is where the pointer is drawn - so
+   * with plain boxes there is nothing for them to sit on, and the button
+   * that opens them used to be greyed out with a note asking for the switch
+   * to be thrown first. A button that explains what to do instead of doing
+   * it is a button doing half its job: opening an element now brings the
+   * drawing with it, and closing it takes it away again. Nothing is
+   * committed - the switch keeps saying what the card was set to.
    */
-  get _live() { return this.slot?.live_preview !== false; }
+  get _live() { return this._innerOn || this.slot?.live_preview !== false; }
 
   connectedCallback() {
     super.connectedCallback();
@@ -2486,18 +2495,27 @@ class ScCanvasEditor extends LitElement {
          press, and the badge, which answers from across the canvas. The border
          goes solid-grey so a locked surface stops reading as a dashed one. */
       .el.pinned { cursor: default; border-color: #9e9e9e; border-style: solid; }
-      /* Top right, and twice the size it was: whether a lock is open or shut
-         is the one thing about it worth reading from across the canvas, and at
-         9px the two glyphs were the same small smudge. The top left is the
-         ring steppers' corner now. A pseudo-element cannot hold an inline
-         SVG, so this one is the same drawing as a mask - which is also why it
-         takes a drop-shadow filter rather than a text-shadow. */
-      .el.pinned::before { content: ''; position: absolute; top: 6px; right: 6px;
-                           width: 18px; height: 18px; z-index: 6;
-                           background: #fff;
-                           filter: drop-shadow(0 1px 2px #000) drop-shadow(0 0 3px #000);
-                           -webkit-mask: var(--sc-lock-mask) center / contain no-repeat;
-                           mask: var(--sc-lock-mask) center / contain no-repeat; }
+      /* Top right, where the lock badge used to be drawn: it is a button now,
+         and it is on every box rather than only on the locked ones. A badge
+         that only appears once the lock is shut answers "is this locked" and
+         nothing else - the way to shut it was a selection and a second button
+         under the canvas, which is a long way round for one box. The one
+         under the canvas stays, because a group is the thing it is good at.
+
+         An open lock is quiet and a shut one is not: sixteen bright locks
+         over sixteen gauges would be a row of buttons with a drawing behind
+         it, and the state worth reading from across the canvas is the shut
+         one. Hover and focus bring the quiet ones up. */
+      .el-lock { position: absolute; top: 6px; right: 6px; z-index: 7;
+        width: 24px; height: 24px; padding: 0; font-size: 15px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; cursor: pointer; touch-action: none;
+        border: 1px solid transparent; background: none; color: #fff;
+        opacity: 0.32; filter: drop-shadow(0 1px 2px #000) drop-shadow(0 0 3px #000);
+        transition: opacity 0.12s; }
+      .el-lock:hover, .el-lock:focus-visible { opacity: 1; }
+      .el.sel > .el-lock { opacity: 0.6; }
+      .el.pinned > .el-lock { opacity: 1; }
       /* Which boxes answer a push, and so take that click away from the card
          underneath them. Bottom left, clear of the lock above it and of the
          resize handle opposite. The card's own badge sits on the canvas frame.
@@ -2580,11 +2598,11 @@ class ScCanvasEditor extends LitElement {
          frame; amber is the one part in hand, and it is warm rather than loud
          because it lies over artwork somebody is trying to look at. */
       :host { --sc-part: #8ce0ff; --sc-part-sel: #f2b544; --sc-part-sel-ink: #1b1200; }
-      /* The lock the pinned badge is masked with, here because a content
+      /* The drawing the push badge is masked with, here because a content
          property cannot hold an element and a mask has to come from
-         somewhere. */
-      :host { --sc-lock-mask: ${unsafeCSS(iconMask('lock'))};
-              --sc-push-mask: ${unsafeCSS(iconMask('pointer'))}; }
+         somewhere. The lock had one too until it became a button, which can
+         simply hold the icon. */
+      :host { --sc-push-mask: ${unsafeCSS(iconMask('pointer'))}; }
       /* The halo and the offset outline both paint *outside* the box, and a
          drag moves the box by rewriting left/top. WebKit then repaints
          only the border box and leaves the ring behind, so a label dragged
@@ -3483,6 +3501,26 @@ class ScCanvasEditor extends LitElement {
       // one saying so.
       if (lock) el.locked = true; else delete el.locked;
     }
+    this._commit(c);
+  }
+
+  /**
+   * Lock or unlock one element, from its own button on the box.
+   *
+   * Beside `_lockSelection` rather than through it: that one is about a
+   * selection and answers one press with one state for all of them, while
+   * this is about the box under the finger and must not touch what happens
+   * to be selected - nor select it, which would throw away a selection being
+   * built for something else.
+   *
+   * @param {string} id
+   */
+  _toggleLock(id) {
+    const c = structuredClone(this._canvas);
+    const el = c.elements.find(e => e.id === id);
+    if (!el) return;
+    // Not locked carries no key at all - see `_lockSelection`.
+    if (isPinned(el)) delete el.locked; else el.locked = true;
     this._commit(c);
   }
 
@@ -6494,9 +6532,15 @@ class ScCanvasEditor extends LitElement {
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
     const hlTip = 'The part in hand blinks on the drawing itself and is lent a colour that stands out against what it is drawn on - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
-    const liveTip = this._live
-      ? "The real gauges and bars. Text sizes are the card's, not this preview's."
-      : 'Plain boxes - easier to see and to grab.';
+    // The switch says what the card is set to; while an element is open the
+    // preview is on over the top of it, and the tip is what says so - a
+    // switch that reads "on" and cannot be thrown explains nothing on its own.
+    const liveHeld = this._innerOn && this.slot?.live_preview === false;
+    const liveTip = liveHeld
+      ? 'On for as long as this element\'s own parts are in hand - the frames sit on the drawing. Back to plain boxes when it is closed.'
+      : (this._live
+          ? "The real gauges and bars. Text sizes are the card's, not this preview's."
+          : 'Plain boxes - easier to see and to grab.');
 
     return html`
       <div class="canvas-settings">
@@ -6515,7 +6559,7 @@ class ScCanvasEditor extends LitElement {
         <span class="hint">%</span>
         <span class="gap"></span>
         <span class="settings-label">Live preview ${SC.tipDot(liveTip, { right: true })}</span>
-        <ha-switch .checked=${this._live}
+        <ha-switch .checked=${this._live} .disabled=${liveHeld}
                    @change=${e => this._send('live_preview', e.target.checked ? undefined : false)}></ha-switch>
         <span class="gap"></span>
         <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
@@ -6730,14 +6774,21 @@ class ScCanvasEditor extends LitElement {
                 ${live ?? el.id}
                 ${inner?.id === el.id ? html`
                   <button class="inner-open ${this._innerOn ? 'on' : ''}"
-                          title=${!this._live
-                            ? 'Switch the live preview on - the frames sit on the drawing'
-                            : (this._innerOn
-                                ? `Done with this ${inner.k.noun}'s own parts`
-                                : `Take this ${inner.k.noun}'s own parts in hand - ${inner.k.holds}`)}
-                          ?disabled=${!this._live}
+                          title=${this._innerOn
+                            ? `Done with this ${inner.k.noun}'s own parts`
+                            : `Take this ${inner.k.noun}'s own parts in hand - ${inner.k.holds}`
+                              + (this.slot?.live_preview === false
+                                  ? ', with the live preview on for as long as it is open'
+                                  : '')}
                           @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
                           @click=${() => this._toggleInner()}>${icon('pencil')}</button>` : ''}
+                ${this._innerOn ? '' : html`
+                <button class="el-lock"
+                        title=${pinned
+                          ? 'Locked - press to let it be dragged again'
+                          : 'Lock in place, so a stray drag cannot move it'}
+                        @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
+                        @click=${() => this._toggleLock(el.id)}>${icon(pinned ? 'lock' : 'lock-open')}</button>`}
                 ${this._innerOn && this._inner === el.id ? this._renderInner() : ''}
                 ${pinned || selected.length > 1 ? '' : html`
                 <div class="handle" @pointerdown=${e => this._onDown(e, idx, 'resize')}></div>`}
