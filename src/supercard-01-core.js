@@ -1554,10 +1554,12 @@ class SupercardModularEditor extends LitElement {
     if (!this.config || !this.hass) return html``;
     const slot = this.config.gauge_studio || {};
 
-    // The canvas is the card, so it comes first and everything that describes
-    // it follows underneath - its dimensions, then its entities, then what is
-    // painted on it.
-    const moduleOrder = ['layout', 'core', 'color', 'labels', 'gauge', 'progressbar', 'debug'];
+    // What the card *is* comes before what is drawn on it: its box and its
+    // entities, then the canvas, then the rest. The canvas was first for a
+    // while - it is the card, after all - but it is also the tallest thing in
+    // the dialog by far, and two settings menus below it are two menus nobody
+    // scrolls to.
+    const moduleOrder = ['core', 'layout', 'color', 'labels', 'gauge', 'progressbar', 'debug'];
     const availableModules = Object.keys(window.SupercardModules);
 
     availableModules.sort((a, b) => {
@@ -1778,7 +1780,7 @@ Object.assign(window.SupercardModules['core'], (() => {
           </details>
 
           <details class="inner-section" ?open=${this._expanded.basis} @toggle=${e => this._expanded = {...this._expanded, basis: e.target.open}}>
-            <summary>${icon('settings')} Basics & Entity(ies) & Aliases <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
+            <summary>${icon('settings')} Basics, Entity & Aliases <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span></summary>
             <div class="inner-content">
 
               <div class="col">

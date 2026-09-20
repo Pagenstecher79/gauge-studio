@@ -624,6 +624,33 @@ const ZOOM_STEPS = Object.freeze([0.5, 0.75, 1, 1.5, 2, 3, 4]);
 let zoomBack = true;
 
 /**
+ * Whether a finger on the canvas draws on it, or scrolls the page past it.
+ *
+ * Only a touchscreen has to choose. `touch-action` is read once, when the
+ * finger goes down, so the gesture belongs to one of the two before anything
+ * can look at it - there is no deciding halfway through, and no gesture that
+ * is both. Scrolling is the answer for the finger that is only passing the
+ * canvas on its way down the dialog, which is most of them; drawing is the
+ * answer while the canvas is actually being arranged, and it is what brings
+ * the selection frame and the pinch back. So it is a switch, and it is above
+ * the canvas as well as below it, because the finger that is stuck is on the
+ * canvas and either end of it is a thumb away.
+ *
+ * Module scope, like `zoomBack`: the bench, not the card, and it outlives
+ * the dialog so the choice is not made again on every open.
+ */
+let fingerDraws = false;
+
+/**
+ * Whether anything on this device can touch the screen at all. Read once -
+ * a display does not grow a touchscreen while a dialog is open - and only
+ * used to keep the switch out of a mouse's way, where `touch-action` decides
+ * nothing.
+ */
+const CAN_TOUCH = typeof window !== 'undefined'
+  && !!window.matchMedia?.('(any-pointer: coarse)').matches;
+
+/**
  * Where a chip has been put by hand, for as long as the page lives.
  *
  * A chip stands where its part is, which is the right place for it right up
@@ -2085,6 +2112,7 @@ class ScCanvasEditor extends LitElement {
       _zoom: { type: Number, state: true },
       _zoomBack: { type: Boolean, state: true },
       _space: { type: Boolean, state: true },
+      _finger: { type: Boolean, state: true },
       _inner: { type: String, state: true },
       _innerRects: { type: Object, state: true },
       _innerSel: { type: String, state: true },
@@ -2141,6 +2169,7 @@ class ScCanvasEditor extends LitElement {
     this._ghost = null;
     this._zoom = 1;
     this._zoomBack = zoomBack;
+    this._finger = fingerDraws;
     // The zoom the canvas was being arranged at before a gauge was opened,
     // and null whenever none is being held for it.
     this._zoomBefore = null;
@@ -2410,15 +2439,20 @@ class ScCanvasEditor extends LitElement {
          is actually dragged - an element, a part's frame, a grip, a chip -
          says none for itself, so taking hold of one of those still works. It
          costs the two gestures that are a bare finger on the canvas: a
-         selection frame, which is a mouse gesture now, and the pinch, whose
-         second finger the browser may take for a two-finger scroll - the zoom
-         buttons under the canvas are what a touchscreen has instead. */
+         selection frame, and the pinch, whose second finger the browser may
+         take for a two-finger scroll. Neither is gone - the switch above
+         the canvas and below it hands the finger back to the canvas, above it and below
+         it, for as long as one is being drawn on. */
       .canvas-pad { flex: 1; min-width: 0; padding: 24px 16px;
                     touch-action: pan-x pan-y;
                     display: flex; justify-content: center; }
       /* Space held, the whole canvas is a hand and the hand moves the window,
          so nothing here is the page's to scroll. */
       .canvas-pad.hand { touch-action: none; }
+      /* The switch the other way round: the finger is the canvas' again, so
+         the selection frame and the pinch are back and the page is scrolled
+         beside the canvas instead of across it. */
+      .canvas-pad.finger, .canvas-pad.finger .canvas { touch-action: none; }
       /* Space held: the whole canvas is a hand, and every cursor inside it -
          an element's grab, a handle's resize - has to give way to that, or
          the canvas would say one thing and its contents another. */
@@ -6519,6 +6553,23 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
+   * The one control that says who the finger on the canvas belongs to.
+   *
+   * Drawn twice, above the canvas and below it, and it is the same button
+   * both times - a switch you have to scroll to is no use to the scroll that
+   * is stuck. Nothing for a mouse, which `touch-action` does not touch.
+   */
+  _renderFinger() {
+    if (!CAN_TOUCH) return '';
+    return html`
+      <button class="toggle ${this._finger ? 'on' : ''}"
+              title=${this._finger
+                ? 'A finger on the canvas draws: a frame around several elements, and a pinch to zoom. Press to scroll the editor with it again - the canvas is then passed by rather than drawn on.'
+                : 'A finger on the canvas scrolls the editor past it. Press to draw on the canvas with it instead - a selection frame and a pinch to zoom, with the page scrolled beside the canvas.'}
+              @click=${() => { fingerDraws = this._finger = !this._finger; }}>${icon(this._finger ? 'pointer' : 'move-vertical')}</button>`;
+  }
+
+  /**
    * The objects on the canvas, front at the top.
    *
    * One list, because there used to be two. A stack list and a list of boxes
@@ -6954,6 +7005,7 @@ class ScCanvasEditor extends LitElement {
                     @click=${() => this._redo()}>${icon('redo-2')}</button>
           </div>
           <div class="names">
+            ${this._renderFinger()}
             <button class="toggle ${this._names ? 'on' : ''}"
                     title="Put each element's name on its box. Off, a box says its id - which is what the lists, the glass targets and the colour rules call it."
                     @click=${() => { this._names = !this._names; }}>Names</button>
@@ -6963,7 +7015,7 @@ class ScCanvasEditor extends LitElement {
         ${this._renderCanvasSettings()}
 
         <div class="canvas-wrap">
-          <div class="canvas-pad ${this._space ? 'hand' : ''}"
+          <div class="canvas-pad ${this._space ? 'hand' : ''} ${this._finger ? 'finger' : ''}"
                @pointermove=${this._onMove}
                @pointerup=${this._onUp}
                @pointercancel=${this._onUp}
@@ -7076,6 +7128,7 @@ class ScCanvasEditor extends LitElement {
                     ?disabled=${!selected.length}
                     @click=${() => this._removeSelection()}>${icon('trash-2')}</button>
           </div>
+          ${CAN_TOUCH ? html`<div class="group">${this._renderFinger()}</div>` : ''}
           <div class="group">
             <button title="Zoom out" ?disabled=${this._zoom <= ZOOM_MIN}
                     @click=${() => this._stepZoom(-1)}>${icon('zoom-out')}</button>
@@ -7113,8 +7166,8 @@ if (!customElements.get('sc-canvas-editor')) customElements.define('sc-canvas-ed
 
 /**
  * The card's box, the canvas' grid and the two view switches, rendered inside
- * the core editor's Card & Dimensions menu so that nothing but the canvas sits
- * above the canvas.
+ * the core editor's Card & Dimensions menu - where the rest of what the card
+ * is, rather than what is drawn on it, is set.
  *
  * It is the canvas editor itself, drawing one part of itself: every getter
  * these controls read - the section's width, the row count, the reshaping - is

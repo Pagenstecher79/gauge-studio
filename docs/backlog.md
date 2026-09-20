@@ -297,8 +297,12 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   a card size set in the Layout tab, which this editor never sees. Anything
   unreadable leaves the button live - the click explains itself, a grey
   button does not.
-- **18** - *Card & Dimensions* and *Basics & Entity(ies) & Aliases* belong
-  above the canvas after all.
+- **18** - ~~*Card & Dimensions* and *Basics & Entity(ies) & Aliases* belong
+  above the canvas after all.~~ Done. `moduleOrder` puts `core` back in front
+  of `layout`, so both menus are folded at the top of the dialog and the
+  canvas follows them; the second of them is now *Basics, Entity & Aliases*.
+  The canvas being the card is why it led - but it is also the tallest thing
+  in the dialog, and a settings menu below it is a menu nobody scrolls to.
 - **26** - "This one is on the canvas ..." should name the menu that is gone:
   "<name> settings are on the canvas ...". Where only part of a menu has
   moved: "Parts of the <name> settings are in the canvas options box, ...",
