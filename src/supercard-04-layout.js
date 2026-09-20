@@ -464,6 +464,16 @@ if (!customElements.get('sc-layout-renderer')) customElements.define('sc-layout-
 const SAME_SPOT_PX = 4;
 
 /**
+ * How far outside its own rect a part's frame can still be grabbed.
+ *
+ * The same 8px `.inner-frame::after` adds - a single digit's text rect is too
+ * small a thing to aim at - and the walk down a stack of parts has to test
+ * against what the pointer can actually hit, or a press would pick a part
+ * that the stack it is walking says is not there.
+ */
+const PART_GRAB_PX = 8;
+
+/**
  * The icon on an alignment button.
  *
  * Two bars and the line they are pulled to. Unicode has arrows and brackets
@@ -1834,30 +1844,39 @@ function hitNode(/** @type {any} */ node, /** @type {number} */ x, /** @type {nu
  * would otherwise be answered with through the pill; document order is the
  * order the renderer painted in, so the thing on top is the thing named.
  *
+ * All of them, in that order, rather than only the first: the one on top is
+ * the answer to a press, and the rest are the stack a second press at the
+ * same spot walks down - the same gesture the canvas has for the elements
+ * one level up.
+ *
  * @param {any} box the element's box on the canvas
  * @param {number} x
  * @param {number} y
  * @param {any} parts the parts this kind will answer with
- * @returns {string|null}
+ * @returns {string[]} topmost first, empty when the press landed on none
  */
-function drawnPartAt(box, x, y, parts) {
+function drawnPartsAt(box, x, y, parts) {
   const root = box?.querySelector('sc-gauge, sc-progressbar')?.shadowRoot;
-  if (!root) return null;
+  if (!root) return [];
   const scan = (/** @type {any} */ node) => {
     if (!node.children.length) return hitNode(node, x, y);
     let best = 0;
     for (const kid of node.children) best = Math.max(best, scan(kid));
     return best;
   };
-  let hit = null;
-  let sure = 0;
+  const hits = [];
   for (const node of root.querySelectorAll('[data-sc-part]')) {
     const part = /** @type {any} */ (node).dataset.scPart;
     if (!parts[part]) continue;
     const h = scan(node);
-    if (h && h >= sure) { sure = h; hit = part; }
+    if (h) hits.push({ part, h });
   }
-  return hit;
+  // Read backwards, then sorted by certainty - `sort` is stable, so the two
+  // rules stay in that order. A part marked on more than one node is named
+  // once, by the topmost of them.
+  hits.reverse();
+  hits.sort((a, b) => b.h - a.h);
+  return [...new Set(hits.map(h => h.part))];
 }
 
 /**
@@ -2120,6 +2139,8 @@ class ScCanvasEditor extends LitElement {
     this._revealOnUp = null;
     this._innerSel = null;
     this._innerAlso = [];
+    /** @type {{x: number, y: number, same: boolean, stack: string[]}|null} */
+    this._innerLastDown = null;
     this._hl = true;
     this._hlHold = 0;
     this._hlTimer = 0;
@@ -2278,6 +2299,7 @@ class ScCanvasEditor extends LitElement {
       this._inner = null;
       this._innerRects = null;
       this._innerSel = null;
+      this._innerLastDown = null;
     }
     // An element left any other way - a click beside the canvas, a different
     // element taken up - keeps the zoom where it is and only forgets where it
@@ -4063,6 +4085,7 @@ class ScCanvasEditor extends LitElement {
     this._inner = this._innerOn ? null : target.id;
     this._innerRects = null;
     this._innerSel = null;
+    this._innerLastDown = null;
     // The parts being framed are a couple of viewBox units across, and at the
     // zoom a whole canvas is arranged at they cannot be aimed at, let alone
     // dragged - so the gauge fills the window as it is opened, and the canvas
@@ -4154,6 +4177,8 @@ class ScCanvasEditor extends LitElement {
   _letGoOfPart() {
     if (this._innerSel) this._innerSel = null;
     if (this._innerAlso.length) this._innerAlso = [];
+    // Nothing in hand is not a step in a walk down a stack of parts.
+    this._innerLastDown = null;
   }
 
   /**
@@ -4202,6 +4227,63 @@ class ScCanvasEditor extends LitElement {
     this._innerAlso = this._innerAlso.includes(part)
       ? this._innerAlso.filter(p => p !== part)
       : [...this._innerAlso, part];
+    // As on the canvas: a press that changed what is held is not a step in a
+    // walk down a stack.
+    this._innerLastDown = null;
+  }
+
+  /**
+   * Which of an element's parts lie under a pointer position, topmost first.
+   *
+   * The canvas has `_stackAt` for its elements and this is the same thing one
+   * level down: geometry rather than the event's target, because a part the
+   * press cannot reach is exactly what it has to find. The rects are the
+   * measured ones the frames are drawn from, grown by the same slack the
+   * frames are grabbed with, and later in the list draws on top - so reversed
+   * is the order a click meets them.
+   */
+  _partStackAt(e) {
+    const target = this._innerTarget;
+    const box = this._innerBoxRect();
+    const rects = this._innerRects?.parts;
+    if (!target || !box || !rects) return [];
+    const drawn = new Set(target.drawn);
+    const hit = [];
+    for (const part of Object.keys(target.parts)) {
+      const r = drawn.has(part) ? rects[part] : null;
+      if (!r) continue;
+      const l = box.left + r.l / 100 * box.width - PART_GRAB_PX;
+      const t = box.top + r.t / 100 * box.height - PART_GRAB_PX;
+      const w = r.w / 100 * box.width + 2 * PART_GRAB_PX;
+      const h = r.h / 100 * box.height + 2 * PART_GRAB_PX;
+      if (e.clientX >= l && e.clientX <= l + w
+          && e.clientY >= t && e.clientY <= t + h) hit.push(part);
+    }
+    return hit.reverse();
+  }
+
+  /**
+   * One step down the stack of parts under the pointer.
+   *
+   * The walk the canvas does for its elements, done for the parts inside one:
+   * a label lying entirely under the value can be taken hold of no other way,
+   * and a person who has learned the gesture outside the element has no
+   * reason to expect it to stop working inside it.
+   *
+   * On release rather than on the press, and never after a drag, for the
+   * reasons `_onUp` gives for the canvas' own walk. Not while several parts
+   * are held either: the walk replaces what is in hand, which is the opposite
+   * of what holding several of them is for.
+   */
+  _walkParts(d) {
+    const last = this._innerLastDown;
+    if (!d || d.mode !== 'move' || d.started || !last?.same) return;
+    if (this._innerAlso.length || last.stack.length < 2) return;
+    const at = last.stack.indexOf(this._innerSel || '');
+    const next = last.stack[(Math.max(at, 0) + 1) % last.stack.length];
+    if (!next || next === this._innerSel) return;
+    this._innerSel = next;
+    this._revealPart(next);
   }
 
   /**
@@ -4224,6 +4306,10 @@ class ScCanvasEditor extends LitElement {
       this._toggleHeld(part);
       return;
     }
+    // A press on anything but a part's own frame ends whatever walk was
+    // going on - a chip, a ring and a corner grip each name what they act on,
+    // so there is nothing to walk down.
+    if (mode !== 'move') this._innerLastDown = null;
     // A chip is grabbed as itself. It used to pass the press on to its ring,
     // so dragging one resized the thing it named - a lever on a part rather
     // than the part, which the ring's own band already is and does better.
@@ -4264,6 +4350,18 @@ class ScCanvasEditor extends LitElement {
       this._ptr = { x: e.clientX, y: e.clientY };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
+    }
+    // Pressing the same spot again keeps the part that is already in hand
+    // there rather than jumping back to the top of the stack, so a part
+    // clicked down to can still be dragged. The step itself is taken on
+    // release, in `_walkParts`.
+    if (mode === 'move') {
+      const stack = this._partStackAt(e);
+      const prev = this._innerLastDown;
+      const same = !!prev && Math.abs(prev.x - e.clientX) <= SAME_SPOT_PX
+                          && Math.abs(prev.y - e.clientY) <= SAME_SPOT_PX;
+      this._innerLastDown = { x: e.clientX, y: e.clientY, same, stack };
+      if (same && this._innerSel && stack.includes(this._innerSel)) part = this._innerSel;
     }
     // Read before the selection moves: what is held is the answer to the press
     // that is arriving, and `_innerHeld` puts whatever is in hand at its head.
@@ -5831,13 +5929,28 @@ class ScCanvasEditor extends LitElement {
     const t = this._innerTarget;
     const box = t && this.shadowRoot?.querySelector(`.el[data-item-id="${t.id}"]`);
     if (!box) return false;
-    const part = drawnPartAt(box, e.clientX, e.clientY, { ...t.parts, ...t.rings });
-    if (!part) return false;
+    const stack = drawnPartsAt(box, e.clientX, e.clientY, { ...t.parts, ...t.rings });
+    if (!stack.length) return false;
+    // Pressing the same spot again walks one step down the stack, the way the
+    // canvas walks down its elements: a tick under a pill can be reached no
+    // other way. On the press rather than on the release, because taking a
+    // drawn part in hand starts no drag of its own - a text is dragged by the
+    // frame this press puts round it, and a ring by its own band.
+    const prev = this._innerLastDown;
+    // Not with a modifier down: that press adds a second part to what is
+    // held, and adding the one already in hand's neighbour is not what the
+    // hand asked for.
+    const mod = e.shiftKey || e.ctrlKey || e.metaKey;
+    const same = !mod && !!prev && Math.abs(prev.x - e.clientX) <= SAME_SPOT_PX
+                                && Math.abs(prev.y - e.clientY) <= SAME_SPOT_PX;
+    const at = stack.indexOf(this._innerSel || '');
+    const part = same && at >= 0 ? stack[(at + 1) % stack.length] : stack[0];
+    this._innerLastDown = { x: e.clientX, y: e.clientY, same, stack };
     e.preventDefault();
     e.stopPropagation();
     // The same modifier that picks a second element on the canvas adds a
     // second text to what is held.
-    if (t.parts[part] && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+    if (t.parts[part] && mod) {
       this._toggleHeld(part);
       return true;
     }
@@ -5929,6 +6042,10 @@ class ScCanvasEditor extends LitElement {
       if (d.mode === 'chip' && d.held && !d.started && this._innerSel === d.part) {
         this._innerSel = null;
       }
+      // Before the reveal, which is then left to the part the walk landed on:
+      // the press that walks is a press on the part already in hand, so it
+      // asked for no reveal of its own.
+      this._walkParts(d);
       // A press that turned into a drag has been answered by the drag, and
       // the part it was about may not even be the one in hand any more.
       const reveal = this._revealOnUp;

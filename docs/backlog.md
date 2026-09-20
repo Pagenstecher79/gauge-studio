@@ -202,9 +202,21 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   It is a kind in `INNER_KINDS` now, with one part and one chip, and the chip
   holds HA's own `ha-icon-picker`; `icon_override` is what it writes and what
   the core reads before falling back to the entity's icon.
-- **22** - Inside an object editor, clicking to select should behave as it
+- **22** - ~~Inside an object editor, clicking to select should behave as it
   does on the main canvas: clicking the same spot cycles through elements
-  that lie over one another.
+  that lie over one another.~~ Done, in both places a part is taken hold of.
+  A press on the drawing answered with the topmost thing under it and nothing
+  else, so a tick lying under the pill and a ring under the pointer could be
+  reached only by hunting along the row of chips - `drawnPartsAt` hands back
+  the whole stack in that same order now, and a second press at the same spot
+  takes the next one. A press on a text's frame walks the frames the same way,
+  measured off the rects the frames are drawn from and grown by the slack they
+  are grabbed with, so the walk finds exactly what the press can hit. The
+  rules are the canvas' own: a press that moved was a drag and picks nothing
+  new, a press with a modifier is adding to what is held rather than walking,
+  bare ground starts over, and the spot that is already in hand stays in hand
+  for as long as the finger is down - so a part clicked down to can still be
+  dragged.
 - **24** - ~~Make the chip menus resizable, with a grip in one of the lower
   corners, bounded so they can be neither too large nor too small.~~ Done. A
   grip in the bottom right corner scales the whole menu between three
