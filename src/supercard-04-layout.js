@@ -474,6 +474,18 @@ const SAME_SPOT_PX = 4;
 const PART_GRAB_PX = 8;
 
 /**
+ * How thick a sizing band is drawn, in screen pixels.
+ *
+ * In pixels rather than in the gauge's own units so that it is the same line
+ * whatever the gauge's size - the needle's handles and the crosshair are
+ * already measured that way. A pixel: half a pixel was tried and is too
+ * little to see, and this is still thinner than the band was on a gauge of
+ * any size, which is the point - it lies across the very ticks and numbers it
+ * is there to place.
+ */
+const BAND_PX = 1;
+
+/**
  * The icon on an alignment button.
  *
  * Two bars and the line they are pulled to. Unicode has arrows and brackets
@@ -612,6 +624,33 @@ const ZOOM_STEPS = Object.freeze([0.5, 0.75, 1, 1.5, 2, 3, 4]);
 let zoomBack = true;
 
 /**
+ * Whether a finger on the canvas draws on it, or scrolls the page past it.
+ *
+ * Only a touchscreen has to choose. `touch-action` is read once, when the
+ * finger goes down, so the gesture belongs to one of the two before anything
+ * can look at it - there is no deciding halfway through, and no gesture that
+ * is both. Scrolling is the answer for the finger that is only passing the
+ * canvas on its way down the dialog, which is most of them; drawing is the
+ * answer while the canvas is actually being arranged, and it is what brings
+ * the selection frame and the pinch back. So it is a switch, and it is above
+ * the canvas as well as below it, because the finger that is stuck is on the
+ * canvas and either end of it is a thumb away.
+ *
+ * Module scope, like `zoomBack`: the bench, not the card, and it outlives
+ * the dialog so the choice is not made again on every open.
+ */
+let fingerDraws = false;
+
+/**
+ * Whether anything on this device can touch the screen at all. Read once -
+ * a display does not grow a touchscreen while a dialog is open - and only
+ * used to keep the switch out of a mouse's way, where `touch-action` decides
+ * nothing.
+ */
+const CAN_TOUCH = typeof window !== 'undefined'
+  && !!window.matchMedia?.('(any-pointer: coarse)').matches;
+
+/**
  * Where a chip has been put by hand, for as long as the page lives.
  *
  * A chip stands where its part is, which is the right place for it right up
@@ -714,7 +753,8 @@ const INNER_RATIO = 1;
  *
  * A card that already says 600 is left alone: it draws what it always drew.
  */
-const textWeights = (/** @type {string} */ key, /** @type {string} */ dflt) => ({
+const textWeights = (/** @type {string} */ key,
+                     /** @type {string|((cfg: any) => string)} */ dflt) => ({
   key, dflt, order: ['400', '500', '700'],
   of: { '400': { glyph: 'A', label: 'to normal', weight: 400 },
         '500': { glyph: 'A', label: 'to medium', weight: 500 },
@@ -1438,6 +1478,12 @@ const BAR_PARTS = Object.freeze({
     label: 'Label', section: '_section_label', spot: { l: 25, t: 28 },
     on: (/** @type {any} */ cfg) => !!cfg.show_label,
     turnOn: { show_label: true }, turnOff: { show_label: false },
+    // `label_bold` is the weight this label had before it had three of them.
+    // A card that still carries it has never been edited since, so it decides
+    // what the button starts on - otherwise a bold label would show under a
+    // button reading normal, and the first press would make it lighter.
+    weight: textWeights('label_font_weight',
+                        (/** @type {any} */ cfg) => cfg.label_bold ? '700' : '400'),
     steps: [
       { key: 'label_font_size', icon: icon('a-large-small'), by: 1, min: 4, max: 60, dflt: 12,
         what: 'label type' },
@@ -1587,6 +1633,7 @@ const BAR_PARTS = Object.freeze({
     turnOn: { show_tick_labels: true, show_ticks: true },
     turnOff: { show_tick_labels: false },
     seed: { tick_count: 11, tick_labels_size: '10' },
+    weight: textWeights('tick_labels_weight', '400'),
     steps: [
       { key: 'tick_label_step', icon: icon('hash'), by: 1, min: 1, max: 20, dflt: 1,
         what: 'every Xth tick numbered' },
@@ -2065,6 +2112,7 @@ class ScCanvasEditor extends LitElement {
       _zoom: { type: Number, state: true },
       _zoomBack: { type: Boolean, state: true },
       _space: { type: Boolean, state: true },
+      _finger: { type: Boolean, state: true },
       _inner: { type: String, state: true },
       _innerRects: { type: Object, state: true },
       _innerSel: { type: String, state: true },
@@ -2121,6 +2169,7 @@ class ScCanvasEditor extends LitElement {
     this._ghost = null;
     this._zoom = 1;
     this._zoomBack = zoomBack;
+    this._finger = fingerDraws;
     // The zoom the canvas was being arranged at before a gauge was opened,
     // and null whenever none is being held for it.
     this._zoomBefore = null;
@@ -2382,8 +2431,28 @@ class ScCanvasEditor extends LitElement {
          wholly inside a frame - the press that draws it would already have to
          be past the edge. The strip is also where a drag that overshoots the
          canvas keeps being tracked. */
-      .canvas-pad { flex: 1; min-width: 0; padding: 24px 16px; touch-action: none;
+      /* A finger here is the page's until it is on something draggable.
+         With touch-action none - which this was, over the full width of the
+         editor - a touchscreen could not scroll past the canvas at all: the
+         only way down the dialog was the sliver outside the strip, and even
+         that was a guess. The pan is handed back instead, and everything that
+         is actually dragged - an element, a part's frame, a grip, a chip -
+         says none for itself, so taking hold of one of those still works. It
+         costs the two gestures that are a bare finger on the canvas: a
+         selection frame, and the pinch, whose second finger the browser may
+         take for a two-finger scroll. Neither is gone - the switch above
+         the canvas and below it hands the finger back to the canvas, above it and below
+         it, for as long as one is being drawn on. */
+      .canvas-pad { flex: 1; min-width: 0; padding: 24px 16px;
+                    touch-action: pan-x pan-y;
                     display: flex; justify-content: center; }
+      /* Space held, the whole canvas is a hand and the hand moves the window,
+         so nothing here is the page's to scroll. */
+      .canvas-pad.hand { touch-action: none; }
+      /* The switch the other way round: the finger is the canvas' again, so
+         the selection frame and the pinch are back and the page is scrolled
+         beside the canvas instead of across it. */
+      .canvas-pad.finger, .canvas-pad.finger .canvas { touch-action: none; }
       /* Space held: the whole canvas is a hand, and every cursor inside it -
          an element's grab, a handle's resize - has to give way to that, or
          the canvas would say one thing and its contents another. */
@@ -2517,7 +2586,7 @@ class ScCanvasEditor extends LitElement {
       .canvas { position: relative; width: 100%; box-sizing: border-box;
         background: var(--ha-card-background, var(--card-background-color, #1a1a1a));
         border: 1px solid var(--divider-color, #555); border-radius: 4px; overflow: hidden;
-        touch-action: none; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        touch-action: pan-x pan-y; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
       /* Mixed from the ink rather than fixed to white: the grid has to read
          as a faint ruling on whatever the surface turned out to be. */
       .grid { position: absolute; inset: 0; pointer-events: none;
@@ -2528,7 +2597,10 @@ class ScCanvasEditor extends LitElement {
          against the editor's own 2-to-5. Kept inside the box it is drawn in,
          a preview cannot climb over the selection, the placing overlay or the
          add menu. */
-      .el { position: absolute; isolation: isolate; box-sizing: border-box; cursor: grab; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; border-radius: 2px; background: rgba(3,169,244,0.3); border: 1px solid var(--primary-color); overflow: hidden; }
+      /* The box is draggable, so the finger on it is ours - the canvas around
+         it has handed the up-and-down back to the page. */
+      .el { touch-action: none;
+            position: absolute; isolation: isolate; box-sizing: border-box; cursor: grab; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; border-radius: 2px; background: rgba(3,169,244,0.3); border: 1px solid var(--primary-color); overflow: hidden; }
       .el.surface { background: rgba(255,193,7,0.18); border-style: dashed; border-color: #ffc107; }
       /* The chips and the panel of numbers are drawn inside the element they
          belong to, and an element clips its own paint - so a chip stepped
@@ -2753,7 +2825,7 @@ class ScCanvasEditor extends LitElement {
          it was the ring in hand, back when every ring had one and the width
          was what told them apart. Only the ring in hand is drawn now, so
          there is nothing left to tell apart and the colour is enough. */
-      .ring-band { fill: none; stroke: var(--sc-part); stroke-width: 0.35;
+      .ring-band { fill: none; stroke: var(--sc-part); stroke-width: var(--sc-band-w, 0.35);
         stroke-dasharray: 1.2 1.2; opacity: 0.5;
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
       .ring-band.sel { stroke: var(--sc-part-sel); }
@@ -3025,7 +3097,11 @@ class ScCanvasEditor extends LitElement {
       .el-config { border: 1px solid var(--divider-color,#444); border-radius: 6px; background: rgba(0,0,0,0.15); }
       .el-config > summary { padding: 7px 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--primary-color,#03a9f4); list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
       .el-config > summary::-webkit-details-marker { display: none; }
-      .el-config > summary::before { content: '▶'; font-size: 9px; transition: transform 0.15s; }
+      /* A pseudo-element holds no element, so the one icon in the editor that
+         cannot be an \`<svg>\` is this marker - it is the same drawing as a mask. */
+      .el-config > summary::before { content: ''; width: 11px; height: 11px; flex: none;
+        background: currentColor; mask: ${unsafeCSS(iconMask('chevron-right'))} center/contain no-repeat;
+        transition: transform 0.15s; }
       .el-config[open] > summary::before { transform: rotate(90deg); }
       .el-config-body { padding: 0 6px 6px; }
       /* The editor stacks against itself, not against the card SC_LAYERS
@@ -5171,10 +5247,17 @@ class ScCanvasEditor extends LitElement {
         ({ x: c.x + r * Math.cos(a2), y: c.y + r * Math.sin(a2) });
       return { tip: on(ends.tip), tail: on(ends.tail) };
     };
+    // One SVG user unit in screen pixels. A band drawn in user units is a
+    // different line on every gauge - a hair on a small one and a rope on a
+    // big one - so its width is worked back out of the pixels it should come
+    // to, the way the needle's handles and the crosshair already are.
+    const unit = (this._innerRects?.px?.width || 0) * svgBox.w / 100 / GAUGE_VIEW;
+    const bandW = unit > 0 ? BAND_PX / unit : 0.35;
     return html`
       ${!bands.length ? '' : html`
       <svg class="ring-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
-           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;">
+           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;
+                  --sc-band-w:${bandW};">
         ${bands.map(([part, spec]) => svg`${ringBands(spec, cfg, ring, scale).map((b) => {
           const c = cen;
           if (b.r < 0.5) return '';
@@ -5197,11 +5280,11 @@ class ScCanvasEditor extends LitElement {
       // label box's grip is ten pixels wherever it is, and a handle that is
       // dragged the same way should be the same thing to reach for - so the
       // radius is worked back out of the pixels it has to come to.
-      const unit = (this._innerRects?.px?.width || 0) * svgBox.w / 100 / GAUGE_VIEW;
       const gripR = unit > 0 ? 5 / unit : 1.1;
       return html`
       <svg class="ring-layer grip-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
-           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;">
+           style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;
+                  --sc-band-w:${bandW};">
         ${needles.map(([part, spec]) => {
           const sel = this._innerSel === part;
           const n = needleAt(spec);
@@ -5300,6 +5383,7 @@ class ScCanvasEditor extends LitElement {
             @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'chip')}>
         ${spec.label}
         ${spec.shapes && sel ? this._renderSwap(spec.label, spec.shapes, 'Make') : ''}
+        ${spec.weight && sel ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
         ${spec.turnOff ? html`
           <button class="ring-drop"
                   title=${`Take the ${spec.label.toLowerCase()} off this ${target.k.noun}`}
@@ -5860,7 +5944,10 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     if (!target) return '';
     const held = String(target.cfg[sw.key] ?? '');
-    const now = sw.order.includes(held) ? held : sw.dflt;
+    // A default may be a question about the entry, because what a part is
+    // drawn at now can be an older setting nobody has replaced yet.
+    const dflt = typeof sw.dflt === 'function' ? sw.dflt(target.cfg) : sw.dflt;
+    const now = sw.order.includes(held) ? held : dflt;
     const next = sw.order[(sw.order.indexOf(now) + 1) % sw.order.length];
     return html`
       <button class="ring-shape"
@@ -6466,6 +6553,23 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
+   * The one control that says who the finger on the canvas belongs to.
+   *
+   * Drawn twice, above the canvas and below it, and it is the same button
+   * both times - a switch you have to scroll to is no use to the scroll that
+   * is stuck. Nothing for a mouse, which `touch-action` does not touch.
+   */
+  _renderFinger() {
+    if (!CAN_TOUCH) return '';
+    return html`
+      <button class="toggle ${this._finger ? 'on' : ''}"
+              title=${this._finger
+                ? 'A finger on the canvas draws: a frame around several elements, and a pinch to zoom. Press to scroll the editor with it again - the canvas is then passed by rather than drawn on.'
+                : 'A finger on the canvas scrolls the editor past it. Press to draw on the canvas with it instead - a selection frame and a pinch to zoom, with the page scrolled beside the canvas.'}
+              @click=${() => { fingerDraws = this._finger = !this._finger; }}>${icon(this._finger ? 'pointer' : 'move-vertical')}</button>`;
+  }
+
+  /**
    * The objects on the canvas, front at the top.
    *
    * One list, because there used to be two. A stack list and a list of boxes
@@ -6479,6 +6583,11 @@ class ScCanvasEditor extends LitElement {
    * the object as a box: where it sits in the stack, whether it is locked,
    * whether it shares its place with another - and, for the one object that
    * is selected alone, its numbers. Not folded away: it is the only list now.
+   *
+   * Two buttons, not four. One step forward and one step back were the grip
+   * before there was a grip, and dragging a row one place is what the grip is
+   * best at; the two ends are what it is worst at, because a stack of six in a
+   * dialog that scrolls is a drag across half the list where a click will do.
    *
    * @param {any[]} els the canvas elements, in array order
    * @param {string[]} selected the ids currently in hand
@@ -6520,10 +6629,6 @@ class ScCanvasEditor extends LitElement {
                   title="Locked - unlock it with the lock under the canvas">${icon('lock')}</span>` : ''}
                 <button title="All the way to the front" ?disabled=${idx === last}
                         @click=${() => this._reorder(idx, 'front')}>${icon('chevrons-up')}</button>
-                <button title="One step forward" ?disabled=${idx === last}
-                        @click=${() => this._reorder(idx, idx + 1)}>${icon('chevron-up')}</button>
-                <button title="One step back" ?disabled=${idx === 0}
-                        @click=${() => this._reorder(idx, idx - 1)}>${icon('chevron-down')}</button>
                 <button title="All the way to the back" ?disabled=${idx === 0}
                         @click=${() => this._reorder(idx, 'back')}>${icon('chevrons-down')}</button>
                 ${alone ? html`
@@ -6900,6 +7005,7 @@ class ScCanvasEditor extends LitElement {
                     @click=${() => this._redo()}>${icon('redo-2')}</button>
           </div>
           <div class="names">
+            ${this._renderFinger()}
             <button class="toggle ${this._names ? 'on' : ''}"
                     title="Put each element's name on its box. Off, a box says its id - which is what the lists, the glass targets and the colour rules call it."
                     @click=${() => { this._names = !this._names; }}>Names</button>
@@ -6909,7 +7015,7 @@ class ScCanvasEditor extends LitElement {
         ${this._renderCanvasSettings()}
 
         <div class="canvas-wrap">
-          <div class="canvas-pad ${this._space ? 'hand' : ''}"
+          <div class="canvas-pad ${this._space ? 'hand' : ''} ${this._finger ? 'finger' : ''}"
                @pointermove=${this._onMove}
                @pointerup=${this._onUp}
                @pointercancel=${this._onUp}
@@ -7022,6 +7128,7 @@ class ScCanvasEditor extends LitElement {
                     ?disabled=${!selected.length}
                     @click=${() => this._removeSelection()}>${icon('trash-2')}</button>
           </div>
+          ${CAN_TOUCH ? html`<div class="group">${this._renderFinger()}</div>` : ''}
           <div class="group">
             <button title="Zoom out" ?disabled=${this._zoom <= ZOOM_MIN}
                     @click=${() => this._stepZoom(-1)}>${icon('zoom-out')}</button>
@@ -7059,8 +7166,8 @@ if (!customElements.get('sc-canvas-editor')) customElements.define('sc-canvas-ed
 
 /**
  * The card's box, the canvas' grid and the two view switches, rendered inside
- * the core editor's Card & Dimensions menu so that nothing but the canvas sits
- * above the canvas.
+ * the core editor's Card & Dimensions menu - where the rest of what the card
+ * is, rather than what is drawn on it, is set.
  *
  * It is the canvas editor itself, drawing one part of itself: every getter
  * these controls read - the section's width, the row count, the reshaping - is

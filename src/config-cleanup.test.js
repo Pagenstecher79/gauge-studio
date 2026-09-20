@@ -256,3 +256,46 @@ describe('withoutElementConfig', () => {
     expect(out.interactions).toEqual([]);
   });
 });
+
+describe("stripDeadConfig: the bar text weights", () => {
+  it('turns a bold checkbox into the weight it drew', () => {
+    const out = stripDeadConfig({ progressbars: [{ entity: 'sensor.a', label_bold: true }] });
+    expect(out.progressbars[0]).toEqual({ entity: 'sensor.a', label_font_weight: '700' });
+  });
+
+  it('turns an unticked one into normal, so the label is not left weightless', () => {
+    const out = stripDeadConfig({ progressbars: [{ label_bold: false }] });
+    expect(out.progressbars[0]).toEqual({ label_font_weight: '400' });
+  });
+
+  it('leaves a weight that is already there and drops the checkbox', () => {
+    const out = stripDeadConfig({ progressbars: [{ label_bold: true, label_font_weight: '500' }] });
+    expect(out.progressbars[0]).toEqual({ label_font_weight: '500' });
+  });
+
+  it('says nothing changed where no bar carries one', () => {
+    expect(stripDeadConfig({ progressbars: [{ label_font_weight: '400' }] })).toBe(null);
+    expect(stripDeadConfig({ progressbars: [null, 5, 'x'] })).toBe(null);
+  });
+
+  it('rewrites the bars the dead-key pass already rebuilt', () => {
+    const out = stripDeadConfig({ progressbars: [{ label_bold: true, offset_x: 3 }] });
+    expect(out.progressbars[0]).toEqual({ label_font_weight: '700' });
+  });
+
+  it('leaves the other lists alone', () => {
+    const out = stripDeadConfig({ gauges: [{ label_bold: true }], progressbars: [{ label_bold: true }] });
+    expect(out.gauges[0]).toEqual({ label_bold: true });
+  });
+
+  it('does the value the same way, and both in one pass', () => {
+    const out = stripDeadConfig({ progressbars: [{ label_bold: false, value_bold: true }] });
+    expect(out.progressbars[0])
+      .toEqual({ label_font_weight: '400', value_font_weight: '700' });
+  });
+
+  it('leaves a value weight that is already there', () => {
+    const out = stripDeadConfig({ progressbars: [{ value_bold: true, value_font_weight: '500' }] });
+    expect(out.progressbars[0]).toEqual({ value_font_weight: '500' });
+  });
+});

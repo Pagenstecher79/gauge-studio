@@ -214,6 +214,42 @@ A drag that commits forty times must still be one press of undo. Here that is a
 every commit after it inside the same gesture does not. Decide this at the same
 time as the gesture, not afterwards.
 
+## 8a. A finger is the page's until it is on something
+
+`touch-action` decides who owns a gesture before a single event is fired, and
+on a touchscreen it decides whether the editor can be scrolled at all. The
+canvas and the strip around it - the full width of the editor - once said
+`touch-action: none`, for the selection frame and the pinch. The cost was
+the whole dialog: a finger anywhere near the canvas was swallowed, and the
+only way down the page was the sliver outside the strip.
+
+The rule now is that the canvas hands the pan back (`pan-x pan-y`) and
+everything that is actually dragged says `none` for itself - the element box,
+a part's frame, the grips, the chips. So a finger drawn across the canvas
+scrolls the editor, and a finger that lands on a box moves the box.
+
+What that costs is a selection frame by finger and the pinch, whose second
+finger the browser may take for a two-finger scroll. Neither is gone, because
+the two uses do not have to share a gesture - they share a switch instead.
+`fingerDraws` gives the canvas its finger back (`touch-action: none` on the
+pad and the canvas, the `.finger` class), and the page is then scrolled
+beside the canvas rather than across it. It is drawn twice, in the tool row
+above the canvas and in the tools below it, since a switch you have to scroll
+to is no use to the scroll that is stuck, and it is drawn only on a device
+with a coarse pointer, where `touch-action` decides anything at all. Like the
+zoom it is the bench and not the card: module scope, never written to a
+config.
+
+This cannot be checked in a desktop browser with emulated touch: emulation
+still sends mouse events, and a synthetic `TouchEvent` does not scroll
+anything. It is checked on the iOS simulator, against a page that puts the
+editor in a box that scrolls, and the test is the number: swipe over the empty
+canvas and read `scrollTop` before and after, then drag a box and read its x/y.
+With the old rule the first number does not move; with this one it does, and
+the second still does when the finger starts on the box. The switch is the
+same test once more with it pressed: `scrollTop` must then stand still, and a
+frame must be drawn.
+
 ## 9. What a control on the canvas may be
 
 Not everything fits on a chip. What worked:

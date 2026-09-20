@@ -51,8 +51,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Gauge
 
-- **3** - Halve the thickness of the dashed sizing lines on the round
-  elements.
+- **3** - ~~Halve the thickness of the dashed sizing lines on the round
+  elements.~~ Done, and measured in pixels rather than in the gauge's own
+  units. A band drawn in user units was a different line on every gauge - a
+  hair on a small one and a rope on a big one, and thicker again at every step
+  of the canvas zoom, which is wrong for a measure: the part frames and the
+  grip crosshair are 1px whatever is under them. A band is now `BAND_PX`, one
+  pixel, which is thinner than it came to on a gauge of any size and the same
+  weight as the frames it is read beside. Half a pixel was tried first and is
+  too little to see.
 - **7** - Sectors created and shaped on the canvas: a permanent `+ sector`
   button in the top right corner, then a chip per sector holding the options
   that cannot be set by hand (gradient, opacity). Inner and outer radius by
@@ -115,8 +122,19 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   only by the edit button that brought it and by the reset button; and the
   indicator line carries its own name beside the pill's, so a row that holds
   the line's colour or thickness pulses the line alone.
-- **19** - The bar label has no weight in its chip menu; neither do the bar's
-  tick labels.
+- **19** - ~~The bar label has no weight in its chip menu; neither do the bar's
+  tick labels.~~ Done. Both now carry the gauge's three-step weight button on
+  their chip - `weight` was only ever drawn on a part's frame, and a bar's
+  parts have chips rather than frames, so it is drawn on the chip too. The
+  label's weight was `label_bold`, a checkbox with two of the three; it is
+  `label_font_weight` now, the renderer still reads the checkbox where nothing
+  has replaced it, and `stripDeadConfig` rewrites it on the next edit so the
+  two never sit in one config. The tick labels had no weight at all, and the
+  one they are given is written only once somebody sets it - a label with none
+  keeps inheriting the card's, which is what every bar drawn so far is doing.
+  The value's `value_bold` went the same way in the same change, so the three
+  texts of a bar are set the same way as a gauge's - it has no chip, being no
+  part of the canvas, so its three weights are in the form alone.
 - **20** - The bar label cannot be dragged out and placed by hand.
 - **35** - Check the pill's automatic alignment, and make sure the pill never
   wraps to two lines - shrinking the font where it must.
@@ -279,8 +297,12 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   a card size set in the Layout tab, which this editor never sees. Anything
   unreadable leaves the button live - the click explains itself, a grey
   button does not.
-- **18** - *Card & Dimensions* and *Basics & Entity(ies) & Aliases* belong
-  above the canvas after all.
+- **18** - ~~*Card & Dimensions* and *Basics & Entity(ies) & Aliases* belong
+  above the canvas after all.~~ Done. `moduleOrder` puts `core` back in front
+  of `layout`, so both menus are folded at the top of the dialog and the
+  canvas follows them; the second of them is now *Basics, Entity & Aliases*.
+  The canvas being the card is why it led - but it is also the tallest thing
+  in the dialog, and a settings menu below it is a menu nobody scrolls to.
 - **26** - "This one is on the canvas ..." should name the menu that is gone:
   "<name> settings are on the canvas ...". Where only part of a menu has
   moved: "Parts of the <name> settings are in the canvas options box, ...",
@@ -302,8 +324,19 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **38** - ~~A new card on a sections dashboard is one row high. It should try
   to come up roughly square.~~ Done: a new card starts as near a square as
   whole rows allow, at any width (`defaultShapeRows`).
-- **41** - The `+ add` button of *Global entities (alias)* should look like the
-  canvas's `+ add object` button.
+- **41** - ~~The `+ add` button of *Global entities (alias)* should look like
+  the canvas's `+ add object` button.~~ Done, and the rest of that editor with
+  it. The button was a blue `<div>` with its look written into it; it is the
+  `.add-btn` every other list uses, with the set's own `plus` beside the word -
+  which needed the rule adding to `formStyles`, because the two stylesheets are
+  different visual languages but an add button is not one of the things that
+  differs. The alias rows carried Material icons from Home Assistant's set - a
+  grip, a bin, a clear cross - and so did the colour editor's centre button and
+  the five action kinds in the interaction editor; all of them are the card's
+  own icons now. The one that could not be, the fold marker under the canvas,
+  was a `▶` character: a `::before` holds no element, so it is the same
+  chevron as a mask. `mdi:` is left in exactly one place, the icon a user picks
+  for the card, which is Home Assistant's to draw.
 - **43** - ~~After a card size change in the layout tab, the frames of a gauge
   and a circular bar are no longer square on the way back to the canvas - the
   circular bar is even re-rendered oval.~~ Done, same two causes as 36: the

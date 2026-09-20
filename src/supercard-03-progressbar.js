@@ -855,6 +855,11 @@ class ScProgressbar extends LitElement {
         if (this._get('show_tick_labels', false)) {
           const tlDec = parseInt(this._get('tick_labels_decimals', 0)); 
           const tlSizeStr = parseDim(this._get('tick_labels_size', 10), `10${u}`, u); 
+          // Written only where somebody has set one: a label with no weight
+          // of its own inherits the card's, which is what every bar drawn
+          // before this setting existed is still doing.
+          const tlWeight = this._get('tick_labels_weight', '');
+          const tlWeightCss = tlWeight ? `font-weight:${tlWeight}; ` : '';
           const gap = parseDim(this._get('tick_labels_tick_gap', 4), `4${u}`, u); 
           const shift = parseDim(this._get('tick_labels_shift', 0), `0${u}`, u); 
           const centerGapOffset = parseDim(this._get('tick_labels_center_gap_offset', 0), `0${u}`, u);
@@ -898,7 +903,7 @@ class ScProgressbar extends LitElement {
             if (isFirst && hideFirstTl) continue;
             if (isLast && hideLastTl) continue;
 
-            let styleBase = `position:absolute; font-size:${tlSizeStr}; white-space:nowrap; pointer-events:none; `;
+            let styleBase = `position:absolute; font-size:${tlSizeStr}; ${tlWeightCss}white-space:nowrap; pointer-events:none; `;
             
             if (isHoriz) { 
               styleBase += `top: calc(50% + ${shift}); `; 
@@ -944,7 +949,11 @@ class ScProgressbar extends LitElement {
 
     if (this._get('show_label', false)) {
       const lSizeStr = parseDim(this._get('label_font_size', 12), `12${u}`, u); 
-      const lWeight = this._get('label_bold', false) ? 'bold' : 'normal';
+      // `label_bold` is what the label's weight was before it had three of
+      // them, and a card that was never edited since still carries it - so it
+      // is what the weight falls back to rather than a second setting.
+      const lWeight = this._get('label_font_weight', null)
+        || (this._get('label_bold', false) ? '700' : '400');
       let lColor = this._get('label_color', 'var(--primary-text-color)'); 
       
       if (this._get('label_color_adaptive_bar', false)) lColor = isCirc ? exactHexColor : contrastColor(exactHexColor); 
@@ -970,7 +979,11 @@ class ScProgressbar extends LitElement {
 
     if (this._get('show_value', false)) {
       const vSizeStr = parseDim(this._get('value_font_size', 12), `12${u}`, u); 
-      const vWeight = this._get('value_bold', false) ? 'bold' : 'normal';
+      // As the label's, and for the same reason: `value_bold` is the weight
+      // this had before it had three, and a card nobody has edited since is
+      // still carrying it.
+      const vWeight = this._get('value_font_weight', null)
+        || (this._get('value_bold', false) ? '700' : '400');
       let vColor = this._get('value_color', 'var(--primary-text-color)'); 
       
       if (this._get('value_color_adaptive_bar', false)) vColor = isCirc ? exactHexColor : contrastColor(exactHexColor); 
@@ -1176,6 +1189,7 @@ const STYLE_FIELDS = [
   { id: 'tick_label_step',     label: 'Only every Xth label (1=all)', type: 'number', placeholder: '1', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_decimals',label: 'Decimals',        type: 'number', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_size',    label: 'Font size (CSS text)', type: 'text', placeholder: '10', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
+  { id: 'tick_labels_weight',  label: 'Weight', type: 'select', options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_hide_unit', label: 'Hide unit', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_hide_first', label: 'Hide first label (min)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
   { id: 'tick_labels_hide_last', label: 'Hide last label (max)', type: 'checkbox', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels, framedBy: 'tick_labels' },
@@ -1196,7 +1210,7 @@ const STYLE_FIELDS = [
   { type: 'note', framedWhen: 'label', label: 'The label is on the canvas while this bar is open - its type size and which way it reads are under the chip.' },
   { id: 'show_label',          label: 'Show name / label', type: 'checkbox', framedBy: 'label' },
   { id: 'label_font_size',     label: 'Font size (e.g. 12 or 12cqw)', type: 'text', placeholder: '12',  condition: cfg => cfg.show_label, framedBy: 'label' },
-  { id: 'label_bold',          label: 'Bold',   type: 'checkbox', condition: cfg => cfg.show_label },
+  { id: 'label_font_weight',   label: 'Weight', type: 'select', options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.show_label, framedBy: 'label' },
   { id: 'label_color',         label: 'Text colour (manual)',   type: 'color',  placeholder: 'var(--primary-text-color)', condition: cfg => cfg.show_label && !cfg.label_color_adaptive_bar && !cfg.label_color_adaptive_theme },
   { id: 'label_color_adaptive_bar',   label: 'Adaptive: contrast to bar color', type: 'checkbox', condition: cfg => cfg.show_label && isLin(cfg) },
   { id: 'label_color_adaptive_bar',   label: 'Take colour from gradient', type: 'checkbox', condition: cfg => cfg.show_label && isCirc(cfg) },
@@ -1224,7 +1238,7 @@ const STYLE_FIELDS = [
   { id: 'value_color_adaptive_bar',   label: 'Adaptive: contrast to bar color', type: 'checkbox', condition: cfg => cfg.show_value && isLin(cfg) },
   { id: 'value_color_adaptive_bar',   label: 'Take colour from gradient', type: 'checkbox', condition: cfg => cfg.show_value && isCirc(cfg) },
   { id: 'value_color_adaptive_theme', label: 'Adaptive: HA theme (light/dark)',   type: 'checkbox', condition: cfg => cfg.show_value },
-  { id: 'value_bold',          label: 'Bold',   type: 'checkbox', condition: cfg => cfg.show_value },
+  { id: 'value_font_weight',   label: 'Weight', type: 'select', options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.show_value },
   { id: 'value_decimals',      label: 'Decimals',      type: 'range',  min: 0, max: 3, step: 1, placeholder: '0', condition: cfg => cfg.show_value },
   { id: 'value_unit',          label: 'Custom unit (e.g. %)', type: 'text', placeholder: 'Optional', condition: cfg => cfg.show_value },
   { id: 'value_position',      label: 'Text position',         type: 'select', options: [
