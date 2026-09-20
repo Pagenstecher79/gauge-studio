@@ -3393,11 +3393,13 @@ class ScCanvasEditor extends LitElement {
         padding: 1px 2px 2px; }
       /* The last line of a panel, and it reads as one: quieter than a row
          that sets something, and set apart from the rows above so the eye
-         does not take it for another control. */
+         does not take it for another control. It is a step larger than the
+         standing text above it, at the size the rows themselves are set in -
+         a line nobody can read is not quiet, it is absent. */
       .ring-more { grid-column: span 4; justify-self: stretch; display: flex;
         align-items: center; gap: 4px; margin-top: 2px; padding: 3px 2px 0;
         border-top: 1px solid rgba(255,255,255,0.12);
-        font-size: 10px; line-height: 1.3; color: rgba(255,255,255,0.62); }
+        font-size: 11px; line-height: 1.3; color: rgba(255,255,255,0.62); }
       .ring-flag { display: flex; align-items: center; gap: 4px; height: 20px;
         font-size: 11px; line-height: 1; color: #fff; cursor: pointer;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
