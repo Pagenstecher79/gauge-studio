@@ -179,7 +179,14 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Card and editor
 
-- **6** - Grey out *Apply* when there is nothing to save.
+- **6** - ~~Grey out *Apply* when there is nothing to save.~~ Done. The
+  dialog already knew: Home Assistant compares its working copy against the
+  config it opened with, and `dialogHasUnsavedWork` reads that same
+  bookkeeping `markDialogClean` writes to. Asked at every render and again
+  when the pointer reaches the button, because the dialog also goes dirty for
+  a card size set in the Layout tab, which this editor never sees. Anything
+  unreadable leaves the button live - the click explains itself, a grey
+  button does not.
 - **18** - *Card & Dimensions* and *Basics & Entity(ies) & Aliases* belong
   above the canvas after all.
 - **26** - "This one is on the canvas ..." should name the menu that is gone:
