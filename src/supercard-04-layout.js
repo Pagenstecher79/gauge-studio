@@ -6003,7 +6003,26 @@ class ScCanvasEditor extends LitElement {
   _ghostAt(e) {
     if (!this._placing) return;
     this._ghost = newElementPreview(this.slot, this._canvas, this._placing,
-                                    this._atPointer(e), this._placingTemplate?.aspect);
+                                    this._atPointer(e), this._placingTemplate?.aspect,
+                                    this._pendingEntry(this._placing, this._placingEntry));
+  }
+
+  /**
+   * The entry the click is about to add: the template's where one was chosen,
+   * and the module's own otherwise.
+   *
+   * The ghost needs it for the same reason the placement does - it is what
+   * says whether the new box is locked square - so both ask here rather than
+   * the ghost guessing from the template's `aspect`, which cannot answer it.
+   *
+   * @param {string} what
+   * @param {any} chosen
+   * @returns {any}
+   */
+  _pendingEntry(what, chosen) {
+    if (chosen) return chosen;
+    const kind = NEW_ELEMENT_KINDS.find(k => k.kind === what);
+    return kind?.module ? window.SupercardModules[kind.module]?.newEntry?.() : undefined;
   }
 
   /**
@@ -6048,10 +6067,7 @@ class ScCanvasEditor extends LitElement {
     const c = this._canvas;
     const at = this._atPointer(e);
 
-    const kind = NEW_ELEMENT_KINDS.find(k => k.kind === what);
-    const entry = chosen ?? (kind?.module
-      ? window.SupercardModules[kind.module]?.newEntry?.()
-      : undefined);
+    const entry = this._pendingEntry(what, chosen);
 
     const made = addElement(this.slot, c, what, entry, at, aspect);
     if (!made) return;

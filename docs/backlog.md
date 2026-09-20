@@ -174,8 +174,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **31** - New feature: an interactive glass FX editor for the canvas.
 - **32** - "Layers (3) - the top of the list is drawn on top" - the list seems
   to work the other way round.
-- **39** - A circular bar placed through `+ add object` appears at about 63%
-  of the box it was drawn in.
+- **39** - ~~A circular bar placed through `+ add object` appears at about 63%
+  of the box it was drawn in.~~ Done. The ghost under the crosshair and the
+  click sized the box from different slots: the click asks the slot *with* the
+  entry it is adding, the ghost asked the slot as it is - where the ring is not
+  there yet, so `isSquareLocked` said no and the template's `aspect: 1` fell
+  through to the strip rule, drawing a box half as wide again as the square the
+  click then made. Two thirds, times `circular_scale: 90`, is the 63%.
+  `pendingPatch` is now the one place that knows what the slot gains, and both
+  callers ask it.
 
 ## Card and editor
 

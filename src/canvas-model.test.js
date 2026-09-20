@@ -1659,6 +1659,29 @@ describe('newElementPreview', () => {
     }
   });
 
+  // A ring is locked square, and what says it is a ring is the entry being
+  // added - not the slot, which does not have it yet. The ghost used to ask
+  // the slot, answer "not square", and draw the strip that an aspect of 1
+  // gives: half as wide again as the square the click then made.
+  it('is the element addElement would add for a ring, which is locked square', () => {
+    const s = slot(), c = canvas();
+    const ring = { orientation: 'circular_donut', width: '100%', height: '100%' };
+    const made = addElement(s, c, 'progressbar', ring, { x: 200, y: 200 }, 1);
+    const el = made.canvas.elements.at(-1);
+    expect(el.w).toBe(el.h);
+    expect(newElementPreview(s, c, 'progressbar', { x: 200, y: 200 }, 1, ring))
+      .toEqual({ id: made.id, surface: false, x: el.x, y: el.y, w: el.w, h: el.h });
+  });
+
+  // The other half of the same rule: a straight bar is not locked, so the
+  // template's aspect still decides, and the entry must not square it.
+  it('leaves a straight bar the shape its template asked for', () => {
+    const s = slot(), c = canvas();
+    const line = { orientation: 'horizontal', width: '100%', height: '100%' };
+    const ghost = newElementPreview(s, c, 'progressbar', { x: 200, y: 200 }, 3, line);
+    expect(ghost.w).toBeGreaterThan(ghost.h);
+  });
+
   it('is null wherever addElement refuses, so nothing is promised', () => {
     for (const s of [slot(), {}, { gauge_active: true }]) {
       for (const what of ['sausage', '', 'gauge_0', 'gauge_1', 'surface_9', 'label_1',

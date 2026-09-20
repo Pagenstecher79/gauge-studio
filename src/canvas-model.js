@@ -1783,25 +1783,43 @@ export function addElement(slot, canvas, what, entry, at, aspect) {
   const elements = Array.isArray(canvas?.elements) ? canvas.elements : [];
   const who = newIdentity(slot, canvas, what);
   if (!who) return null;
-  const { id, surface, spec } = who;
+  const { id, surface } = who;
+  // Cloned here rather than in `pendingPatch`, because the other caller is
+  // the ghost under a moving pointer and only reads what comes back.
+  const patch = pendingPatch(slot, who, structuredClone(entry ?? {}));
 
-  /** @type {Record<string, any>} */
-  const patch = {};
-  if (spec?.key) {
-    const list = Array.isArray(slot?.[spec.key]) ? slot[spec.key] : [];
-    patch[spec.key] = [...list, structuredClone(entry ?? {})];
-    // Nothing renders while its module is off, and the switch that used to
-    // turn it on is in the section the canvas replaces.
-    if (spec.active && !slot?.[spec.active]) patch[spec.active] = true;
-  }
-
-  // The slot as it will be, not as it is: the entry being added is what says
-  // whether this bar is a ring, and it is in `patch` rather than in `slot`
-  // until the caller commits. Asking the old slot would give the new element
-  // the shape of whatever happened to sit at that index before.
   const el = { id, ...(surface ? { surface: true } : { inner: 'cc' }),
                ...newBox(canvas, id, surface, at, aspect, { ...slot, ...patch }) };
   return { canvas: { ...canvas, elements: [...elements, el] }, patch, id };
+}
+
+/**
+ * What the slot gains when `entry` is added as `who`.
+ *
+ * Shared by the placement and by the ghost that previews it, because the two
+ * have to size the box the same way and the entry is what decides it: a bar
+ * is square only if it is a ring, and whether it is a ring is in the entry
+ * being added, not in the slot it is being added to. Asking the old slot
+ * gives the new element the shape of whatever happened to sit at that index
+ * before - nothing, usually, so a ring came out a third smaller than the
+ * ghost that promised it.
+ *
+ * @param {any} slot
+ * @param {{spec?: {key?: string, active?: string}}} who from `newIdentity`
+ * @param {any} entry
+ * @returns {Record<string, any>} the keys to merge onto the slot
+ */
+function pendingPatch(slot, who, entry) {
+  /** @type {Record<string, any>} */
+  const patch = {};
+  const spec = who?.spec;
+  if (!spec?.key) return patch;
+  const list = Array.isArray(slot?.[spec.key]) ? slot[spec.key] : [];
+  patch[spec.key] = [...list, entry ?? {}];
+  // Nothing renders while its module is off, and the switch that used to
+  // turn it on is in the section the canvas replaces.
+  if (spec.active && !slot?.[spec.active]) patch[spec.active] = true;
+  return patch;
 }
 
 /**
@@ -1851,13 +1869,16 @@ function newIdentity(slot, canvas, what) {
  * @param {string} what a kind, or the id of an existing element
  * @param {{x: number, y: number}} [at] point the box is centred on
  * @param {number} [aspect] the shape the entry wants, see `newBox`
+ * @param {any} [entry] the entry the click will add, see `pendingPatch`
  * @returns {{ id: string, surface: boolean, x: number, y: number, w: number, h: number } | null}
  */
-export function newElementPreview(slot, canvas, what, at, aspect) {
+export function newElementPreview(slot, canvas, what, at, aspect, entry) {
   const who = newIdentity(slot, canvas, what);
   if (!who) return null;
-  // The ghost has no entry yet - the template's `aspect` is what carries a
-  // ring's shape until there is one - so the slot here is the slot as it is.
+  // The same prospective slot the click will use. `aspect` cannot stand in
+  // for it: a square is a lock rather than a default, and `newBox` does not
+  // read `aspect` at all once it has locked.
+  const patch = pendingPatch(slot, who, entry);
   return { id: who.id, surface: who.surface,
-           ...newBox(canvas, who.id, who.surface, at, aspect, slot) };
+           ...newBox(canvas, who.id, who.surface, at, aspect, { ...slot, ...patch }) };
 }
