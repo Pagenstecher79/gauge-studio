@@ -2402,8 +2402,23 @@ class ScCanvasEditor extends LitElement {
          wholly inside a frame - the press that draws it would already have to
          be past the edge. The strip is also where a drag that overshoots the
          canvas keeps being tracked. */
-      .canvas-pad { flex: 1; min-width: 0; padding: 24px 16px; touch-action: none;
+      /* A finger here is the page's until it is on something draggable.
+         With touch-action none - which this was, over the full width of the
+         editor - a touchscreen could not scroll past the canvas at all: the
+         only way down the dialog was the sliver outside the strip, and even
+         that was a guess. The pan is handed back instead, and everything that
+         is actually dragged - an element, a part's frame, a grip, a chip -
+         says none for itself, so taking hold of one of those still works. It
+         costs the two gestures that are a bare finger on the canvas: a
+         selection frame, which is a mouse gesture now, and the pinch, whose
+         second finger the browser may take for a two-finger scroll - the zoom
+         buttons under the canvas are what a touchscreen has instead. */
+      .canvas-pad { flex: 1; min-width: 0; padding: 24px 16px;
+                    touch-action: pan-x pan-y;
                     display: flex; justify-content: center; }
+      /* Space held, the whole canvas is a hand and the hand moves the window,
+         so nothing here is the page's to scroll. */
+      .canvas-pad.hand { touch-action: none; }
       /* Space held: the whole canvas is a hand, and every cursor inside it -
          an element's grab, a handle's resize - has to give way to that, or
          the canvas would say one thing and its contents another. */
@@ -2537,7 +2552,7 @@ class ScCanvasEditor extends LitElement {
       .canvas { position: relative; width: 100%; box-sizing: border-box;
         background: var(--ha-card-background, var(--card-background-color, #1a1a1a));
         border: 1px solid var(--divider-color, #555); border-radius: 4px; overflow: hidden;
-        touch-action: none; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        touch-action: pan-x pan-y; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
       /* Mixed from the ink rather than fixed to white: the grid has to read
          as a faint ruling on whatever the surface turned out to be. */
       .grid { position: absolute; inset: 0; pointer-events: none;
@@ -2548,7 +2563,10 @@ class ScCanvasEditor extends LitElement {
          against the editor's own 2-to-5. Kept inside the box it is drawn in,
          a preview cannot climb over the selection, the placing overlay or the
          add menu. */
-      .el { position: absolute; isolation: isolate; box-sizing: border-box; cursor: grab; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; border-radius: 2px; background: rgba(3,169,244,0.3); border: 1px solid var(--primary-color); overflow: hidden; }
+      /* The box is draggable, so the finger on it is ours - the canvas around
+         it has handed the up-and-down back to the page. */
+      .el { touch-action: none;
+            position: absolute; isolation: isolate; box-sizing: border-box; cursor: grab; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; border-radius: 2px; background: rgba(3,169,244,0.3); border: 1px solid var(--primary-color); overflow: hidden; }
       .el.surface { background: rgba(255,193,7,0.18); border-style: dashed; border-color: #ffc107; }
       /* The chips and the panel of numbers are drawn inside the element they
          belong to, and an element clips its own paint - so a chip stepped
