@@ -3,6 +3,7 @@ import { reportedRows, isHeightPinned, canvasFromGrid, defaultShapeRows } from "
 import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { rowsAsCanvas } from "./rows-compat.js";
 import { icon } from "./icons.js";
+import { GRADIENT_PRESETS, gradientPresetCss } from "./gradient-presets.js";
 
 // --- CENTRAL LAYER DICTIONARY ---
 export const SC_LAYERS = {
@@ -471,6 +472,108 @@ Object.assign(window.SupercardUtils, (() => {
     </div>`;
 
   /**
+   * A length and the unit it is measured in: the number, and the menu beside
+   * it that says what the number means.
+   *
+   * A corner radius is the setting that needs it - eight of something is a
+   * hairline on one element and a full round end on another, and which of the
+   * two depends entirely on whether the eight is pixels or per cent of the
+   * box. The control was written out twice already, for the surface's corner
+   * and for the glass panel's, and the bar's is the third.
+   *
+   * Two storage shapes, because the card carries both and neither is worth a
+   * migration: a colour pattern keeps the unit in a key of its own, and every
+   * length a bar owns carries it in the value string (`'50%'`, `'8px'`). Pass
+   * `unit` and `onUnit` for the first; leave them out and the row splits and
+   * rejoins the string itself.
+   *
+   * @param {string|number|undefined} value
+   * @param {(v: string) => void} onInput what the number field writes - the
+   *   whole string where the unit rides in it, the bare number otherwise
+   * @param {{ units?: readonly string[], unit?: string, onUnit?: (u: string) => void,
+   *          dflt?: string, placeholder?: string, min?: number, max?: number,
+   *          step?: number|string }} [opts] `dflt` is the value the element is
+   *   drawn at when nothing is set, which is what tells the row which unit to
+   *   show for a card that has never said.
+   */
+  const lengthRow = (value, onInput, opts = {}) => {
+    const units = opts.units || ['px', '%'];
+    const split = splitLength(value, opts.dflt);
+    // Where the unit has a key of its own the string never holds one, so the
+    // key is the only answer; otherwise it is whatever the value carries, and
+    // the default's unit for a value that carries none.
+    const inline = opts.unit === undefined;
+    const unit = inline ? split.unit : opts.unit;
+    const write = (/** @type {string} */ n, /** @type {string} */ u) =>
+      onInput(inline ? (n === '' ? '' : n + u) : n);
+    return html`
+      <div class="length-row">
+        <input type="number" .value=${split.n} placeholder=${opts.placeholder || nothing}
+               min=${opts.min ?? nothing} max=${opts.max ?? nothing} step=${opts.step ?? nothing}
+               @input=${e => write(e.target.value, unit)}>
+        <select @change=${e => (inline ? write(split.n, e.target.value)
+                                       : opts.onUnit?.(e.target.value))}>
+          ${units.map(u => html`<option value=${u} ?selected=${unit === u}>${u}</option>`)}
+        </select>
+      </div>`;
+  };
+
+  /**
+   * A stored length taken apart into its number and its unit.
+   *
+   * The number comes back as the string the input field shows rather than as
+   * a float, so a field being typed into keeps its empty state and its
+   * half-written `0.` instead of being rewritten under the cursor.
+   *
+   * @param {string|number|undefined|null} value
+   * @param {string} [dflt] what the element is drawn at when nothing is set
+   * @returns {{ n: string, unit: string }}
+   */
+  const splitLength = (value, dflt = '') => {
+    const unitOf = (/** @type {string} */ s) =>
+      (/^\s*-?\d*\.?\d*\s*([a-z%]+)\s*$/i.exec(s)?.[1]) || '';
+    const raw = value === undefined || value === null ? '' : String(value).trim();
+    const m = /^(-?\d*\.?\d*)\s*([a-z%]*)$/i.exec(raw);
+    if (!m) return { n: '', unit: unitOf(String(dflt)) || 'px' };
+    return { n: m[1], unit: m[2] || unitOf(String(dflt)) || 'px' };
+  };
+
+  /**
+   * The ready-made colour ramps, as the pictures they are.
+   *
+   * Swatches rather than a menu of names: a ramp is a picture, and "Fresh to
+   * stuffy" only means something once the purple at the top has been seen.
+   * What each one is *for* is the balloon on it, because that line is read
+   * once and then never again.
+   *
+   * The gauge's ring and the bar's fill are coloured from the same catalogue
+   * and differ only in which keys the pick is written to - so the grid is one
+   * control and the caller says what a pick means.
+   *
+   * @param {(id: string) => void} onPick
+   * @param {{ label?: string }} [opts]
+   */
+  const rampGrid = (onPick, opts = {}) => html`
+    <div class="col" style="gap:6px;">
+      <label>${opts.label || 'Start from a ramp'} ${tipDot('A set of colour stops that suit each other, written straight into the list below. Every stop stays yours to move, and nothing remembers which ramp you picked.')}</label>
+      <div class="ramp-grid">
+        ${GRADIENT_PRESETS.map(pr => html`
+          <button class="ramp" title=${pr.label + ' \u2013 ' + pr.hint}
+                  @click=${() => onPick(pr.id)}>
+            <span class="ramp-bar" style="background:${gradientPresetCss(pr)}"></span>
+            <span class="ramp-name">${pr.label}</span>
+          </button>`)}
+      </div>
+    </div>`;
+
+  /** `lengthRow` under its own label. */
+  const lengthField = (label, value, onInput, opts = {}) => html`
+    <div class="col">
+      <label>${label}</label>
+      ${lengthRow(value, onInput, opts)}
+    </div>`;
+
+  /**
    * One field of an editor built from a field array.
    *
    * The gauge and the progressbar are written that way - a field is a record,
@@ -643,6 +746,17 @@ Object.assign(window.SupercardUtils, (() => {
       case 'range':
         return place(slider(val ?? field.placeholder ?? 0, set,
           { min: field.min, max: field.max, step: field.step, width, int: field.int }));
+
+      // A length whose unit is part of the answer. `unitId` names the key the
+      // unit lives in where it has one of its own; without it the unit rides
+      // in the value, which is how every length a bar owns is stored.
+      case 'length':
+        return place(lengthRow(val, set, {
+          units: field.units, dflt: field.dflt, placeholder: field.placeholder,
+          min: field.min, max: field.max, step: field.step,
+          ...(field.unitId ? { unit: ctx.entry?.[field.unitId] ?? field.units?.[0] ?? 'px',
+                               onUnit: u => ctx.set(field.unitId, u) } : {}),
+        }), 'col');
 
       case 'color':
         return place(colorRow(val || '', set, {
@@ -882,6 +996,12 @@ Object.assign(window.SupercardUtils, (() => {
     .section-title { font-size: 11px; font-weight: bold; color: var(--primary-color); text-transform: uppercase; border-bottom: 1px solid var(--divider-color,#333); padding-bottom: 4px; margin-top: 8px; margin-bottom: -4px; }
     .color-row { display: flex; align-items: center; gap: 6px; }
     .color-row input[type="text"] { flex: 1; }
+    /* The number takes the room and the unit takes what it needs, so the
+       menu is the same width under either stylesheet and the fields of a
+       column line up down their right-hand edge. */
+    .length-row { display: flex; align-items: center; gap: 6px; }
+    .length-row input[type="number"] { flex: 1; min-width: 0; }
+    .length-row select { width: 64px; flex: none; }
     .pattern-card { background: var(--secondary-background-color, #1e1e1e); border: 1px solid var(--divider-color, #444); border-radius: 8px; padding: 10px; position: relative; }
     .pattern-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; cursor: pointer; }
     .pattern-content { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; margin-top: 8px; border-top: 1px dashed var(--divider-color, #333); }
@@ -908,6 +1028,20 @@ Object.assign(window.SupercardUtils, (() => {
     input[type="color"] { width: 42px; height: 32px; padding: 2px; border-radius: 6px; border: 1px solid var(--divider-color,#444); background: none; cursor: pointer; }
     .color-row { display: flex; align-items: center; gap: 8px; }
     .color-row input[type="text"] { flex: 1; }
+    .length-row { display: flex; align-items: center; gap: 8px; }
+    .length-row input[type="number"] { flex: 1; min-width: 0; }
+    .length-row select { width: 64px; flex: none; }
+    /* The ramp swatches. In the shared sheet because the gauge's ring and the
+       bar's fill offer the same catalogue, and a ramp drawn two sizes would
+       be the same setting looking like two. */
+    .ramp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .ramp { display: flex; flex-direction: column; gap: 4px; padding: 4px;
+            border: 1px solid var(--divider-color,#444); border-radius: 6px;
+            background: none; color: inherit; cursor: pointer; font: inherit; }
+    .ramp:hover { border-color: var(--primary-color,#03a9f4); }
+    .ramp-bar { height: 10px; border-radius: 5px; }
+    .ramp-name { font-size: 11px; line-height: 1.2; color: var(--secondary-text-color);
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
     .toggle input { opacity: 0; width: 0; height: 0; }
     .toggle-slider { position: absolute; inset: 0; background: var(--divider-color,#555); border-radius: 20px; cursor: pointer; transition: background 0.2s; }
@@ -974,7 +1108,8 @@ function hassInputsChanged(oldHass, newHass, ids) {
     getAvailableElements, listElements, elementLabel, showsElement, elementPartSelector,
     resolveAlias, withPatch, gaugeIsResponsive, onCanvas, cardIsPill, cardRadius,
     collectEntityIds, hassInputsChanged,
-    colorRow, colorField, slider, sliderRow, sliderField, tipDot,
+    colorRow, colorField, lengthRow, lengthField, splitLength, rampGrid,
+    slider, sliderRow, sliderField, tipDot,
     renderField, renderFields, fieldFramed, framedPart,
     editorStyles, formStyles, partHighlight
   });

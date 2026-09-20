@@ -34,6 +34,16 @@ describe('offsetsFromDrag', () => {
   it('survives a scale or a measurement of zero', () => {
     expect(offsetsFromDrag({ x: 1, y: 1 }, 0, 0, 0, 0)).toEqual({ x: 1, y: 1 });
   });
+
+  it('takes a bound of its own, one per axis', () => {
+    expect(offsetsFromDrag({ x: 0, y: 0 }, 4000, -4000, 1, 1, { x: 300, y: 80 }))
+      .toEqual({ x: 300, y: -80 });
+  });
+
+  it('takes one number for both axes', () => {
+    expect(offsetsFromDrag({ x: 0, y: 0 }, 4000, 4000, 1, 1, 120))
+      .toEqual({ x: 120, y: 120 });
+  });
 });
 
 describe('fontFromResize', () => {
@@ -48,6 +58,11 @@ describe('fontFromResize', () => {
   it('keeps a size the editor would accept', () => {
     expect(fontFromResize(19, 200, 4, 1)).toBe(FONT_MAX);
     expect(fontFromResize(1, -200, 4, 1)).toBe(FONT_MIN);
+  });
+
+  it('keeps one the part\'s own type would accept, where it says so', () => {
+    expect(fontFromResize(12, 4000, 1, 1, 4, 60)).toBe(60);
+    expect(fontFromResize(12, -4000, 1, 1, 4, 60)).toBe(4);
   });
 });
 

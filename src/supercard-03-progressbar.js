@@ -8,6 +8,7 @@ import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
 import { adaptiveInk } from "./adaptive-ink.js";
+import { gradientPresetPatch } from "./gradient-presets.js";
 
 const SC = window.SupercardUtils;
 
@@ -289,6 +290,28 @@ class ScProgressbar extends LitElement {
         contain: strict;
         z-index: ${ELM_BASE};
         container-type: size;
+      }
+      /*
+       * A ring is drawn as 100cqmin, the largest square its box holds, so a
+       * box wider than it is tall is a letterbox and is meant to look like
+       * one - that is what lets the canvas stretch a card back and forth
+       * without anything on screen changing. The background was the one thing
+       * that did not play along: it filled the box, and 50% of a box that
+       * is not square is an ellipse. So it gets the ring's square instead,
+       * and the wrap carries nothing.
+       */
+      .sc-pb-wrap.circ {
+        background: none; box-shadow: none; border-radius: 0;
+      }
+      .sc-pb-disc {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100cqmin; height: 100cqmin;
+        border-radius: var(--pb-radius, 50%);
+        background: var(--pb-bg-color, rgba(255,255,255,0.1));
+        box-shadow: var(--pb-shadow, inset 0 1px 3px rgba(0,0,0,0.3));
+        pointer-events: none;
+        z-index: ${ELM_BASE};
       }
       .sc-liquid-layer {
         position: absolute; inset: 0; filter: none; border-radius: inherit;
@@ -778,7 +801,7 @@ class ScProgressbar extends LitElement {
             </defs>
             <circle cx="50" cy="50" r="${r}" fill="none" stroke="${bgColorRaw}" stroke-opacity="${bgOpacity/100}" stroke-width="${sw}" stroke-dasharray="${dashLength} ${gapLength}" stroke-dashoffset="0" stroke-linecap="round" style="z-index: ${ELM_STATIC}; filter: ${bgFilter};" transform="${svgTransform}"></circle>
             ${progLength > 0 ? svg`
-              <circle cx="50" cy="50" r="${r}" fill="none" stroke="${(this._get('use_gradient', false) && !this._get('gradient_as_solid', false)) ? `url(#${this._uniqueId})` : exactHexColor}" stroke-width="${sw}" stroke-dasharray="${progLength} ${c}" stroke-dashoffset="0" stroke-linecap="round" style="transition: stroke 0.1s linear; z-index: ${ELM_DYNAMIC}; filter: ${circleFilter};" transform="${svgTransform}"></circle>
+              <circle cx="50" cy="50" r="${r}" data-sc-part="fill" fill="none" stroke="${(this._get('use_gradient', false) && !this._get('gradient_as_solid', false)) ? `url(#${this._uniqueId})` : exactHexColor}" stroke-width="${sw}" stroke-dasharray="${progLength} ${c}" stroke-dashoffset="0" stroke-linecap="round" style="transition: stroke 0.1s linear; z-index: ${ELM_DYNAMIC}; filter: ${circleFilter};" transform="${svgTransform}"></circle>
             ` : ''}
           </svg>
         `;
@@ -1151,9 +1174,10 @@ class ScProgressbar extends LitElement {
         </defs>
       </svg>` : ''}
       
-      <div class="sc-pb-wrap">
+      <div class="sc-pb-wrap ${isCirc ? 'circ' : ''}">
+        ${isCirc ? html`<div class="sc-pb-disc"></div>` : ''}
         <div class="sc-liquid-layer ${isGooey ? 'gooey' : ''}">
-          ${isCirc ? circularHtml : html`<div class="sc-pb-fill ${orientation}" style="${fillStyle}"></div>`}
+          ${isCirc ? circularHtml : html`<div class="sc-pb-fill ${orientation}" data-sc-part="fill" style="${fillStyle}"></div>`}
           ${indicatorGooeyHtml}
         </div>
         
@@ -1223,19 +1247,32 @@ const STYLE_FIELDS = [
     condition: (cfg, slot) => !SC.onCanvas(slot) },
   { id: 'height',              label: 'Height (CSS)',            type: 'text',   placeholder: '20px or 100%' },
   { type: 'note', framedWhen: 'corners', label: 'The corners are on the canvas - drag either grip, at the bottom left or the top right.' },
-  { id: 'border_radius',       label: 'Corner radius',           type: 'range',  min: 0, max: 50, step: 0.1,   placeholder: '4px', condition: cfg => isLin(cfg), framedBy: 'corners' },
-  { id: 'circular_border_radius', label: 'Background corner radius (%)', type: 'range', min: 0, max: 50, step: 1, placeholder: '50', condition: cfg => isCirc(cfg), framedBy: 'corners' },
+  // A number and the unit it is in, the way a surface's corner is set - and
+  // for the same reason: eight of something is a hairline on one bar and a
+  // full round end on another, and which of the two is entirely a question of
+  // whether the eight is pixels or per cent. The unit rides in the value, as
+  // every length a bar owns does; the renderer has always read it that way.
+  { id: 'border_radius',       label: 'Corner radius',           type: 'length', dflt: '4px',
+    placeholder: '4', min: 0, step: 0.1, condition: cfg => isLin(cfg), framedBy: 'corners' },
+  { id: 'circular_border_radius', label: 'Background corner radius', type: 'length', dflt: '50%',
+    placeholder: '50', min: 0, step: 1, condition: cfg => isCirc(cfg), framedBy: 'corners' },
   { id: '_section_colors',     icon: icon('palette'), label: '── Colours, Gradient & Animation',   type: 'section' },
   { id: 'animation_duration',  label: 'Animation duration (s)',  type: 'range',  min: 0, max: 10, step: 0.1, placeholder: '0.4' },
   { id: 'bounce_intensity', label: 'Bounce intensity (%)', type: 'range', min: 0, max: 30, dynamic_step: true, placeholder: '50' },
-  { id: 'bg_color',            label: 'Background colour',      type: 'color',  placeholder: '#ffffff' },
-  { id: 'bg_opacity',          label: 'Background opacity (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '10' },
+  { type: 'note', framedWhen: 'fill', label: 'What the bar is filled with is on the canvas - the ramp, the two colours and the track are under the chip. The stops stay here.' },
+  { id: 'bg_color',            label: 'Background colour',      type: 'color',  placeholder: '#ffffff', framedBy: 'fill' },
+  { id: 'bg_opacity',          label: 'Background opacity (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '10', framedBy: 'fill' },
   // A gradient overwrites the fill outright, so offering the solid colour
   // there would be offering a setting that does nothing.
   { id: 'fill_color',          label: 'Fill colour (solid)',     type: 'color',  placeholder: 'var(--primary-color)',
-    condition: cfg => !cfg.use_gradient },
-  { id: 'use_gradient',        label: 'Use gradient', type: 'checkbox' },
-  { id: 'gradient_as_solid',   label: 'Derive colour from gradient (dynamic)', type: 'checkbox', condition: cfg => cfg.use_gradient },
+    condition: cfg => !cfg.use_gradient, framedBy: 'fill' },
+  { id: 'use_gradient',        label: 'Use gradient', type: 'checkbox', framedBy: 'fill' },
+  { id: 'gradient_as_solid',   label: 'Derive colour from gradient (dynamic)', type: 'checkbox', condition: cfg => cfg.use_gradient, framedBy: 'fill' },
+  // The same catalogue the gauge's ring offers, written into the list below.
+  // A fill and a ring are coloured by the same question - what the number
+  // means - so the answers already mixed for one of them are the answers for
+  // the other, and offering them twice over would be two catalogues to keep.
+  { id: 'gradient_ramp',       type: 'ramp', condition: cfg => cfg.use_gradient, framedBy: 'fill' },
   { id: 'gradient_stops',      label: 'Gradient colour stops',    type: 'gradient-stops', condition: cfg => cfg.use_gradient },
   // Under the colours, because it paints behind them: the pattern is the bar's
   // backdrop and the track and fill draw on top of it. Only on a canvas, where
@@ -1303,7 +1340,7 @@ const STYLE_FIELDS = [
   { id: 'tick_labels_center_gap_offset', label: 'Adjust centre gap', type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_ticks && cfg.show_tick_labels && cfg.tick_labels_pos === 'center' },
 
   { id: '_section_label',      icon: icon('tag'), label: '── Label (Name/Label)', type: 'section' },
-  { type: 'note', framedWhen: 'label', label: 'The label is on the canvas while this bar is open - its type size and which way it reads are under the chip.' },
+  { type: 'note', framedWhen: 'label', label: 'The label is on the canvas while this bar is open - on a straight bar drag it where it goes and take its corner to size it; on a ring its type size is under the chip. Which way it reads is under the chip either way.' },
   { id: 'show_label',          label: 'Show name / label', type: 'checkbox', framedBy: 'label' },
   { id: 'label_font_size',     label: 'Font size (e.g. 12 or 12cqw)', type: 'text', placeholder: '12',  condition: cfg => cfg.show_label, framedBy: 'label' },
   { id: 'label_font_weight',   label: 'Weight', type: 'select', options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.show_label, framedBy: 'label' },
@@ -1312,8 +1349,8 @@ const STYLE_FIELDS = [
   { id: 'label_color_adaptive_bar',   label: 'Take colour from gradient', type: 'checkbox', condition: cfg => cfg.show_label && isCirc(cfg) },
   { id: 'label_color_adaptive_theme', label: 'Adaptive: HA theme (light/dark)',   type: 'checkbox', condition: cfg => cfg.show_label },
   { id: 'label_position',      label: 'Position in the bar',    type: '9-sector', condition: cfg => isLin(cfg) && cfg.show_label },
-  { id: 'label_offset_x',      label: 'X offset',  type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_label },
-  { id: 'label_offset_y',      label: 'Y offset',  type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_label },
+  { id: 'label_offset_x',      label: 'X offset',  type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_label, framedBy: 'label' },
+  { id: 'label_offset_y',      label: 'Y offset',  type: 'text', placeholder: '0', condition: cfg => isLin(cfg) && cfg.show_label, framedBy: 'label' },
   { id: 'circular_label_offset_y', label: 'Y offset in circle (%)', type: 'range', min: -100, max: 100, step: 1, placeholder: '0', condition: cfg => isCirc(cfg) && cfg.show_label },
   { id: 'label_rotation',      label: 'Text rotation',         type: 'select', options: [
     { value: '0', label: '0° (horizontal)' },
@@ -1468,7 +1505,7 @@ class ScProgressbarEditor extends LitElement {
     this.commitFn('progressbars', newBars);
   }
 
-  _renderField(field, cfg, updateDirect, updateDebounced, idx) {
+  _renderField(field, cfg, updateDirect, updateDebounced, idx, updateMany) {
     if (field.condition && !field.condition(cfg, this.slot)) return html``;
     // This editor draws its own fields, so the rule the shared renderer
     // applies has to be asked for by name here - not written out a second
@@ -1545,6 +1582,17 @@ class ScProgressbarEditor extends LitElement {
             ${SC.colorRow(val || '', updateDirect, { fallback: '#000000',
               placeholder: field.placeholder || '', onText: updateDebounced })}
           </div>`;
+        break;
+      // A length and the unit it is in, the way a surface's corner is set.
+      case 'length':
+        content = SC.lengthField(field.label, val, updateDirect,
+          { dflt: field.dflt, placeholder: field.placeholder,
+            min: field.min, max: field.max, step: field.step });
+        break;
+      case 'ramp':
+        content = updateMany
+          ? SC.rampGrid(id => updateMany(gradientPresetPatch(id, 'bar')))
+          : html``;
         break;
       case 'gradient-stops':
         content = html`
@@ -1632,6 +1680,16 @@ class ScProgressbarEditor extends LitElement {
       this.commitFn('progressbars', next);
     };
     const updateDebounced = (key, val) => { clearTimeout(timeout); timeout = setTimeout(() => updateDirect(key, val), 400); };
+    // One press, several keys: a ramp is its colours *and* the switch that
+    // says the fill is one. Written in a single commit, because `_commit`
+    // clones the config and Home Assistant writes it back asynchronously -
+    // two commits in a tick silently lose the first.
+    const updateMany = patch => {
+      if (!patch) return;
+      const next = structuredClone(bars);
+      Object.assign(next[idx], patch);
+      this.commitFn('progressbars', next);
+    };
 
     const groups = [];
     let cur = null;
@@ -1665,7 +1723,7 @@ class ScProgressbarEditor extends LitElement {
               <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span>
             </summary>
             <div class="inner-content">
-              ${g.fields.map(f => this._renderField(f, cfg, v => updateDirect(f.id, v), v => updateDebounced(f.id, v), idx))}
+              ${g.fields.map(f => this._renderField(f, cfg, v => updateDirect(f.id, v), v => updateDebounced(f.id, v), idx, updateMany))}
             </div>
           </details>`;
       })}

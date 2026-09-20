@@ -285,10 +285,27 @@ Not everything fits on a chip. What worked:
   there is no shadow, and the three colours of a symmetric ramp are not offered
   while the ring is being coloured from a list. A panel that is eight rows deep
   whatever the part is doing is a panel nobody reads to the bottom.
-- **Not a text field, not a free colour value.** A name, an entity, an
-  `rgba()` someone types out - those stay in the form. A list that is edited by
-  dragging its items about - a gradient's stops - stays there too: it is not
-  one control but a small editor, and it needs the room the form has.
+- **The text a part draws, typed in the part's own frame.** Not in the
+  stepper grid - a field is wider than the four cells and the grid stops
+  reading as a grid - but in the frame itself, where the words land. What a
+  label says and how much room it has are one question, and answering it in a
+  row of the form means reading the answer somewhere else. The pencil beside
+  the frame's drop button opens it, Enter and Escape close it, and every
+  keystroke is written straight through so the drawing answers as it is
+  typed. Two things this needs: the field keeps the *last* frame the part was
+  measured at, because a text cleared to be retyped is a text the card draws
+  nothing for and the frame would vanish under the caret; and the value goes
+  in as the `value` attribute rather than the `.value` property, or the render
+  that each keystroke asks for puts the caret back at the end. A part says it
+  has one with `text: '<the key>'`, and the form keeps the field as well -
+  a card written by hand has no frames, and for a bar it is also the name the
+  list is read by.
+- **Not a free colour value, and no text that is not drawn.** An entity, an
+  `rgba()` someone types out, a unit to substitute - those stay in the form:
+  there is nothing on the drawing for them to be typed *into*. A list that is
+  edited by dragging its items about - a gradient's stops - stays there too:
+  it is not one control but a small editor, and it needs the room the form
+  has.
 - **All of it, or the part will be looked for in both places.** Once a chip
   carries a part's settings it carries the whole of them, minus only what the
   frame already does by being dragged. A chip with three of a part's eight
@@ -390,6 +407,57 @@ two rules finish the job:
   axis, because a chip that goes round a corner reads as a chip that has
   wandered. Without the second half of that rule a chip that had dodged the
   panel landed on its neighbour, which is the same fault one step further on.
+- **Each obstacle asks for the clearance it deserves.** Eight pixels for the
+  panel and for the frame being worked on, two between one chip and the next.
+  One figure for all of them was the first answer and it produced the very
+  overlap it was written to stop: on a small element there is not eight
+  pixels of room around four chips, a column of add buttons and a panel, so
+  nothing came back clear, the least-overlap fallback took over and a chip
+  ended up lying on an add button. A chip standing against a chip is untidy;
+  a chip over the one press that adds a part is a fault.
+- **What is being worked on is kept clear, frame or no frame.** A part with a
+  frame is protected by the frame; one whose only mark is a ring - the ticks,
+  the pointer - is protected by its measured box where it has one. The rings
+  themselves have none and want none: a tick ring is spread over the whole
+  circle, and a chip resting on one arc of it hides nothing that cannot be
+  read somewhere else.
+- **Frames are obstacles too, and a frame's head is a chip.** A part's frame is
+  worked on the way the panel is read, so the chips give way to its drawing and
+  to the field it is being typed into. Its head is not an obstacle but a chip
+  of its own: it steps aside like the rest, and before them, because the parts
+  drawn in a gauge's middle - the label, the value, the multiplier, the scale -
+  are exactly the ones the steppers hang over, and a head under the panel is a
+  bin and a pencil nobody can press. It may only go about its own height either
+  way, or it stops reading as that frame's name.
+- **A head goes round its own frame rather than onto it.** Its frame asks it
+  for no clearance - a head sits against the thing it names on purpose - but
+  the frame is still something not to be *on*. The panel hangs directly over
+  the parts in a gauge's middle, so above the frame is exactly where the
+  value's and the multiplier's heads have no room, and given the frame away
+  entirely they were left lying on the drawing they name. A head may take any
+  of its frame's other three sides instead, further than the cap allows and
+  let through anyway: against its frame it still reads as that frame's, from
+  whichever side.
+- **Over the panel, for the chip that had nowhere to go.** Behind it is the
+  better picture and stays the rule, but a chip that cannot be pressed is not a
+  chip, so one still covered when everything else has been tried is raised
+  above it instead.
+- **The dodge is animated, nothing else is.** A chip's own place is `left`/
+  `top` and a chip dragged by hand writes those; the stepping aside is a
+  `transform`. Transitioning only the transform glides a chip out of the way
+  and still lets a dragged one keep up with the finger. It takes 0.9s and is
+  slowest at both ends, because a chip is getting out of the way of something
+  the eye is already on and the movement has to be possible to ignore; at 160ms
+  it read as a jump, and at 1.2s - tried on the toolbar for an afternoon - it
+  was slow enough to watch.
+- **One chip, and its buttons at the right end.** A ring's chip and a frame's
+  head are the same surface: the name, then what the part reads (the pencil),
+  then the way back out (the bin), in that order wherever a chip is drawn. The
+  bin is last because it is the one press that pressing again does not undo,
+  and it is a bin rather than a minus sign - a minus in a row of steppers reads
+  as one fewer of something. The frame's two buttons used to be placed
+  separately at its right corner, which on a wide frame put a part's name and
+  the button acting on it half the drawing apart.
 - **The open element stops clipping.** An element's own box draws its chips,
   and a box with `overflow: hidden` cuts the chip it has just pushed outwards
   in half. Only the element being worked on gets `overflow: visible`, so

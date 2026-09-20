@@ -108,15 +108,22 @@ export function gradientPreset(/** @type {string} */ id) {
  *
  * Unlike a tick preset there is nothing here to spare - a ramp *is* its
  * colours and their positions, so all of it is written, every time.
+ *
+ * @param {string} id
+ * @param {'gauge'|'bar'} [kind] which element's keys the pick is written to
  */
-export function gradientPresetPatch(/** @type {string} */ id) {
+export function gradientPresetPatch(/** @type {string} */ id,
+                                    /** @type {string} */ kind = 'gauge') {
   const preset = gradientPreset(id);
   if (!preset) return null;
-  return {
-    gradient_preset: 'manual',
-    threshold_unit: 'percent',
-    manual_stops: preset.stops.map(s => ({ pos: s.pos, color: s.color })),
-  };
+  const stops = preset.stops.map(s => ({ pos: s.pos, color: s.color }));
+  // One catalogue, two sets of keys. A gauge colours a ring it may also
+  // colour three other ways, so a ramp has to say which of the four it is;
+  // a bar has one fill and a switch that says whether it is a ramp at all,
+  // and picking a ramp is asking for that switch to be on.
+  return kind === 'bar'
+    ? { use_gradient: true, gradient_stops: stops }
+    : { gradient_preset: 'manual', threshold_unit: 'percent', manual_stops: stops };
 }
 
 /**

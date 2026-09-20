@@ -14,6 +14,16 @@ npm run typecheck  # tsc -p jsconfig.json --noEmit   (NOT `npx tsc`, see below)
 npm run ha         # real Home Assistant in Docker (docker/README.md)
 ```
 
+**Testing happens in that one Docker instance, at <http://127.0.0.1:8123/>.**
+One is enough and one is all there should be: a second container, a second
+port or a second browser profile splits the dashboards, the storage and the
+resource entry, and then a build that works in one and not the other says
+nothing about the card. `npm run build` restarts the container onto the new
+bundle, so the address stays the same from one build to the next - open it
+and reload rather than looking for a fresh URL. Synthetic pages under
+`.claude/bench/` stay what they are: a place to measure one mechanism in
+isolation, never the proof that the card works.
+
 `npm run ha` starts a real Home Assistant in Docker with the card registered
 as a Lovelace resource and a demo dashboard seeded - see `docker/README.md`.
 Use it for anything a synthetic page cannot show: the editor running inside

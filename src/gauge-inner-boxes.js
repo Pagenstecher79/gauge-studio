@@ -56,13 +56,22 @@ function fine(v) {
  * @param {{x: number, y: number}} start the offsets the drag began at
  * @param {number} dxPx @param {number} dyPx
  * @param {number} pxPerUnit screen pixels per viewBox unit
+ * @param {number} scale
+ * @param {number|{x: number, y: number}} [limit] how far a part may travel,
+ *   in its own unit
  * @param {number} scale the gauge's `gauge_scale`
  */
-export function offsetsFromDrag(start, dxPx, dyPx, pxPerUnit, scale) {
+export function offsetsFromDrag(start, dxPx, dyPx, pxPerUnit, scale, limit = OFFSET_LIMIT) {
   const per = (pxPerUnit || 1) * (scale || 1);
+  // One number, or one per axis. A gauge's parts travel in viewBox units and
+  // the same 25 bounds both; a bar's travel in whatever unit that bar
+  // measures in, where the sensible bound is the box itself - and a box is
+  // rarely as tall as it is wide.
+  const lx = typeof limit === 'number' ? limit : limit.x;
+  const ly = typeof limit === 'number' ? limit : limit.y;
   return {
-    x: clamp(tenth(start.x + dxPx / per), -OFFSET_LIMIT, OFFSET_LIMIT),
-    y: clamp(tenth(start.y + dyPx / per), -OFFSET_LIMIT, OFFSET_LIMIT),
+    x: clamp(tenth(start.x + dxPx / per), -lx, lx),
+    y: clamp(tenth(start.y + dyPx / per), -ly, ly),
   };
 }
 
@@ -75,10 +84,13 @@ export function offsetsFromDrag(start, dxPx, dyPx, pxPerUnit, scale) {
  *
  * @param {number} startSize @param {number} dPx
  * @param {number} pxPerUnit @param {number} scale
+ * @param {number} [min] @param {number} [max] the range this part's type is
+ *   set in - a gauge's is viewBox units, a bar's its own base unit
  */
-export function fontFromResize(startSize, dPx, pxPerUnit, scale) {
+export function fontFromResize(startSize, dPx, pxPerUnit, scale,
+                               min = FONT_MIN, max = FONT_MAX) {
   const per = (pxPerUnit || 1) * (scale || 1);
-  return clamp(tenth(startSize + dPx / per), FONT_MIN, FONT_MAX);
+  return clamp(tenth(startSize + dPx / per), min, max);
 }
 
 /**

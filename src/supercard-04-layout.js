@@ -941,6 +941,8 @@ const GAUGE_PARTS = Object.freeze({
                  // switching it on here seeds the form's own placeholder -
                  // otherwise the button would look broken.
                  needs: 'gauge_label_text', seed: 'Gauge',
+                 // What it says, typed in its own frame.
+                 text: 'gauge_label_text',
                  place: { gauge_label_offset_x: 0, gauge_label_offset_y: 10.7,
                           gauge_label_font_size: 4.1 },
                  weight: textWeights('gauge_label_font_weight', '500'),
@@ -1473,9 +1475,88 @@ const ICON_PARTS = Object.freeze({
  */
 const lineOnly = (/** @type {any} */ cfg) => !barIsCircular(cfg);
 
+/**
+ * The one piece of a bar that stands where it is put.
+ *
+ * A bar's own parts are all fixed to it - the fill is the bar, a tick stands
+ * on the scale - except the label, which is a text at an offset from
+ * whichever of the nine sectors it is anchored to. That is the same thing a
+ * gauge's label is, so it is framed the same way: dragged where it goes,
+ * sized by the corner, and the numbers it was set by are gone from the form
+ * while the frame is up.
+ *
+ * Only on a straight bar. A ring's label has a `circular_label_offset_y` and
+ * no x at all - there is nowhere to drag it sideways to - so there it stays
+ * the chip it was, and `can` on both sides keeps exactly one of the two in
+ * the editor at a time.
+ *
+ * `limit` because the gauge's 25 is 25 viewBox units, and a bar's offsets are
+ * in pixels or in hundredths of its track: the bound that means the same
+ * thing here is the bar's own box.
+ */
+const BAR_LABEL_PARTS = Object.freeze({
+  label: {
+    label: 'Label', section: '_section_label', can: lineOnly,
+    x: 'label_offset_x', y: 'label_offset_y', size: 'label_font_size',
+    dx: 0, dy: 0, dsize: 12, sizeMin: 4, sizeMax: 60,
+    // Empty is not nothing here: a bar with no label text of its own draws
+    // the entity's name, so the field offers that as its placeholder and
+    // clearing it goes back to it.
+    text: 'label_text',
+    limit: (/** @type {any} */ px, /** @type {number} */ per) =>
+      ({ x: px.width / per, y: px.height / per }),
+    active: 'show_label',
+    // Nothing to place: an offset the card has not set is zero, and zero is
+    // the sector the label is anchored to - which is somewhere it can be seen.
+    weight: textWeights('label_font_weight',
+                        (/** @type {any} */ cfg) => cfg.label_bold ? '700' : '400'),
+    steps: [
+      { key: 'label_rotation', icon: icon('rotate-cw'), what: 'label rotation',
+        read: (/** @type {any} */ cfg) => String(cfg.label_rotation ?? '0'),
+        picks: [{ value: '0', label: 'Horizontal', short: '0\u00B0' },
+                { value: '90', label: 'Quarter turn', short: '90\u00B0' },
+                { value: '-90', label: 'Quarter turn back', short: '-90\u00B0' }] },
+    ],
+  },
+});
+
 const BAR_PARTS = Object.freeze({
+  // The one part of a bar that cannot be switched off: a bar without a fill
+  // is not a bar. So no `turnOff` and no `on` that ever says no - the chip is
+  // there to hold what the fill is *coloured* with, which is the one question
+  // a bar is read by and the one that sat six folds down the dialog.
+  fill: {
+    label: 'Fill', section: '_section_colors', spot: { l: 50, t: 50 },
+    on: () => true,
+    steps: [
+      { key: 'use_gradient', icon: icon('blend'), flag: true, what: 'gradient fill' },
+      // The same catalogue the gauge's ring offers. Under a chip it is the
+      // list of names rather than the grid of swatches the form draws: a
+      // panel of numbers is one row high per setting, and nine pictures in it
+      // would be the panel.
+      { icon: icon('rainbow'), what: 'ready-made ramp', picks: RAMP_PICKS,
+        condition: (/** @type {any} */ cfg) => !!cfg.use_gradient,
+        read: () => '',
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
+          gradientPresetPatch(v, 'bar') },
+      { key: 'gradient_as_solid', icon: icon('droplet'), flag: true,
+        what: 'one colour, read off the ramp',
+        condition: (/** @type {any} */ cfg) => !!cfg.use_gradient },
+      { icon: icon('paintbrush'), what: 'fill colour', paint: true,
+        condition: (/** @type {any} */ cfg) => !cfg.use_gradient,
+        read: (/** @type {any} */ cfg) => markHex(cfg.fill_color ?? 'var(--primary-color)', '#03a9f4'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ fill_color: v }) },
+      { icon: icon('layers'), what: 'track colour', paint: true,
+        read: (/** @type {any} */ cfg) => markHex(cfg.bg_color, '#ffffff'),
+        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) => ({ bg_color: v }) },
+      { key: 'bg_opacity', icon: icon('contrast'), slide: true, by: 5, min: 0, max: 100,
+        dflt: 10, what: 'track opacity' },
+    ],
+  },
   label: {
     label: 'Label', section: '_section_label', spot: { l: 25, t: 28 },
+    // The straight bar's label is framed instead - see BAR_LABEL_PARTS.
+    can: barIsCircular,
     on: (/** @type {any} */ cfg) => !!cfg.show_label,
     turnOn: { show_label: true }, turnOff: { show_label: false },
     // `label_bold` is the weight this label had before it had three of them.
@@ -1719,6 +1800,20 @@ const partSeed = (spec, cfg) => {
 const partOn = (spec, cfg) => partCan(spec, cfg) && spec.on(cfg);
 
 /**
+ * What the drawing multiplies a part's own numbers by, on top of the
+ * measurement.
+ *
+ * A gauge's texts are placed in viewBox units and then the whole face is
+ * drawn at a scale of its own, so the two have to be multiplied together. A
+ * bar has no such second factor - its label is placed in a CSS length, and
+ * `measureBar` already says what one of those is worth on the screen. Asking
+ * the gauge's question of a bar's config is how a 40-pixel drag came out as
+ * 46: `gaugeScaleOf` answers for any config handed to it, and a bar's answer
+ * means nothing.
+ */
+const partScaleOf = (target) => target?.k?.partScale?.(target.cfg) || 1;
+
+/**
  * A length a bar writes as text - `100%`, `1`, `4px`, `12cqw`.
  *
  * The bar's lengths are text fields because the unit is part of the answer: a
@@ -1787,6 +1882,10 @@ function measureGauge(box) {
     // layer is free to be scaled differently from the one beside it.
     const ctm = t.ownerSVGElement?.getScreenCTM?.();
     next.parts[part] = {
+      // What the card actually drew, which is not always what it was told to
+      // draw: a bar falls back to the entity's own name, and that is what the
+      // field in the frame has to offer as its placeholder.
+      text: (t.textContent || '').trim(),
       l: (r.left - elRect.left) / elRect.width * 100,
       t: (r.top - elRect.top) / elRect.height * 100,
       w: r.width / elRect.width * 100,
@@ -1810,6 +1909,48 @@ function boxFrame(box) {
   if (!r.width || !r.height) return null;
   return { parts: NO_PARTS, angle: 0, svg: { l: 0, t: 0, w: 100, h: 100 },
            px: { width: r.width, height: r.height } };
+}
+
+/**
+ * The same for a bar, plus the one part of it that is placed by hand.
+ *
+ * Nothing letterboxes here either, so the box is still the frame - but the
+ * label travels in whatever unit the bar measures in, and what that unit is
+ * worth on the screen is a length only the drawing knows. `cqmin` and its
+ * two siblings are a hundredth of the track, which is the element that
+ * carries `container-type`; a plain `px` is a CSS pixel, which the canvas'
+ * own zoom then magnifies. The zoom is read off the box - its rect against
+ * its own layout width - rather than off `this._zoom`, because the editor is
+ * not the only transform between a bar and the screen.
+ *
+ * @param {any} box the element's box on the canvas
+ * @param {any} [cfg] the bar's config, which names the unit
+ */
+function measureBar(box, cfg) {
+  const base = boxFrame(box);
+  if (!base || barIsCircular(cfg || {})) return base;
+  const bar = box.querySelector('sc-progressbar');
+  const label = bar?.shadowRoot?.querySelector('[data-sc-part="label"]');
+  const wrap = bar?.shadowRoot?.querySelector('.sc-pb-wrap');
+  if (!label || !wrap) return base;
+  const elRect = box.getBoundingClientRect();
+  const r = label.getBoundingClientRect();
+  if (!r.width && !r.height) return base;
+  const track = wrap.getBoundingClientRect();
+  const zoom = box.offsetWidth ? elRect.width / box.offsetWidth : 1;
+  const unit = cfg?.base_unit && cfg.base_unit !== 'auto' ? cfg.base_unit : 'px';
+  const per = unit === 'cqw' ? track.width / 100
+    : unit === 'cqh' ? track.height / 100
+    : unit === 'cqmin' ? Math.min(track.width, track.height) / 100
+    : zoom;
+  return { ...base, parts: { label: {
+    text: (label.textContent || '').trim(),
+    l: (r.left - elRect.left) / elRect.width * 100,
+    t: (r.top - elRect.top) / elRect.height * 100,
+    w: r.width / elRect.width * 100,
+    h: r.height / elRect.height * 100,
+    pxPerUnit: per || 1,
+  } } };
 }
 
 /**
@@ -1962,6 +2103,7 @@ const INNER_KINDS = Object.freeze({
     parts: GAUGE_PARTS,
     rings: GAUGE_RINGS,
     measure: measureGauge,
+    partScale: gaugeScaleOf,
     config: (/** @type {any} */ slot, /** @type {string} */ _id, /** @type {number} */ idx) => {
       if (!slot.gauge_active) return null;
       const gauges = Array.isArray(slot.gauges) && slot.gauges.length ? slot.gauges : [slot];
@@ -1995,21 +2137,31 @@ const INNER_KINDS = Object.freeze({
     noun: 'bar',
     holds: 'its ticks, its pill, its label',
     editor: 'sc-progressbar-editor',
-    parts: NO_PARTS,
+    parts: BAR_LABEL_PARTS,
     rings: BAR_PARTS,
-    measure: boxFrame,
-    // Two keys for one idea, because a line and a ring round their corners in
-    // different units: a line's radius is a length, a ring's is a share of its
-    // own thickness. The renderer reads whichever the orientation calls for,
-    // so the grips have to write the same one.
-    corners: (/** @type {any} */ cfg) => (barIsCircular(cfg)
-      ? { key: 'circular_border_radius', unit: '%' }
-      : { key: 'border_radius', unit: 'px' }),
+    measure: measureBar,
+    // Two keys for one idea, because a line and a ring round their corners on
+    // different boxes: `border_radius` is the straight bar's own, and
+    // `circular_border_radius` the plate a ring floats on. The renderer reads
+    // whichever the orientation calls for, so the grips write the same one.
+    //
+    // Either may be a length or a share of the box, and which it is rides in
+    // the value the way every length a bar owns does - so the grip is told
+    // the unit by the value it is about to change, and writes it back. A card
+    // that says nothing gets the unit the renderer falls back to.
+    corners: (/** @type {any} */ cfg) => {
+      const circular = barIsCircular(cfg);
+      const key = circular ? 'circular_border_radius' : 'border_radius';
+      const { n, unit } = SC.splitLength(cfg[key], circular ? '50%' : '4px');
+      return { key, unit, now: SC.safeFloat(n, 0),
+               patch: (/** @type {number} */ v) => ({ [key]: v + unit }) };
+    },
     config: (/** @type {any} */ slot, /** @type {string} */ _id, /** @type {number} */ idx) => {
       if (!slot.progressbar_active || !Array.isArray(slot.progressbars)) return null;
       return slot.progressbars[idx] || null;
     },
-    drawn: () => [],
+    drawn: (/** @type {any} */ cfg) =>
+      cfg.show_label && !barIsCircular(cfg) ? ['label'] : [],
     write: (/** @type {any} */ slot, /** @type {any} */ t, /** @type {any} */ patch) => {
       if (!Array.isArray(slot.progressbars) || !slot.progressbars[t.idx]) return null;
       const next = structuredClone(slot.progressbars);
@@ -2052,11 +2204,15 @@ const INNER_KINDS = Object.freeze({
     // Every side of a box can be bowed, and the keys are always the same, so
     // the kind has nothing to say here beyond that it can be.
     sides: true,
-    corners: (/** @type {any} */ cfg) => ({
-      key: 'border_radius',
-      unit: cfg.border_radius_unit === '%' ? '%' : 'px',
-      with: { border_radius_auto: false, border_radius_unit: cfg.border_radius_unit || 'px' },
-    }),
+    corners: (/** @type {any} */ cfg) => {
+      const unit = cfg.border_radius_unit === '%' ? '%' : 'px';
+      return { key: 'border_radius', unit, now: SC.safeFloat(cfg.border_radius, 0),
+               // Taking a grip in hand is also what says the radius is set by
+               // hand, which is the switch the menu offers above the number.
+               patch: (/** @type {number} */ v) => ({ border_radius: v,
+                                                      border_radius_auto: false,
+                                                      border_radius_unit: unit }) };
+    },
     // A surface nothing paints yet is opened on the pattern it would have, the
     // way its panel is: the first thing written is what brings it into being.
     config: (/** @type {any} */ slot, /** @type {string} */ id) =>
@@ -2119,6 +2275,10 @@ class ScCanvasEditor extends LitElement {
       _applyError: { type: String, state: true },
       _canApply: { type: Boolean, state: true },
       _menuKind: { type: String, state: true },
+      // Which template's colour page the menu is showing, null for the page
+      // of shapes. A bar is picked in two answers - what shape it is, and
+      // what its fill means - so the menu has a page for each.
+      _menuTemplate: { type: Object, state: true },
       _placing: { type: String, state: true },
       _ghost: { type: Object, state: true },
       _zoom: { type: Number, state: true },
@@ -2141,6 +2301,10 @@ class ScCanvasEditor extends LitElement {
       // The one part the highlight is narrowed to while a row that names it
       // is being held - a chip can set more than one mark.
       _hlNarrow: { type: String, state: true },
+      // The part whose text is being typed into, in its own frame. One at a
+      // time, and it is never the same question as which part is in hand: a
+      // part is held to be moved and edited to be read.
+      _innerEdit: { type: String, state: true },
       // The parts held *besides* the one in hand. A plain array rather than a
       // Set, because lit's change detection is identity on both and an array
       // is what the render walks.
@@ -2172,6 +2336,7 @@ class ScCanvasEditor extends LitElement {
     // Which kind's template page the menu is showing, null for its front
     // page. State, because the menu is drawn from it.
     this._menuKind = null;
+    this._menuTemplate = null;
     this._placing = null;
     // The template the next placement lays down and the config it copied out
     // of it, or null for whatever the module makes. Not reactive - the hint
@@ -2200,6 +2365,23 @@ class ScCanvasEditor extends LitElement {
     this._revealOnUp = null;
     this._innerSel = null;
     this._innerAlso = [];
+    this._innerEdit = null;
+    /**
+     * The last frame the part being typed into was measured at, and the text
+     * it held when the typing started.
+     *
+     * A text that is emptied is a text the card draws nothing for, and a part
+     * that draws nothing has no rect - so the frame, and the field inside it,
+     * would vanish under the caret at exactly the moment somebody is clearing
+     * it to type something else. The last measurement stands in until there
+     * is something to measure again.
+     * @type {any}
+     */
+    this._editRect = null;
+    /** @type {string|null} */
+    this._editFrom = null;
+    /** Whether anything has been typed yet in the edit now open. */
+    this._typed = false;
     /** @type {{x: number, y: number, same: boolean, stack: string[]}|null} */
     this._innerLastDown = null;
     this._hl = true;
@@ -2278,6 +2460,7 @@ class ScCanvasEditor extends LitElement {
       if (this._menu && !e.composedPath().includes(this.shadowRoot?.querySelector('.menu-wrap'))) {
         this._menu = false;
         this._menuKind = null;
+        this._menuTemplate = null;
       }
     };
   }
@@ -2360,6 +2543,7 @@ class ScCanvasEditor extends LitElement {
       this._inner = null;
       this._innerRects = null;
       this._innerSel = null;
+      this._innerEdit = null;
       this._innerLastDown = null;
     }
     // An element left any other way - a click beside the canvas, a different
@@ -2763,21 +2947,56 @@ class ScCanvasEditor extends LitElement {
       /* Which of the two the middle-axis buttons would act on. */
       .inner-frame.sel { outline: 2px solid var(--sc-part-sel);
         background: rgba(242,181,68,0.22); }
+      /* One surface, with the name at its left and the buttons at its right,
+         so a frame's head reads the way a ring's chip does. They used to be
+         three things placed separately - the name at the frame's left corner
+         and the buttons at its right - which on a wide frame put the name and
+         the button that acts on it half the drawing apart. */
       .inner-tag { position: absolute; left: 0; bottom: 100%; margin-bottom: 7px;
-        font-size: 11.5px; line-height: 1; padding: 2px 5px; border-radius: 3px;
+        /* A head steps aside like any chip - it has to, because the parts
+           drawn in a gauge's middle are the ones the steppers hang over, and
+           a head under the panel is a bin and a pencil nobody can press. */
+        transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
+        transition: transform var(--sc-chip-glide, 0.9s) cubic-bezier(0.33, 0, 0.2, 1);
+        display: flex; align-items: center; gap: 3px;
+        font-size: 11.5px; line-height: 1; padding: 2px 3px 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
         pointer-events: none; opacity: 0.8; box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
       .inner-frame.sel .inner-tag { opacity: 1;
         background: var(--sc-part-sel); color: var(--sc-part-sel-ink); }
-      /* The way back out, across the frame's head from its tag: the same key
-         the + chip writes, so a part can be taken off where it was put on. */
-      .inner-drop { position: absolute; right: 0; bottom: 100%; margin-bottom: 7px;
-        width: 16px; height: 16px; padding: 0; font-size: 14px; line-height: 1;
+      /* The buttons every chip ends with, in one order wherever a chip is
+         drawn: what the part says, then the way back out. Last because it is
+         the one press that cannot be taken back by pressing again, and a
+         button that removes something belongs at the end of a row rather than
+         in the middle of one. A bin rather than a minus sign - a minus beside
+         a row of steppers reads as one fewer of something. */
+      .chip-btn { width: 15px; height: 15px; padding: 0; font-size: 11px;
+        line-height: 0; display: grid; place-items: center; pointer-events: auto;
         border-radius: 3px; cursor: pointer; touch-action: none;
-        border: 1px solid var(--sc-part); background: rgba(0,0,0,0.65); color: #fff;
-        box-shadow: 0 0 0 1px rgba(0,0,0,0.55); }
-      .inner-drop:hover { background: var(--error-color,#db4437); border-color: var(--error-color,#db4437);
+        border: 1px solid rgba(255,255,255,0.7); background: rgba(0,0,0,0.4);
         color: #fff; }
+      .ring-tag.sel .chip-btn, .inner-frame.sel .chip-btn {
+        border-color: rgba(0,0,0,0.45); color: var(--sc-part-sel-ink); }
+      .chip-btn.drop:hover { background: var(--error-color,#db4437);
+        border-color: var(--error-color,#db4437); color: #fff; }
+      .chip-btn.write:hover { background: rgba(255,255,255,0.3); }
+      .chip-btn.write.on { background: rgba(0,0,0,0.75); color: #fff;
+        border-color: rgba(255,255,255,0.9); }
+      /* Over the text it is setting, centred on it, and never narrower than a
+         word or two: the frame is as wide as whatever is drawn, and a label
+         being cleared to be retyped would leave a field too small to aim at.
+         The editor's own type size rather than the drawing's - the frame is
+         read at whatever the canvas is zoomed to, and the field has to stay
+         legible at all of them. */
+      .inner-text { position: absolute; left: 50%; top: 50%;
+        transform: translate(-50%, -50%);
+        width: 100%; min-width: 120px; box-sizing: border-box;
+        font: inherit; font-size: 12px; line-height: 1.2; text-align: center;
+        padding: 2px 4px; border-radius: 3px; touch-action: auto; cursor: text;
+        border: 2px solid var(--sc-part-sel); background: rgba(0,0,0,0.92);
+        color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,0.55); z-index: 1; }
+      .inner-text:focus { outline: none;
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.55), 0 0 0 3px rgba(242,181,68,0.35); }
       /* Every offer this element has not taken up yet, down the sides of it -
          out of the drawing, and out of the way of the chips of the parts that
          are drawn.
@@ -2802,6 +3021,7 @@ class ScCanvasEditor extends LitElement {
       .inner-adds { position: absolute; top: 6px;
         max-height: calc(100% - 42px);
         transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
+        transition: transform var(--sc-chip-glide, 0.9s) cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; flex-flow: column wrap; column-gap: 6px; row-gap: 3px;
         z-index: 6; pointer-events: none; }
       /* Below the pencil, which owns the top left corner. */
@@ -2878,6 +3098,13 @@ class ScCanvasEditor extends LitElement {
       .ring-tag { position: absolute;
         transform: translate(calc(-50% + var(--sc-chip-dx, 0px)),
                              calc(-50% + var(--sc-chip-dy, 0px)));
+        /* Only the stepping aside moves a chip by a transform - where it
+           belongs is left/top, and a chip dragged by hand writes those -
+           so this animates the dodge and nothing else, and never lags a
+           finger. Slow, and slowest at both ends: a chip is getting out of
+           the way of something the eye is already on, so it has to be
+           possible to ignore. At a fifth of a second it read as a jump. */
+        transition: transform var(--sc-chip-glide, 0.9s) cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; align-items: center; gap: 3px; z-index: 7;
         font-size: 11.5px; line-height: 1; padding: 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
@@ -2889,12 +3116,6 @@ class ScCanvasEditor extends LitElement {
          panel is put away again. */
       .ring-tag.sel { opacity: 1; z-index: 9;
         background: var(--sc-part-sel); color: var(--sc-part-sel-ink); }
-      .ring-drop { width: 15px; height: 15px; padding: 0; font-size: 14px;
-        line-height: 1; border-radius: 3px; cursor: pointer; touch-action: none;
-        border: 1px solid rgba(255,255,255,0.7); background: rgba(0,0,0,0.4);
-        color: #fff; }
-      .ring-tag.sel .ring-drop { border-color: rgba(0,0,0,0.45);
-        color: var(--sc-part-sel-ink); }
       .ring-shape { width: 15px; height: 15px; padding: 0; font-size: 10px;
         line-height: 1; border-radius: 3px; cursor: pointer; touch-action: none;
         border: 1px solid rgba(0,0,0,0.45); background: rgba(0,0,0,0.25);
@@ -3079,8 +3300,6 @@ class ScCanvasEditor extends LitElement {
       /* Under everything the editor draws on the box, and taking no presses:
          it is the drawing, not a control. */
       .surface-skin { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-      .ring-drop:hover { background: var(--error-color,#db4437);
-        border-color: var(--error-color,#db4437); }
       .inner-grip { position: absolute; right: -8px; bottom: -8px; width: 10px; height: 10px;
         border-radius: 50%; background: var(--primary-color, #03a9f4);
         box-shadow: 0 0 0 1.5px rgba(0,0,0,0.6), 0 0 0 2.5px rgba(255,255,255,0.85);
@@ -4178,6 +4397,7 @@ class ScCanvasEditor extends LitElement {
     this._inner = this._innerOn ? null : target.id;
     this._innerRects = null;
     this._innerSel = null;
+    this._innerEdit = null;
     this._innerLastDown = null;
     // The parts being framed are a couple of viewBox units across, and at the
     // zoom a whole canvas is arranged at they cannot be aimed at, let alone
@@ -4207,10 +4427,13 @@ class ScCanvasEditor extends LitElement {
   _measureInner() {
     const target = this._innerOn ? this._innerTarget : null;
     const box = target && this.shadowRoot?.querySelector(`.el[data-item-id="${this._inner}"]`);
-    const next = box ? target.k.measure(box) : null;
+    const next = box ? target.k.measure(box, target.cfg) : null;
     if (!next) {
       if (this._innerRects) this._innerRects = null;
       return false;
+    }
+    if (this._innerEdit && next.parts[this._innerEdit]) {
+      this._editRect = next.parts[this._innerEdit];
     }
     const was = this._innerRects;
     const same = was
@@ -4222,7 +4445,11 @@ class ScCanvasEditor extends LitElement {
       && Object.entries(next.parts).every(([k, v]) => {
         const o = was.parts[k];
         return o && ['l', 't', 'w', 'h'].every(f => Math.abs(o[f] - v[f]) < 0.05)
-          && Math.abs(o.pxPerUnit - v.pxPerUnit) < 0.01;
+          && Math.abs(o.pxPerUnit - v.pxPerUnit) < 0.01
+          // The text too, and not only the box round it: a label that falls
+          // back to the entity's name is offered as the placeholder of the
+          // field it is typed in, and two names can be the same width.
+          && o.text === v.text;
       });
     if (!same) this._innerRects = next;
     return !same;
@@ -4269,6 +4496,7 @@ class ScCanvasEditor extends LitElement {
    */
   _letGoOfPart() {
     if (this._innerSel) this._innerSel = null;
+    if (this._innerEdit) this._innerEdit = null;
     if (this._innerAlso.length) this._innerAlso = [];
     // Nothing in hand is not a step in a walk down a stack of parts.
     this._innerLastDown = null;
@@ -4462,8 +4690,10 @@ class ScCanvasEditor extends LitElement {
     const fresh = this._innerSel !== part;
     this._innerSel = part;
     // A ring is not one of the things that can be held together with a text,
-    // so taking hold of one is letting go of them.
-    if (target.rings[part]) this._innerAlso = [];
+    // so taking hold of one is letting go of them. A key that is in both
+    // tables - a bar's label, framed on a straight bar and a chip on a ring -
+    // is the part wherever there is one.
+    if (!target.parts[part] && target.rings[part]) this._innerAlso = [];
     // After the assignment, never before: what the reveal has to scroll to is
     // the section the new selection has just pulled to the top of the editor.
     // On release, though, for the same reason a chip's is deferred.
@@ -4530,7 +4760,7 @@ class ScCanvasEditor extends LitElement {
         size: SC.safeFloat(cfg[spec.size], spec.dsize),
       },
       pxPerUnit: this._innerRects?.parts?.[part]?.pxPerUnit || 1,
-      scale: gaugeScaleOf(cfg) || 1,
+      scale: partScaleOf(target),
       started: false,
     };
     this._ptr = { x: e.clientX, y: e.clientY };
@@ -4657,8 +4887,8 @@ class ScCanvasEditor extends LitElement {
       return;
     }
     if (d.mode === 'corner') {
-      this._writeInner({ [d.spec.key]: radiusFromGrip(p, d.box, d.end, d.spec.unit),
-                         ...(d.spec.with || {}) }, d.started);
+      this._writeInner(d.spec.patch(radiusFromGrip(p, d.box, d.end, d.spec.unit)),
+                       d.started);
       d.started = true;
       return;
     }
@@ -4689,7 +4919,8 @@ class ScCanvasEditor extends LitElement {
     const spec = this._innerTarget?.parts[d.part];
     if (!spec) return;
     const patch = d.mode === 'size'
-      ? { [spec.size]: fontFromResize(d.from.size, p.y - d.startY, d.pxPerUnit, d.scale) }
+      ? { [spec.size]: fontFromResize(d.from.size, p.y - d.startY, d.pxPerUnit,
+                                      d.scale, spec.sizeMin, spec.sizeMax) }
       : (() => {
           // Every held part travels the same distance on the screen, which is
           // not the same number of units each: a part is measured in its own
@@ -4697,9 +4928,13 @@ class ScCanvasEditor extends LitElement {
           // beside it. So the pixels are shared and the arithmetic is not.
           const movers = d.group || [{ part: d.part, spec, from: d.from, pxPerUnit: d.pxPerUnit }];
           const out = {};
+          const px = this._innerRects?.px;
           for (const m of movers) {
+            const per = (m.pxPerUnit || 1) * (d.scale || 1);
             const at = offsetsFromDrag(m.from, p.x - d.startX, p.y - d.startY,
-                                       m.pxPerUnit, d.scale);
+                                       m.pxPerUnit, d.scale,
+                                       m.spec.limit && px
+                                         ? m.spec.limit(px, per) : undefined);
             out[m.spec.x] = at.x;
             out[m.spec.y] = at.y;
           }
@@ -4974,7 +5209,7 @@ class ScCanvasEditor extends LitElement {
     const target = this._innerTarget;
     const rects = this._innerRects;
     if (!target || !rects?.px) return;
-    const scale = gaugeScaleOf(target.cfg) || 1;
+    const scale = partScaleOf(target);
     const items = this._innerHeld.map((part) => {
       const spec = target.parts[part];
       const r = rects.parts?.[part];
@@ -5124,19 +5359,45 @@ class ScCanvasEditor extends LitElement {
     // these would start dragging the whole gauge.
     const swallow = (/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); };
     return html`${Object.entries(target.parts).map(([part, spec]) => {
-      const r = rects?.[part];
-      if (!drawn.has(part) || !r) return '';
+      const editing = this._innerEdit === part;
+      // The last measurement while the text is being typed into: see
+      // `_editRect`. Only then - a part switched off has no frame, and one
+      // left over from a part that was is worse than none.
+      const r = rects?.[part] || (editing ? this._editRect : null);
+      if ((!drawn.has(part) && !editing) || !r) return '';
       return html`
         <div class="inner-frame ${this._isHeld(part) ? 'sel' : ''}" data-part=${part}
              style="left:${r.l}%; top:${r.t}%; width:${r.w}%; height:${r.h}%;"
              title=${`Drag the ${spec.label.toLowerCase()}, or its corner to resize it`}
              @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'move')}>
-          <span class="inner-tag">${spec.label}${spec.weight && this._innerSel === part
-            ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}</span>
-          <button class="inner-drop"
-                  title=${`Hide the ${spec.label.toLowerCase()} on this ${target.k.noun}`}
-                  @pointerdown=${swallow}
-                  @click=${() => this._setInnerPart(part, false)}>−</button>
+          <span class="inner-tag">
+            ${spec.label}
+            ${spec.weight && this._innerSel === part
+              ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
+            ${spec.text && this._innerSel === part ? html`
+              <button class="chip-btn write ${editing ? 'on' : ''}"
+                      title=${editing ? 'Done' : `Type the ${spec.label.toLowerCase()}`}
+                      @pointerdown=${swallow}
+                      @click=${() => this._editText(part, !editing)}>${icon('pencil')}</button>` : ''}
+            <button class="chip-btn drop"
+                    title=${`Hide the ${spec.label.toLowerCase()} on this ${target.k.noun}`}
+                    @pointerdown=${swallow}
+                    @click=${() => this._setInnerPart(part, false)}>${icon('trash-2')}</button>
+          </span>
+          <!-- \`value\`, the attribute, and not the \`.value\` property: every
+               keystroke is written through to the card, and the card comes
+               back a render later. Reassigning the property would put back
+               what is already there and send the caret to the end of it,
+               where the attribute is only the starting value and the browser
+               leaves a field somebody has typed in alone. -->
+          ${editing ? html`
+            <input class="inner-text" type="text" data-edit=${part}
+                   value=${target.cfg[spec.text] ?? ''}
+                   placeholder=${(target.cfg[spec.text] ? '' : r.text) || spec.label}
+                   @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}
+                   @input=${(/** @type {any} */ e) => this._typeText(spec, e.target.value)}
+                   @keydown=${(/** @type {any} */ e) => this._typeKey(e, spec)}
+                   @blur=${() => this._editText(part, false)}>` : ''}
           <div class="inner-grip"
                @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'size')}></div>
         </div>
@@ -5147,6 +5408,57 @@ class ScCanvasEditor extends LitElement {
     ${this._renderSides()}
     ${this._renderRings(swallow)}
     ${this._renderOffers(swallow)}`;
+  }
+
+  /**
+   * Open or close the field a part's own text is typed into.
+   *
+   * In the frame rather than in a row of the form, because what a label says
+   * and where it stands are one thought: reading it in place is how you know
+   * the name fits the space it has. The form keeps the field too - the canvas
+   * is not the only way in, and a card being written by hand has no frames.
+   *
+   * @param {string} part @param {boolean} on
+   */
+  async _editText(part, on) {
+    if (!on) {
+      if (this._innerEdit === part) this._innerEdit = null;
+      this._editFrom = null;
+      return;
+    }
+    const spec = this._innerTarget?.parts[part];
+    if (!spec?.text) return;
+    this._editFrom = this._innerTarget?.cfg[spec.text] ?? '';
+    this._typed = false;
+    this._editRect = this._innerRects?.parts?.[part] || null;
+    this._innerEdit = part;
+    // After the field exists, not before: it is drawn by the render this
+    // assignment asks for.
+    await this.updateComplete;
+    const box = this.shadowRoot?.querySelector(`.inner-text[data-edit="${part}"]`);
+    /** @type {any} */ (box)?.select?.();
+  }
+
+  /**
+   * One keystroke of it, written straight through to the card.
+   *
+   * Live, so the drawing answers as it is typed - which is the whole point of
+   * typing it here. Quiet after the first, so the edit is one step to undo
+   * rather than one per letter.
+   */
+  _typeText(spec, value) {
+    this._writeInner({ [spec.text]: value }, this._typed);
+    this._typed = true;
+  }
+
+  /** Enter to be done with it, Escape to put back what was there. */
+  _typeKey(e, spec) {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); return; }
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (this._editFrom !== null) this._writeInner({ [spec.text]: this._editFrom }, true);
+    e.target.blur();
   }
 
   /**
@@ -5184,7 +5496,7 @@ class ScCanvasEditor extends LitElement {
       {
         side: 'left',
         offers: Object.entries(target.parts)
-          .filter(([part]) => !drawn.has(part))
+          .filter(([part, spec]) => partCan(spec, target.cfg) && !drawn.has(part))
           .map(([part, spec]) => ({ spec, on: () => this._setInnerPart(part, true) })),
       },
       {
@@ -5402,10 +5714,10 @@ class ScCanvasEditor extends LitElement {
         ${spec.shapes && sel ? this._renderSwap(spec.label, spec.shapes, 'Make') : ''}
         ${spec.weight && sel ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
         ${spec.turnOff ? html`
-          <button class="ring-drop"
+          <button class="chip-btn drop"
                   title=${`Take the ${spec.label.toLowerCase()} off this ${target.k.noun}`}
                   @pointerdown=${swallow}
-                  @click=${() => this._setInnerRing(part, false)}>−</button>` : ''}
+                  @click=${() => this._setInnerRing(part, false)}>${icon('trash-2')}</button>` : ''}
       </span>
       ${sel ? this._renderSteppers(steps?.l ?? at.l, steps?.t ?? at.t, steps) : ''}`;
   }
@@ -5430,7 +5742,7 @@ class ScCanvasEditor extends LitElement {
     const spec = target?.k.corners?.(target.cfg);
     const box = this._innerRects?.px;
     if (!spec || !box) return '';
-    const now = SC.safeFloat(target.cfg[spec.key], 0);
+    const now = spec.now;
     return html`${Object.entries(GRIP_CORNERS).map(([corner, c]) => {
       const home = gripHome(now, box, corner, spec.unit);
       return html`
@@ -5713,19 +6025,82 @@ class ScCanvasEditor extends LitElement {
     const c = this._safeRect();
     if (!root || !c) return;
     const box = /** @type {any} */ (root.querySelector('.ring-steps'));
-    const M = 4;
-    const hits = (/** @type {any} */ h, /** @type {any} */ o) =>
-      h.l < o.right + M && h.l + h.w > o.left - M
-      && h.t < o.bottom + M && h.t + h.h > o.top - M;
-    const taken = box ? [box.getBoundingClientRect()] : [];
-    const chips = /** @type {any[]} */ ([...root.querySelectorAll('.ring-tag, .inner-adds')]);
+    // Enough that a chip which has stepped aside reads as standing beside the
+    // thing rather than against it.
+    const M = 8;
+    // Between two chips, a hair instead. They are the same kind of thing and
+    // there are more of them than there is room, so asking for the full
+    // clearance leaves nowhere free and ends in the overlap it was meant to
+    // prevent - better a chip standing against a chip than one over it.
+    const MC = 2;
+    const hits = (/** @type {any} */ h, /** @type {any} */ o, /** @type {number} */ m) =>
+      h.l < o.right + m && h.l + h.w > o.left - m
+      && h.t < o.bottom + m && h.t + h.h > o.top - m;
+    // The same question without the clearance: touching is not covering, and
+    // only covering costs a press.
+    const hitsHard = (/** @type {any} */ h, /** @type {any} */ o) =>
+      h.l < o.right && h.l + h.w > o.left && h.t < o.bottom && h.t + h.h > o.top;
+    // How many screen pixels a CSS pixel is worth here. Read once off the
+    // canvas: a chip is a few pixels wide and rounds its own box, so asking
+    // each one gives a factor that is a fraction out - which over a nudge of
+    // a couple of hundred pixels is a pixel of drift, and drift rewrites the
+    // nudge and starts the glide again.
+    const canvasEl = /** @type {any} */ (root.querySelector('.canvas'));
+    const zoom = canvasEl?.offsetWidth
+      ? canvasEl.getBoundingClientRect().width / canvasEl.offsetWidth : 1;
+    const panel = box ? box.getBoundingClientRect() : null;
+    /** @type {any[]} */
+    const taken = [];
+    const note = (/** @type {any} */ r, /** @type {any} */ extra) => {
+      taken.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, m: M, ...extra });
+    };
+    if (panel) note(panel, { panel: true });
+    // A frame is worked on the way the panel is read, so it gets the same
+    // right to be clear of chips: its drawing, and the field it is being
+    // typed into. Its head is not in this list - a head steps aside like any
+    // other chip, below.
+    for (const f of /** @type {any[]} */ ([...root.querySelectorAll('.inner-frame')])) {
+      for (const el of /** @type {any[]} */ ([f, ...f.querySelectorAll('.inner-text')])) {
+        const r = el.getBoundingClientRect();
+        // The frame is its own head's business and not in its way; the field
+        // being typed into is, head or not.
+        if (r.width || r.height) note(r, { own: el === f ? f : null });
+      }
+    }
+    // The part being worked on is protected whether it has a frame or not:
+    // a ring's chip has no frame, and its drawing was the one thing nothing
+    // kept off. Selected means looked at, so everything that would come to
+    // lie over it is moved instead - including the chip that names it, which
+    // reads better beside the mark than on it.
+    const selBox = this._innerBoxRect();
+    const selR = this._innerSel ? this._innerRects?.parts?.[this._innerSel] : null;
+    if (selBox && selR) {
+      note({ left: selBox.left + selR.l / 100 * selBox.width,
+             top: selBox.top + selR.t / 100 * selBox.height,
+             right: selBox.left + (selR.l + selR.w) / 100 * selBox.width,
+             bottom: selBox.top + (selR.t + selR.h) / 100 * selBox.height }, {});
+    }
+    const chips = /** @type {any[]} */ (
+      [...root.querySelectorAll('.ring-tag, .inner-adds, .inner-tag')]);
     // The one the panel hangs from goes first, so it gets the shortest way out
     // and the others arrange themselves around it. It gives way like any
     // other: the panel is placed from where that chip belongs, not from where
     // it ends up, so stepping aside costs the panel nothing and is the only
     // way both can be seen when the panel has been pushed up over it.
-    chips.sort((/** @type {any} */ a, /** @type {any} */ b) =>
-      Number(b.dataset.part === this._innerSel) - Number(a.dataset.part === this._innerSel));
+    //
+    // Then the frame heads, before the free-floating chips: a head is the
+    // only way to the bin and the pencil of a part that is drawn where the
+    // panel hangs - the label, the value, the multiplier and the scale all
+    // sit around a gauge's middle - so it gets its pick of the room.
+    // Then the add buttons, which are a block of several and stand in a
+    // corner: a column that has to fit round four chips rarely can, where
+    // four chips round a column can. Then the frame heads, and the loose
+    // chips last, they being the smallest things and the easiest to place.
+    const rank = (/** @type {any} */ el) =>
+      el.dataset.part === this._innerSel ? 0
+        : el.classList.contains('inner-adds') ? 1
+        : el.classList.contains('inner-tag') ? 2 : 3;
+    chips.sort((/** @type {any} */ a, /** @type {any} */ b) => rank(a) - rank(b));
     for (const chip of chips) {
       const was = {
         x: parseFloat(chip.style.getPropertyValue('--sc-chip-dx')) || 0,
@@ -5734,9 +6109,35 @@ class ScCanvasEditor extends LitElement {
       const r = chip.getBoundingClientRect();
       // Where it stands with no nudge, which is the only place worth asking
       // about: a chip that has been pushed aside is not where it belongs.
-      const h = { l: r.left - was.x, t: r.top - was.y, w: r.width, h: r.height };
+      //
+      // Read off what is on the screen *now*, not off the nudge it was last
+      // given: while the chip is gliding those are two different places, and
+      // taking the target for the truth makes every pass during a glide
+      // measure from somewhere the chip never was. Each such pass then wrote
+      // a new target, which restarted the glide - chips wandering for seconds
+      // before they came to rest. Untransformed the chip sits at its layout
+      // box; the rest of its transform is the centring, which is half its own
+      // box for a ring's chip and nothing for a column of add buttons.
+      const m = new DOMMatrixReadOnly(getComputedStyle(chip).transform);
+      const mid = chip.classList.contains('ring-tag');
+      const now = {
+        x: (m.e + (mid ? chip.offsetWidth / 2 : 0)) * zoom,
+        y: (m.f + (mid ? chip.offsetHeight / 2 : 0)) * zoom,
+      };
+      const h = { l: r.left - now.x, t: r.top - now.y, w: r.width, h: r.height };
+      // Its own frame is not in its way: a head sits against the frame it
+      // names on purpose, and the seven pixels between them are less than
+      // the clearance everything else is given.
+      const own = chip.closest('.inner-frame');
+      // Its own frame asks for no clearance - a head sits against the frame
+      // it names on purpose, and the seven pixels between them are less than
+      // anything else is given. It is still something not to be *on*, though:
+      // given away entirely, a head crowded by the rest ends up over the very
+      // drawing it names, which is the worst place of all for it.
+      const clear = (/** @type {any} */ o) => (own && o.own === own ? 0 : o.m);
       const at = (/** @type {any} */ w) => ({ l: h.l + w.x, t: h.t + w.y, w: h.w, h: h.h });
-      const free = (/** @type {any} */ w) => !taken.some((/** @type {any} */ o) => hits(at(w), o));
+      const free = (/** @type {any} */ w) =>
+        !taken.some((/** @type {any} */ o) => hits(at(w), o, clear(o)));
       const inside = (/** @type {any} */ w) =>
         h.l + w.x >= c.left && h.l + w.x + h.w <= c.right
         && h.t + w.y >= c.top && h.t + w.y + h.h <= c.bottom;
@@ -5754,17 +6155,73 @@ class ScCanvasEditor extends LitElement {
         // a chip that goes round a corner reads as a chip that has wandered.
         const ways = [];
         for (const o of taken) {
-          ways.push({ x: o.left - M - (h.l + h.w), y: 0 }, { x: o.right + M - h.l, y: 0 },
-                    { x: 0, y: o.top - M - (h.t + h.h) }, { x: 0, y: o.bottom + M - h.t });
+          const m = clear(o);
+          ways.push({ x: o.left - m - (h.l + h.w), y: 0 }, { x: o.right + m - h.l, y: 0 },
+                    { x: 0, y: o.top - m - (h.t + h.h) }, { x: 0, y: o.bottom + m - h.t });
         }
-        const ok = ways.map(held).filter(inside).filter(free)
+        // A head names the frame under it, so it may only go as far as it can
+        // while still reading as that frame's - about its own height either
+        // way. A chip of its own has no such tie and may go where it must.
+        const far = chip.classList.contains('inner-tag') ? h.h * 2.5 : Infinity;
+        // The three other sides of its own frame, for the head that has run
+        // out of room above it. They are further than the cap allows and are
+        // let through anyway: a head against its frame reads as that frame's
+        // from whichever side, and the alternative is the one place a head
+        // must never be - on the drawing it names. The panel hangs directly
+        // over the parts in a gauge's middle, so for the value and the
+        // multiplier this is the ordinary case, not the odd one.
+        const sides = [];
+        if (own && far !== Infinity) {
+          const o = own.getBoundingClientRect();
+          sides.push({ x: 0, y: o.bottom + 7 - h.t },
+                     { x: o.left - 7 - (h.l + h.w), y: o.top - h.t },
+                     { x: o.right + 7 - h.l, y: o.top - h.t });
+        }
+        const near = ways.map(held).filter(inside)
+          .filter((/** @type {any} */ w) => Math.abs(w.x) + Math.abs(w.y) <= far)
+          .concat(sides.map(held).filter(inside));
+        const ok = near.filter(free)
           .sort((/** @type {any} */ p, /** @type {any} */ q) =>
             (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
+        // Nowhere clear is the ordinary case on a small element, where four
+        // chips, a column of add buttons and a panel are all asking for the
+        // same corner. Staying put was the old answer and it is the worst
+        // one: the chip lies wherever it happened to be drawn. Take the
+        // place that covers the least instead, counting the panel for much
+        // more than a chip - a chip half over a chip is untidy, a chip under
+        // the panel cannot be pressed.
         if (ok.length) best = ok[0];
+        else if (near.length) {
+          const cost = (/** @type {any} */ w) => {
+            const a = at(w);
+            let sum = 0;
+            for (const o of taken) {
+              const ov = Math.max(0, Math.min(a.l + a.w, o.right) - Math.max(a.l, o.left))
+                       * Math.max(0, Math.min(a.t + a.h, o.bottom) - Math.max(a.t, o.top));
+              sum += ov * (o.panel ? 10 : 1);
+            }
+            return sum;
+          };
+          const by = near.map((/** @type {any} */ w) => ({ w, c: cost(w) }))
+            .sort((/** @type {any} */ p, /** @type {any} */ q) =>
+              p.c - q.c || (Math.abs(p.w.x) + Math.abs(p.w.y)) - (Math.abs(q.w.x) + Math.abs(q.w.y)));
+          if (by[0].c < cost(best)) best = by[0].w;
+        }
       }
-      taken.push(/** @type {any} */ ({ left: h.l + best.x, right: h.l + best.x + h.w,
-                                       top: h.t + best.y, bottom: h.t + best.y + h.h }));
-      if (Math.abs(best.x - was.x) < 0.5 && Math.abs(best.y - was.y) < 0.5) continue;
+      // The last line, for the chip that had nowhere to go: over the panel
+      // rather than under it. Behind the panel is the better picture, but a
+      // chip that cannot be pressed is not a chip - and the parts drawn in a
+      // gauge's middle are exactly the ones the panel hangs over.
+      const over = panel && hitsHard({ l: h.l + best.x, t: h.t + best.y, w: h.w, h: h.h }, panel);
+      if (over) chip.style.zIndex = '9';
+      else chip.style.removeProperty('z-index');
+      note({ left: h.l + best.x, right: h.l + best.x + h.w,
+             top: h.t + best.y, bottom: h.t + best.y + h.h }, { m: MC, own });
+      // Wider than it needs to be for a still picture: measuring against a
+      // drawing that is itself laid out in fractions of a pixel, two passes
+      // can disagree by a pixel over nothing, and rewriting the nudge for
+      // that restarts a glide that lasts more than a second.
+      if (Math.abs(best.x - was.x) < 1.5 && Math.abs(best.y - was.y) < 1.5) continue;
       if (best.x || best.y) {
         chip.style.setProperty('--sc-chip-dx', best.x + 'px');
         chip.style.setProperty('--sc-chip-dy', best.y + 'px');
@@ -6070,7 +6527,7 @@ class ScCanvasEditor extends LitElement {
     this._innerSel = part;
     // A ring is not held together with a text, the same rule the chips and
     // the frames go by.
-    if (t.rings[part]) this._innerAlso = [];
+    if (!t.parts[part] && t.rings[part]) this._innerAlso = [];
     // On release, like every other way of taking a part in hand: the reveal
     // scrolls the dialog, and doing that under a finger that is still down
     // moves the drawing out from under it.
@@ -6273,15 +6730,22 @@ class ScCanvasEditor extends LitElement {
    * menu that knew which template it was is gone - and taken as a copy, so the
    * element the click makes is the person's own from the start.
    *
+   * `patch` is what a second page added to it - a bar's ramp - written over
+   * the template's own colours before anything is placed, so the element the
+   * click makes is finished rather than recoloured a moment later.
+   *
    * @param {string} what
    * @param {{ id: string, label: string, aspect?: number } | null} [template]
+   * @param {Record<string, any> | null} [patch]
    */
-  _startPlacing(what, template = null) {
+  _startPlacing(what, template = null, patch = null) {
     this._menu = false;
     this._menuKind = null;
+    this._menuTemplate = null;
     this._placing = what;
     this._placingTemplate = template;
     this._placingEntry = template ? templateEntry(what, template.id) : null;
+    if (this._placingEntry && patch) Object.assign(this._placingEntry, patch);
     // No ghost until the pointer says where. Drawing one at the last position
     // would put a box under a crosshair that has since moved on.
     this._ghost = null;
@@ -6290,6 +6754,7 @@ class ScCanvasEditor extends LitElement {
   _closeMenu() {
     this._menu = false;
     this._menuKind = null;
+    this._menuTemplate = null;
     this._placing = null;
     this._placingTemplate = null;
     this._placingEntry = null;
@@ -6397,6 +6862,7 @@ class ScCanvasEditor extends LitElement {
    * flew out of it would be clipped by exactly that.
    */
   _renderAddMenu() {
+    if (this._menuTemplate) return this._renderRampMenu(this._menuKind, this._menuTemplate);
     if (this._menuKind) return this._renderTemplateMenu(this._menuKind);
     const unplaced = this._unplaced();
     return html`
@@ -6446,9 +6912,49 @@ class ScCanvasEditor extends LitElement {
           <span class="tpl-text"><b>Empty</b><em>Nothing set, the way Add has always made one.</em></span>
         </button>
         ${templatesFor(kind).map(t => html`
-          <button class="menu-item tpl" @click=${() => this._startPlacing(kind, t)}>
+          <button class="menu-item tpl" @click=${() => (kind === 'progressbar'
+                    ? (this._menuTemplate = t) : this._startPlacing(kind, t))}>
             <span class="tpl-pv" style=${cell}>${this._renderTemplatePreview(kind, t)}</span>
             <span class="tpl-text"><b>${t.label}</b><em>${t.hint}</em></span>
+            ${kind === 'progressbar' ? html`<span class="chev">${icon('chevron-right')}</span>` : ''}
+          </button>`)}
+      </div>`;
+  }
+
+  /**
+   * What the bar just chosen should mean, as the colours that say it.
+   *
+   * A bar is two answers, not one: what shape it is, and what its fill means.
+   * The three shapes differ in nothing else - they are all 0 to 100 per cent -
+   * so the one thing left to decide is the ramp, and a menu that laid the
+   * three shapes and the nine ramps out at once would be twenty-seven rows
+   * for two questions.
+   *
+   * The gauge has no such page. Its templates are quantities, and a
+   * temperature already knows what its colours mean - offering to recolour
+   * one at the moment it is made would be offering to make it wrong.
+   *
+   * @param {string} kind
+   * @param {{ id: string, label: string, hint: string, aspect?: number }} t
+   */
+  _renderRampMenu(kind, t) {
+    const cell = `width:${TPL_CELL.w}px; height:${TPL_CELL.h}px;`;
+    return html`
+      <div class="menu wide">
+        <button class="menu-item back" @click=${() => { this._menuTemplate = null; }}>
+          <span class="chev back">${icon('chevron-left')}</span>Back
+        </button>
+        <div class="menu-group">${t.label} bar - colours</div>
+        <button class="menu-item tpl" @click=${() => this._startPlacing(kind, t)}>
+          <span class="tpl-pv" style=${cell}>${this._renderTemplatePreview(kind, t)}</span>
+          <span class="tpl-text"><b>Default</b><em>The template's own colours - cool to warm, and full is good.</em></span>
+        </button>
+        ${GRADIENT_PRESETS.map(pr => html`
+          <button class="menu-item tpl"
+                  @click=${() => this._startPlacing(kind, t, gradientPresetPatch(pr.id, 'bar'))}>
+            <span class="tpl-pv" style=${cell}>${
+              this._renderTemplatePreview(kind, t, gradientPresetPatch(pr.id, 'bar'))}</span>
+            <span class="tpl-text"><b>${pr.label}</b><em>${pr.hint}</em></span>
           </button>`)}
       </div>`;
   }
@@ -6486,10 +6992,12 @@ class ScCanvasEditor extends LitElement {
    *
    * @param {string} kind
    * @param {{ id: string }} t
+   * @param {Record<string, any> | null} [patch] what a second page has added
    */
-  _renderTemplatePreview(kind, t) {
+  _renderTemplatePreview(kind, t, patch = null) {
     const pv = previewFor(kind, t.id);
     if (!pv) return '';
+    if (patch) Object.assign(pv.config, patch);
     // The miniature is the shape the click will make, not the cell it sits in:
     // a ring shown in a 3:2 cell is an ellipse, and a vertical bar is a
     // horizontal one. The cell stays one size so the rows keep their rhythm,
@@ -6991,6 +7499,7 @@ class ScCanvasEditor extends LitElement {
           <div class="menu-wrap">
             <button class="add-btn" style="width:auto; padding:6px 12px;"
                     @click=${() => { this._menu = !this._menu; this._menuKind = null;
+                                     this._menuTemplate = null;
                                      this._placing = null; this._placingTemplate = null;
                                      this._placingEntry = null; }}>
               ${icon('plus')} Add element
