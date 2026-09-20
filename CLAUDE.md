@@ -477,6 +477,33 @@ a GitHub release - live, immediately, to everyone who has the card installed.
 Never commit, push, or tag on your own initiative. Build locally, report what
 you found, and wait for an explicit go-ahead.
 
+### Two branches, and which one a tag comes from
+
+`main` is the stable version - what a tag from it goes to everyone. `beta` is
+where the work lands first.
+
+- **Work branches off `beta` and is squash-merged back into it.** A pull
+  request's base is `beta` unless the change is a fix for the released version
+  and nothing else.
+- **`beta` goes into `main` with an ordinary merge commit, not a squash.**
+  Squashing would rewrite the same commits under a new id and leave `beta`
+  behind `main` for good; a merge keeps `beta` an ancestor of `main`, so the
+  next branch starts from something that is already released.
+- **A tag on `beta` carries a suffix** - `v2.5.0-beta.1` - and the workflow
+  marks such a release a **pre-release**, because the tag name contains a `-`.
+  HACS offers a pre-release only to someone who has ticked *show beta versions*
+  on this repository; everyone else goes on being offered the newest release
+  without a suffix. That is the whole of the beta channel - there is no second
+  repository and no second `hacs.json`.
+- **A tag on `main` has no suffix** and is the release everyone gets.
+
+So a version is usually tagged twice: `v2.5.0-beta.1` off `beta` to try it out,
+and `v2.5.0` off `main` once it holds up. Both need the same annotated tag
+message written for users, and the beta's says what is being tried.
+
+`Checks` runs on every pull request and on a push to either branch. The release
+workflow is the one that is fired by a tag and by nothing else.
+
 The release body is the **annotated tag's message**, with GitHub's generated
 notes appended under a rule. So write the tag message for users:
 `git tag -a vX.Y.Z -m "..."`. A lightweight tag yields no intro - the workflow
