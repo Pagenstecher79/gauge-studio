@@ -477,32 +477,27 @@ a GitHub release - live, immediately, to everyone who has the card installed.
 Never commit, push, or tag on your own initiative. Build locally, report what
 you found, and wait for an explicit go-ahead.
 
-### Two branches, and which one a tag comes from
+### The beta channel is a tag, not a branch
 
-`main` is the stable version - what a tag from it goes to everyone. `beta` is
-where the work lands first.
+Merging into `main` publishes nothing: HACS installs from tags, so until one is
+pushed no installed card changes. There is therefore one line of development
+and no `beta` branch to keep in step with it.
 
-- **Work branches off `beta` and is squash-merged back into it.** A pull
-  request's base is `beta` unless the change is a fix for the released version
-  and nothing else.
-- **`beta` goes into `main` with an ordinary merge commit, not a squash.**
-  Squashing would rewrite the same commits under a new id and leave `beta`
-  behind `main` for good; a merge keeps `beta` an ancestor of `main`, so the
-  next branch starts from something that is already released.
-- **A tag on `beta` carries a suffix** - `v2.5.0-beta.1` - and the workflow
-  marks such a release a **pre-release**, because the tag name contains a `-`.
-  HACS offers a pre-release only to someone who has ticked *show beta versions*
-  on this repository; everyone else goes on being offered the newest release
-  without a suffix. That is the whole of the beta channel - there is no second
-  repository and no second `hacs.json`.
-- **A tag on `main` has no suffix** and is the release everyone gets.
+What the channel is instead: **a tag whose name carries a suffix** -
+`v2.5.0-beta.1` - which the release workflow marks a **pre-release**, on the
+sole ground that the name contains a `-`. HACS offers a pre-release only to
+someone who has ticked *show beta versions* on this repository, and goes on
+offering everyone else the newest release without a suffix. So a version that
+is worth trying out first is tagged twice off the same branch: `v2.5.0-beta.1`
+for the testers, then `v2.5.0` once it holds up.
 
-So a version is usually tagged twice: `v2.5.0-beta.1` off `beta` to try it out,
-and `v2.5.0` off `main` once it holds up. Both need the same annotated tag
-message written for users, and the beta's says what is being tried.
+Both tags are annotated and both messages are written for users; the beta's
+says what is being tried and what to look at.
 
-`Checks` runs on every pull request and on a push to either branch. The release
-workflow is the one that is fired by a tag and by nothing else.
+The one thing this does not buy is a hotfix for the released version while
+unfinished work sits on `main` - a tag would take that work with it. Keep
+`main` releasable, and if that ever stops being true, a branch is the answer
+and this section is what changes.
 
 The release body is the **annotated tag's message**, with GitHub's generated
 notes appended under a rule. So write the tag message for users:

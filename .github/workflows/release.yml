@@ -74,7 +74,11 @@ jobs:
           # word is the whole of the beta channel: HACS offers a pre-release
           # only to someone who has ticked "show beta versions" on this
           # repository, and goes on offering everyone else the newest release
-          # without one. Said explicitly rather than left to the action to
-          # guess, because what it guesses is what decides whether a test
-          # build lands on every installed dashboard.
+          # without one. There is no branch behind it - a pre-release is tagged
+          # off `main` like any other, because merging into `main` publishes
+          # nothing and only a tag does.
+          #
+          # Said explicitly rather than left to the action to guess, because
+          # what it guesses is what decides whether a test build lands on every
+          # installed dashboard.
           prerelease: ${{ contains(github.ref_name, '-') }}
