@@ -76,6 +76,41 @@ export function offsetsFromDrag(start, dxPx, dyPx, pxPerUnit, scale, limit = OFF
 }
 
 /**
+ * How near the middle axis a part has to come before the axis takes it.
+ *
+ * In screen pixels rather than in viewBox units, so the pull feels the same
+ * on a gauge drawn at 80 pixels and one drawn at 500: a unit is worth ten
+ * times as much on the second, and a tolerance in units would be a grab of
+ * half the dial there and nothing at all on the first.
+ */
+export const CENTRE_PULL_PX = 7;
+
+/**
+ * An offset, taken by the middle axis where it comes near enough to it.
+ *
+ * A gauge's parts are offset from the centre of its viewBox, so the axis a
+ * label is centred on is simply `x = 0` - there is no line to look up and no
+ * arithmetic to do. What the guide adds is the pull: landing exactly on zero
+ * by hand means reading a number while dragging a text, and a tenth either
+ * way is visible on a big gauge.
+ *
+ * Off by default, and not because it is expensive: a part deliberately set a
+ * hair off the axis - a value nudged left to make room for a unit - would be
+ * pulled back onto it by an editor that always snapped, and there would be no
+ * way to say no.
+ *
+ * @param {number} x the offset the drag arrived at, in viewBox units
+ * @param {number} per screen pixels one of those units is worth
+ * @param {boolean} [on] whether the guide is switched on
+ * @param {number} [pull] how near, in screen pixels
+ * @returns {number}
+ */
+export function snapToCentre(x, per, on = true, pull = CENTRE_PULL_PX) {
+  if (!on) return x;
+  return Math.abs(x) * (Math.abs(per) || 1) <= pull ? 0 : x;
+}
+
+/**
  * The font size a part has after its frame is dragged `dPx` taller.
  *
  * A single line of text is as tall as its font size, so the frame's height is

@@ -118,8 +118,8 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   the next edit, so nothing on a dashboard changes what it reads.
 - **30 / 48** - ~~Gauge background options reachable from the gauge editor's
   canvas, as a dropdown - the top edge is probably the right place for one.~~
-  Done for the gauge; the progress bar is what is left of this one. The
-  background is a `spot` part standing at the top of the box, `background` in
+  Done. The background is a `spot` part standing at the top of the box,
+  `background` in
   `GAUGE_RINGS`, and it carries the whole of what the disc is painted with:
   the mode, the gradient's kind, a ready-made ramp, the two colours and the
   balance between them, the angle, and the opacity as a per cent rather than
@@ -134,6 +134,14 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   What stayed in the form is *when* the background changes: the two dozen
   fields of the threshold and its animation are a condition, not a colour, and
   the chip's panel points down at them the way every other part does.
+  The bar's half followed, and it is smaller than it looked: a bar has no
+  disc to stand on - what a gauge's `bg_*` fields paint, a bar answers with
+  the pattern behind it, which is the colour panel both forms already carry
+  in the same place - and its track was on the fill chip from the start. What
+  was left was the fill's own stop list, still in the form under a line
+  reading *the stops stay here*, which is the sentence the gauge's half
+  reversed. It is under the fill chip now, beside the ramp that writes into
+  it, and the line says so.
 - **34** - ~~Glass FX for the pointer and the centre point~~; possibly a
   relief FX for ticks and texts. The glass half is done, and it was measured
   before it was built - see `docs/perf-cpu.md`. The cost of glass on a needle

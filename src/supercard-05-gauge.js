@@ -949,7 +949,7 @@ class ScGauge extends LitElement {
       if (lTxt) {
         const lCol = resolveColor(this._get('scale_label_color_type','adaptive'),this._get('scale_label_color',null),
           inkAtXY(safeFloat(this._get('scale_label_offset_x',0),0)*scale, safeFloat(this._get('scale_label_offset_y',-18),-18)*scale));
-        extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${lTxt}</text>`);
+        extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="scale_label" x="${this.CENTER+safeFloat(this._get('scale_label_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('scale_label_offset_y',-18),-18)*scale}" fill="${lCol}" font-size="${safeFloat(this._get('scale_label_font_size',10),10)*scale}px" text-anchor="middle" font-weight="${this._get('scale_label_font_weight',500)}" style="pointer-events:none">${lTxt}</text>`);
       }
     }
     if (this._get('show_multiplier_label',false) && tCount > 1) {
@@ -970,7 +970,7 @@ class ScGauge extends LitElement {
       const mStr=`${this._get('multiplier_prepend','x')}${mNum}${mPrefix}`;
       const mCol=resolveColor(this._get('multiplier_color_type','adaptive'),this._get('multiplier_color',null),
         inkAtXY(safeFloat(this._get('multiplier_offset_x',0),0)*scale, safeFloat(this._get('multiplier_offset_y',-30),-30)*scale));
-      extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="multiplier" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="500" style="pointer-events:none">${mStr}</text>`);
+      extraLabels.push(svg`<text class="layer-elm-dynamic" data-sc-part="multiplier" x="${this.CENTER+safeFloat(this._get('multiplier_offset_x',0),0)*scale}" y="${this.CENTER+safeFloat(this._get('multiplier_offset_y',-30),-30)*scale}" fill="${mCol}" font-size="${safeFloat(this._get('multiplier_font_size',10),10)*scale}px" text-anchor="middle" font-weight="${this._get('multiplier_font_weight',500)}" style="pointer-events:none">${mStr}</text>`);
     }
     if (this._get('gauge_label_text','') && this._get('gauge_label_active',true)) {
       const glTxt=this._get('gauge_label_text',''), glSize=safeFloat(this._get('gauge_label_font_size',8),8)*scale;

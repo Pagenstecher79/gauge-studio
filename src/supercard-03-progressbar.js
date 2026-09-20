@@ -1259,7 +1259,7 @@ const STYLE_FIELDS = [
   { id: '_section_colors',     icon: icon('palette'), label: '── Colours, Gradient & Animation',   type: 'section' },
   { id: 'animation_duration',  label: 'Animation duration (s)',  type: 'range',  min: 0, max: 10, step: 0.1, placeholder: '0.4' },
   { id: 'bounce_intensity', label: 'Bounce intensity (%)', type: 'range', min: 0, max: 30, dynamic_step: true, placeholder: '50' },
-  { type: 'note', framedWhen: 'fill', label: 'What the bar is filled with is on the canvas - the ramp, the two colours and the track are under the chip. The stops stay here.' },
+  { type: 'note', framedWhen: 'fill', label: 'What the bar is filled with is on the canvas - the ramp, the colours it is mixed from, the solid colour and the track are all under the chip.' },
   { id: 'bg_color',            label: 'Background colour',      type: 'color',  placeholder: '#ffffff', framedBy: 'fill' },
   { id: 'bg_opacity',          label: 'Background opacity (%)', type: 'range', min: 0, max: 100, step: 1, placeholder: '10', framedBy: 'fill' },
   // A gradient overwrites the fill outright, so offering the solid colour
@@ -1273,7 +1273,7 @@ const STYLE_FIELDS = [
   // means - so the answers already mixed for one of them are the answers for
   // the other, and offering them twice over would be two catalogues to keep.
   { id: 'gradient_ramp',       type: 'ramp', condition: cfg => cfg.use_gradient, framedBy: 'fill' },
-  { id: 'gradient_stops',      label: 'Gradient colour stops',    type: 'gradient-stops', condition: cfg => cfg.use_gradient },
+  { id: 'gradient_stops',      label: 'Gradient colour stops',    type: 'gradient-stops', condition: cfg => cfg.use_gradient, framedBy: 'fill' },
   // Under the colours, because it paints behind them: the pattern is the bar's
   // backdrop and the track and fill draw on top of it. Only on a canvas, where
   // the renderer names the box it paints.

@@ -316,10 +316,18 @@ Not everything fits on a chip. What worked:
   distance is right - a count, a length, a thickness, a type size. Under the
   chip, because the ring is already saying one thing by being dragged, and a
   second meaning for the same gesture is no meaning at all.
-- **A swap button on the chip** for a setting with two or three values - a
-  shape, a weight. It steps round; the tooltip says what the *next* press will
-  do, so the preposition belongs in the value's own label
-  (`'to normal'`, `'a triangle'`) or the sentence reads wrong.
+- **A swap button** for a setting with two or three values - a shape, a weight.
+  It steps round; the tooltip says what the *next* press will do, so the
+  preposition belongs in the value's own label (`'to normal'`, `'a triangle'`)
+  or the sentence reads wrong.
+- **A chip carries one button, and it is the one that takes the part away.**
+  Everything else a part can be told is in the panel under it. A chip is a
+  handle before it is a row of controls: it is dragged out of the way, it is
+  double-clicked back, and every button on it is one the finger meets while
+  reaching for that drag. A part that is *framed* on the drawing is the
+  exception - its frame is the handle, so its name can hold the weight button
+  and the pencil that opens the field its text is typed into, both of them
+  beside the words they are about.
 - **A switch, a short list, a swatch.** A checkbox for something that is on or
   off, a `<select>` of two or three words, and a swatch that opens the
   browser's own colour control each take the three cells the buttons and the
@@ -359,6 +367,33 @@ Not everything fits on a chip. What worked:
 - **Not a free colour value, and no text that is not drawn.** An entity, an
   `rgba()` someone types out, a unit to substitute - those stay in the form:
   there is nothing on the drawing for them to be typed *into*.
+- **A part is taken in hand by its name.** The four texts a gauge draws are
+  the smallest marks on it - a scale label is a few pixels tall - and until
+  the head of their frame became a handle the only way to take one was to hit
+  the text itself. The head is already standing beside the thing it names and
+  is the bigger target, so a press on it selects, and a drag from it moves the
+  part with the pointer the way a press on the text does.
+- **The middle axis.** A guide rather than a mark: a dashed line down the
+  dial's own square, switched on by a button beside the one that opened the
+  parts - it is about placing them and belongs where the hand already is,
+  rather than in the settings row over the canvas - and offered only while a
+  gauge's parts are open. A part dragged within a few screen
+  pixels of it is taken by it - `snapToCentre`, and the tolerance is in
+  pixels, not units, or the same number would be half the dial on a small
+  gauge and nothing on a big one. Off by default, because a text nudged a hair
+  off centre on purpose would have no way to stay there; and never while
+  several parts are held, because a group that is being carried keeps its
+  arrangement. The line goes solid while something sits on it, which is the
+  whole of the feedback: what the hand wants to know is whether it took.
+- **A ramp is a picture.** The catalogue of ready-made ramps is a strip of
+  swatches under a chip, not a menu of names: *Fresh to stuffy* means nothing
+  until the purple at the top has been seen, which is why the form has always
+  drawn them. What a chip cannot take is the form's three-by-three grid - that
+  is the panel rather than a row in it - so the same pictures lie in one strip
+  that scrolls sideways, each with its name under it, because what a ramp is
+  *for* is the one thing its colours do not say. `ramps` on a step; it reads
+  nothing back, since a ramp is not a mode but a list of stops written into
+  the row below.
 - **A small editor, where it is what the part is.** A list edited by dragging
   its items about is not one control, so it was at first the one thing left in
   the form while everything around it moved. That did not hold: a gradient is
@@ -366,10 +401,12 @@ Not everything fits on a chip. What worked:
   angle and the effect while the colours themselves sit five folds down is
   exactly the split these frames exist to end - and it is the split the rule
   below forbids. So the stop list goes under the chip wherever a part is
-  coloured from one: a surface's paint, a gauge's ring, and the disc a gauge
-  is drawn on. It takes its unit with it, because a position read on the
-  entity's scale and one read in per cent are the same number meaning two
-  things. `<sc-gradient-stops>` is the one editor rather than a second one
+  coloured from one: a surface's paint, a gauge's ring, the disc a gauge
+  is drawn on, and a bar's fill. It takes its unit with it, because a position
+  read on the entity's scale and one read in per cent are the same number
+  meaning two things - a bar has neither that question nor bands, so its row
+  carries the list alone. `<sc-gradient-stops>` is the one editor rather than
+  a second one
   (`stops` on a step, with `absolute` and `blocks` where the reading of a
   position is a question of the config), and the panel's size grip
   is what makes room for it - a panel at its default width is too narrow to
