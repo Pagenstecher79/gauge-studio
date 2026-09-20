@@ -27,6 +27,8 @@ import { applyCardConfig } from "./card-apply.js";
 import { highlightInk } from "./highlight-ink.js";
 import { withoutElementConfig, TARGET_LISTS } from "./config-cleanup.js";
 import { GRIP_CORNERS, radiusFromGrip, gripHome } from "./canvas-corner.js";
+import { hitZones, radialDeg, radialCursor, captionSpot, sectorOf,
+         sectorDeg } from "./ring-grab.js";
 import { BEND_SIDES, BEND_ROOM, bendKey, bendAtKey, BEND_AT_MID,
          bendsOf, bendEscapes, isBent,
          bendClipPath, bendOutlineSvg, bentBox,
@@ -485,6 +487,26 @@ const PART_GRAB_PX = 8;
  * is there to place.
  */
 const BAND_PX = 1;
+
+/**
+ * The word naming the edge under the hand, in pixels.
+ *
+ * Small - it is a caption on a drawing, not a label on a control - but read
+ * at the same size wherever it is, so it is sized in pixels and worked back
+ * into the gauge's own units like everything else the editor lays over a
+ * dial.
+ */
+const CAPTION_PX = 11;
+
+/**
+ * How many directions the caption is placed in around the ring.
+ *
+ * It only has to stand near the hand, and a re-render for every degree of
+ * travel would be forty of them across one ring. Twelve is a caption that
+ * follows within thirty degrees, which on a circle a hand is dragging is
+ * beside it.
+ */
+const CAPTION_SECTORS = 12;
 
 /**
  * The icon on an alignment button.
@@ -1145,14 +1167,17 @@ const GAUGE_RINGS = Object.freeze({
     radiusOf: (/** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
       gaugeOuter(scale),
     edges: {
-      outer: { what: "the gauge's size",
+      // `what` is the sentence in the tooltip; `short` is the word written on
+      // the drawing while the hand is over that edge, where there is room for
+      // a word and no room for a sentence.
+      outer: { what: "the gauge's size", short: 'gauge size',
         radiusOf: (/** @type {any} */ _cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
           gaugeOuter(scale),
         fromRadius: (/** @type {number} */ r) => scaleFromRadius(r) },
       // Nothing to take hold of while no frame is drawn: the two edges are the
       // same circle then, and a second band on top of the first is a handle
       // nobody can tell from the one under it.
-      inner: { what: "the frame's width",
+      inner: { what: "the frame's width", short: 'frame width',
         condition: (/** @type {any} */ cfg) => cfg.frame_ring_active === true,
         radiusOf: (/** @type {any} */ cfg, /** @type {number} */ _ring, /** @type {number} */ scale) =>
           frameInnerEdge(cfg, scale),
@@ -1358,11 +1383,12 @@ const ringPartPatch = (/** @type {any} */ spec, /** @type {number} */ r, /** @ty
 const ringBands = (spec, cfg, ring, scale) => {
   if (!spec.edges) {
     return [{ edge: null, r: Math.abs(ringPartAt(spec, cfg, ring, scale)),
-              what: spec.label.toLowerCase() }];
+              what: spec.label.toLowerCase(), short: spec.label.toLowerCase() }];
   }
   return Object.entries(spec.edges)
     .filter(([, e]) => !e.condition || e.condition(cfg))
-    .map(([edge, e]) => ({ edge, r: Math.abs(e.radiusOf(cfg, ring, scale)), what: e.what }));
+    .map(([edge, e]) => ({ edge, r: Math.abs(e.radiusOf(cfg, ring, scale)),
+                           what: e.what, short: e.short || e.what }));
 };
 
 /**
@@ -2327,6 +2353,16 @@ class ScCanvasEditor extends LitElement {
       // drawing a crosshair. One at a time: the pair of lines is there to say
       // where *this* end is going.
       _crossEnd: { type: String, state: true },
+      // Which edge of which ring the hand is over, as `part:edge`, and the
+      // sector of the circle it is over it at. A ring with two edges is two
+      // circles that can be one pixel apart, so the drawing has to say which
+      // of them is about to be grabbed - and say it in a word, because at
+      // that distance highlighting one of the two is not a difference the eye
+      // can read. The angle is kept as a sector rather than as itself: the
+      // caption only has to stand near the hand, and a render per degree of
+      // travel would be forty of them across one ring.
+      _ringHot: { type: String, state: true },
+      _ringHotSector: { type: Number, state: true },
       // The one part the highlight is narrowed to while a row that names it
       // is being held - a chip can set more than one mark.
       _hlNarrow: { type: String, state: true },
@@ -2422,6 +2458,8 @@ class ScCanvasEditor extends LitElement {
     this._innerRects = null;
     this._innerDrag = null;
     this._crossEnd = null;
+    this._ringHot = null;
+    this._ringHotSector = 0;
     this._pinch = null;
     // The last pointer position, in client pixels. The edge scroll works from
     // it: the pointer can stand still while the view keeps moving under it.
@@ -3099,11 +3137,35 @@ class ScCanvasEditor extends LitElement {
         stroke-dasharray: 1.2 1.2; opacity: 0.5;
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
       .ring-band.sel { stroke: var(--sc-part-sel); }
+      /* The edge the hand is over, out of the two a frame has. Solid, which
+         is what every band did when it was the ring in hand, back when width
+         was how the rings were told apart - the reason is a real one here:
+         these two are one ring and mean different things, and the hand has
+         to know which of them it is about to pull. */
+      .ring-band.hot { stroke-dasharray: none; opacity: 1; }
+      /* And the word for it, because a frame's two edges can be a pixel
+         apart, and at that distance lighting one of them up is not a
+         difference an eye can read. White ink on a dark outline, the way the
+         handles are drawn, so it stands over the dial's own colours; the
+         outline is painted under the letters rather than over them. */
+      .ring-caption { fill: #fff; paint-order: stroke;
+        stroke: rgba(0,0,0,0.85); stroke-width: var(--sc-cap-w, 0.6);
+        stroke-linejoin: round; font-weight: 600; dominant-baseline: middle;
+        pointer-events: none; }
       /* The edge of a ring nobody has drawn. It still sets the gauge's size,
          so it has to be reachable - but a longer dash and less of it says it
          is a measure rather than something painted on the card. */
       .ring-band.ghost { stroke-dasharray: 0.6 2.4; opacity: 0.35; }
-      .ring-hit { fill: none; stroke: transparent; stroke-width: 2.4;
+      /* No width here, and that is not an oversight: it is written per band
+         by hitZones, and a width in this rule would beat the attribute -
+         a presentation attribute loses to any stylesheet - so every zone
+         would silently be the same size again and the two edges of a frame
+         would go back to lying on top of one another.
+
+         The cursor is the fallback for a browser that will not take an
+         image: the real one is an arrow along the radius, written onto the
+         element as the hand moves. */
+      .ring-hit { fill: none; stroke: transparent;
         pointer-events: stroke; cursor: ns-resize; touch-action: none; }
       /* The needle itself, which selects the pointer and slides it in and out
          along its own line. The two ends set its length instead, and they are
@@ -5558,6 +5620,46 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
+   * The hand is over one edge of a ring: point the arrow the way the drag
+   * actually goes, and say which edge it is.
+   *
+   * `ns-resize` was the cursor on every band, and it is the truth only at the
+   * top and the bottom of a circle - at three o'clock a ring is dragged
+   * sideways and the arrow said otherwise. So the cursor is an arrow lying
+   * along the radius, turned to wherever on the ring the hand is; it is
+   * written straight onto the element rather than through a render, because
+   * it changes with every pointer event and nothing else about the drawing
+   * does.
+   *
+   * The caption does go through a render, and is why the angle is kept as one
+   * of twelve sectors: it has to stand near the hand, not follow it exactly.
+   *
+   * This also runs all through a drag - the element has the pointer captured,
+   * so the moves keep arriving here - which is what turns the arrow while the
+   * ring is being dragged round rather than only while it is hovered.
+   *
+   * @param {any} e @param {string} key the ring's part and edge, as `part:edge`
+   */
+  _ringOver(e, key) {
+    const el = e.currentTarget;
+    // The hit circle's own box, which is square about the ring's centre
+    // whatever the element under it is shaped like.
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    const deg = radialDeg(r.left + r.width / 2, r.top + r.height / 2, e.clientX, e.clientY);
+    const cur = radialCursor(deg);
+    if (el.style.cursor !== cur) el.style.cursor = cur;
+    const sector = sectorOf(deg, CAPTION_SECTORS);
+    if (this._ringHot !== key) this._ringHot = key;
+    if (this._ringHotSector !== sector) this._ringHotSector = sector;
+  }
+
+  /** The hand has left that edge - unless it has already found another one. */
+  _ringOut(key) {
+    if (this._ringHot === key) this._ringHot = null;
+  }
+
+  /**
    * The ring frames, the needle's two handles, and the chip on each that names
    * it and takes it off.
    *
@@ -5621,26 +5723,57 @@ class ScCanvasEditor extends LitElement {
     // to, the way the needle's handles and the crosshair already are.
     const unit = (this._innerRects?.px?.width || 0) * svgBox.w / 100 / GAUGE_VIEW;
     const bandW = unit > 0 ? BAND_PX / unit : 0.35;
+    // The caption is type, so it is sized in pixels and worked back into the
+    // gauge's units the way the bands and the handles are: one word the same
+    // size on a small dial and a big one.
+    const capSize = unit > 0 ? CAPTION_PX / unit : 3;
+    const capGap = capSize * 1.1;
     return html`
       ${!bands.length ? '' : html`
       <svg class="ring-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
            style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;
-                  --sc-band-w:${bandW};">
-        ${bands.map(([part, spec]) => svg`${ringBands(spec, cfg, ring, scale).map((b) => {
-          const c = cen;
-          if (b.r < 0.5) return '';
+                  --sc-band-w:${bandW}; --sc-cap-w:${capSize / 5};">
+        ${bands.map(([part, spec]) => {
+          const bs = ringBands(spec, cfg, ring, scale);
+          // Where each edge is taken hold of. Two edges of one ring can be a
+          // pixel apart, and two hit strokes of the same width then lie on
+          // top of one another - the one drawn last took every press, so the
+          // outer edge, which is the only handle a gauge's size has, could
+          // not be reached at all. See `hitZones`.
+          const zones = hitZones(bs.map((b) => b.r));
           // A ring nobody has drawn is still shown, because its edge is what
           // sets the gauge's size - but shown as the outline it is, so it does
           // not read as a frame that is switched on.
           const ghost = spec.ghost?.(cfg) ? 'ghost' : '';
-          return svg`
-            <circle class="ring-band sel ${ghost}" cx=${c.x} cy=${c.y} r=${b.r}></circle>
-            <circle class="ring-hit" cx=${c.x} cy=${c.y} r=${b.r}
+          // Only a ring with a choice to make names its edges: one band is
+          // the ring itself, and a word for it would be one on every drag.
+          const named = bs.length > 1;
+          return svg`${bs.map((b, i) => {
+            const c = cen;
+            if (b.r < 0.5) return '';
+            const key = part + ':' + b.edge;
+            const hot = this._ringHot === key;
+            const cap = hot && named
+              ? captionSpot(c.x, c.y, b.r, sectorDeg(this._ringHotSector, CAPTION_SECTORS),
+                            capGap)
+              : null;
+            return svg`
+            <circle class="ring-band sel ${ghost} ${hot ? 'hot' : ''}"
+                    cx=${c.x} cy=${c.y} r=${b.r}></circle>
+            ${!cap ? '' : svg`
+            <text class="ring-caption" x=${cap.x} y=${cap.y} font-size=${capSize}
+                  text-anchor=${cap.anchor}>${b.short}</text>`}
+            <circle class="ring-hit" cx=${c.x} cy=${c.y} r=${zones[i].r}
+                    stroke-width=${zones[i].w}
+                    @pointerenter=${(/** @type {any} */ e) => this._ringOver(e, key)}
+                    @pointermove=${(/** @type {any} */ e) => this._ringOver(e, key)}
+                    @pointerleave=${() => this._ringOut(key)}
                     @pointerdown=${(/** @type {any} */ e) =>
                       this._innerDown(e, part, 'ring', b.edge)}>
               <title>${'Drag ' + b.what + ' in or out'}</title>
             </circle>`;
-        })}`)}
+          })}`;
+        })}
       </svg>`}
       ${!needles.length ? '' : (() => {
       // The needle's two handles are drawn in the gauge's own units, which

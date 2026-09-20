@@ -112,6 +112,47 @@ Every bug in the part editor that a user noticed was a hit-testing bug.
   layer above the chips for the handles.
 - **Put the handles in their own layer** and give it the top z-index. Then
   every later question about ordering has one answer.
+- **Two handles on one ring must not share the ground.** The frame's two
+  edges mean different things - the outside is the gauge's size, the inside
+  is how wide the frame is drawn - and on a thin frame they are nearly the
+  same circle. Two fat strokes of the same width then lay on top of one
+  another, and because the inner one is drawn last it took every press: the
+  outer edge, which is the only handle a gauge's size has, could not be
+  grabbed at all. `hitZones` in `ring-grab.js` cuts the ground at the
+  midpoint between two bands and gives each one its own side, so a hand
+  coming from outside the gauge always finds the size and one coming from
+  inside always finds the width. Where the frame's width is nothing and the
+  two are one circle, the zones meet back to back rather than overlapping,
+  and the edge named first - the outer one - keeps the outward side.
+- **Write that width in the markup, not in the stylesheet.** A presentation
+  attribute loses to any CSS rule, so a `stroke-width` in the rule silently
+  puts every zone back to the same size. This was found by driving the real
+  editor, not by reading the diff.
+
+### Say which edge, in a word
+
+A highlight is not enough when the two bands are a pixel apart: lighting one
+of them up is not a difference an eye can read at that distance. So the edge
+under the hand is named on the drawing - `gauge size`, `frame width` - in
+white on a dark outline, standing just inside the band at the angle the hand
+is at. Only a ring that has more than one edge names them; one band is the
+ring, and a word for it would be a word on every drag.
+
+The angle is kept as one of twelve sectors rather than as itself. The caption
+has to stand near the hand, not follow it exactly, and a render per degree of
+travel would be forty of them across one ring.
+
+### The arrow points the way the drag goes
+
+`ns-resize` on a ring is the truth at the top and the bottom of the circle and
+nowhere else: at three o'clock a ring is dragged sideways. So the cursor is a
+double-headed arrow lying along the radius, turned to wherever on the ring the
+pointer is (`radialCursor`). It is written straight onto the element as the
+pointer moves rather than through a render - it changes with every event and
+nothing else about the drawing does - and it is memoised per sector, so a drag
+right round a ring decodes eight images and no more. The drag keeps it
+turning, because the element has the pointer captured and the moves keep
+arriving.
 
 ## 5. Let go, not just take hold
 
