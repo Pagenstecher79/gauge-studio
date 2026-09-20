@@ -6515,6 +6515,11 @@ class ScCanvasEditor extends LitElement {
    * whether it shares its place with another - and, for the one object that
    * is selected alone, its numbers. Not folded away: it is the only list now.
    *
+   * Two buttons, not four. One step forward and one step back were the grip
+   * before there was a grip, and dragging a row one place is what the grip is
+   * best at; the two ends are what it is worst at, because a stack of six in a
+   * dialog that scrolls is a drag across half the list where a click will do.
+   *
    * @param {any[]} els the canvas elements, in array order
    * @param {string[]} selected the ids currently in hand
    * @param {number} step the snap, which the number fields step by
@@ -6555,10 +6560,6 @@ class ScCanvasEditor extends LitElement {
                   title="Locked - unlock it with the lock under the canvas">${icon('lock')}</span>` : ''}
                 <button title="All the way to the front" ?disabled=${idx === last}
                         @click=${() => this._reorder(idx, 'front')}>${icon('chevrons-up')}</button>
-                <button title="One step forward" ?disabled=${idx === last}
-                        @click=${() => this._reorder(idx, idx + 1)}>${icon('chevron-up')}</button>
-                <button title="One step back" ?disabled=${idx === 0}
-                        @click=${() => this._reorder(idx, idx - 1)}>${icon('chevron-down')}</button>
                 <button title="All the way to the back" ?disabled=${idx === 0}
                         @click=${() => this._reorder(idx, 'back')}>${icon('chevrons-down')}</button>
                 ${alone ? html`
