@@ -68,8 +68,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   shortening its reach.
 - **9** - The gap between sectors set by a dashed ring, the way every other
   round element is set.
-- **23** - The up/down cursor over a gauge's dashed circle should point at the
-  gauge's centre - an arrow head that turns with the pointer's position.
+- **23** - ~~The up/down cursor over a gauge's dashed circle should point at
+  the gauge's centre - an arrow head that turns with the pointer's position.~~
+  Done. `ns-resize` was on every band and it is the truth only at the top and
+  the bottom of a circle: at three o'clock a ring is dragged sideways. The
+  cursor is now a double-headed arrow lying along the radius, turned to
+  wherever on the ring the hand is, and it keeps turning through the drag.
+  Eight pictures cover the circle - a double arrow reads the same turned by
+  half a turn - and they are memoised, so a drag right round a ring decodes
+  each of them once. See `ring-grab.js`.
 - **25** - ~~The pointer's grips become crosshairs while held - only the one
   actually held.~~ Done, and a real one: a vertical and a horizontal line
   crossing at the handle, dashed so they do not hide the marks they are being
@@ -114,8 +121,22 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   and carries the warning, and at zero it writes no `blur()` at all, because
   `blur(0px)` still pays for a backdrop root. The relief for ticks and texts
   is still open.
-- **40** - On a very thin frame it is hard to tell whether the inner or the
-  outer radius is being grabbed.
+- **40** - ~~On a very thin frame it is hard to tell whether the inner or the
+  outer radius is being grabbed.~~ Done, and it was worse than hard to tell:
+  the two hit strokes were the same width and centred on their own bands, so
+  on a thin frame they lay on top of one another and the one drawn last - the
+  inner edge - took every press. The outer edge, which is the only handle a
+  gauge's size has, could not be grabbed at all. `hitZones` now cuts the
+  ground at the midpoint between two bands, so a hand from outside finds the
+  size and one from inside finds the width; where the frame is nothing and
+  the two are one circle the zones meet back to back and the outer edge keeps
+  the outward side. Telling them apart is a word on the drawing - `gauge
+  size`, `frame width` - because at a pixel apart lighting one of the two up
+  is not a difference an eye can read; the band under the hand also goes
+  solid. Two things only the running editor showed: a `stroke-width` in the
+  stylesheet beats the attribute, so every zone was silently the same size
+  again, and a stable sort by radius gave the outward side to the wrong edge
+  where the two coincided.
 - **46** - ~~Ticks, sub-ticks and every text should answer the gauge
   background adaptively. Visible on a light dashboard theme when the big
   gauge's background goes red: the marks become unreadable.~~ Done.
