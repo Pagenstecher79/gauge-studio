@@ -14,6 +14,17 @@ npm run typecheck  # tsc -p jsconfig.json --noEmit   (NOT `npx tsc`, see below)
 npm run ha         # real Home Assistant in Docker (docker/README.md)
 ```
 
+**The build does its own minifying**, in `build/slim-bundle.js`. Vite turns
+esbuild's whitespace pass off for an `es` library on the assumption that
+something downstream will bundle it again; Home Assistant serves the file as
+it is, so the card used to ship its indentation, its method names and 117 kB
+of comments. One plugin runs that pass, and a second compacts the inside of
+every ``css` `` literal, which esbuild does not look into at all. Together:
+857 kB to 564 kB, 232 kB to 157 kB gzipped. Two things follow. A new
+``css` `` literal is compacted like every other, so do not hand-minify one -
+write it readably. And an ``html` `` literal is *not* touched, because a
+space between two text nodes is a space between two words.
+
 **Testing happens in that one Docker instance, at <http://127.0.0.1:8123/>.**
 One is enough and one is all there should be: a second container, a second
 port or a second browser profile splits the dashboards, the storage and the
