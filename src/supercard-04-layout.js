@@ -464,6 +464,16 @@ if (!customElements.get('sc-layout-renderer')) customElements.define('sc-layout-
 const SAME_SPOT_PX = 4;
 
 /**
+ * How far outside its own rect a part's frame can still be grabbed.
+ *
+ * The same 8px `.inner-frame::after` adds - a single digit's text rect is too
+ * small a thing to aim at - and the walk down a stack of parts has to test
+ * against what the pointer can actually hit, or a press would pick a part
+ * that the stack it is walking says is not there.
+ */
+const PART_GRAB_PX = 8;
+
+/**
  * The icon on an alignment button.
  *
  * Two bars and the line they are pulled to. Unicode has arrows and brackets
@@ -1386,6 +1396,25 @@ const SURFACE_PARTS = Object.freeze({
 });
 
 /**
+ * What the card's own icon has: which icon it is.
+ *
+ * One part and one row, because there is only one thing about it the canvas
+ * can answer for. The card draws the icon its entity carries, which is the
+ * right icon almost always and the wrong one exactly when somebody has put
+ * the entity on a card to mean something else - and until now there was
+ * nowhere at all to say so. Left empty it goes back to the entity's own.
+ */
+const ICON_PARTS = Object.freeze({
+  glyph: {
+    label: 'Icon', spot: { l: 50, t: 50 },
+    on: () => true,
+    steps: [
+      { key: 'icon_override', icon: icon('image'), what: 'icon', pickIcon: true },
+    ],
+  },
+});
+
+/**
  * What a bar has that can be worked on where it is drawn.
  *
  * None of them is a ring, so none has a radius and none is dragged in or out:
@@ -1815,30 +1844,39 @@ function hitNode(/** @type {any} */ node, /** @type {number} */ x, /** @type {nu
  * would otherwise be answered with through the pill; document order is the
  * order the renderer painted in, so the thing on top is the thing named.
  *
+ * All of them, in that order, rather than only the first: the one on top is
+ * the answer to a press, and the rest are the stack a second press at the
+ * same spot walks down - the same gesture the canvas has for the elements
+ * one level up.
+ *
  * @param {any} box the element's box on the canvas
  * @param {number} x
  * @param {number} y
  * @param {any} parts the parts this kind will answer with
- * @returns {string|null}
+ * @returns {string[]} topmost first, empty when the press landed on none
  */
-function drawnPartAt(box, x, y, parts) {
+function drawnPartsAt(box, x, y, parts) {
   const root = box?.querySelector('sc-gauge, sc-progressbar')?.shadowRoot;
-  if (!root) return null;
+  if (!root) return [];
   const scan = (/** @type {any} */ node) => {
     if (!node.children.length) return hitNode(node, x, y);
     let best = 0;
     for (const kid of node.children) best = Math.max(best, scan(kid));
     return best;
   };
-  let hit = null;
-  let sure = 0;
+  const hits = [];
   for (const node of root.querySelectorAll('[data-sc-part]')) {
     const part = /** @type {any} */ (node).dataset.scPart;
     if (!parts[part]) continue;
     const h = scan(node);
-    if (h && h >= sure) { sure = h; hit = part; }
+    if (h) hits.push({ part, h });
   }
-  return hit;
+  // Read backwards, then sorted by certainty - `sort` is stable, so the two
+  // rules stay in that order. A part marked on more than one node is named
+  // once, by the topmost of them.
+  hits.reverse();
+  hits.sort((a, b) => b.h - a.h);
+  return [...new Set(hits.map(h => h.part))];
 }
 
 /**
@@ -1919,6 +1957,24 @@ const INNER_KINDS = Object.freeze({
       Object.assign(next[t.idx], patch);
       return { key: 'progressbars', value: next };
     },
+  },
+  icon: {
+    // No index to take: there is one card icon, and the id is the whole name.
+    match: /^icon$/,
+    noun: 'icon',
+    holds: 'which icon it draws',
+    // Nothing in the form to bring to the top - the icon had no setting at
+    // all before this one, which is half of why it is worth having here.
+    editor: '',
+    parts: NO_PARTS,
+    rings: ICON_PARTS,
+    measure: boxFrame,
+    // The card's own config: the icon belongs to the card, not to an entry in
+    // a list, so the slot is the entry being edited.
+    config: (/** @type {any} */ slot) => slot,
+    drawn: () => [],
+    write: (/** @type {any} */ _slot, /** @type {any} */ _t, /** @type {any} */ patch) =>
+      ({ key: '__merge__', value: { ...patch } }),
   },
   surface: {
     match: /^surface_(\d+)$/,
@@ -2083,6 +2139,8 @@ class ScCanvasEditor extends LitElement {
     this._revealOnUp = null;
     this._innerSel = null;
     this._innerAlso = [];
+    /** @type {{x: number, y: number, same: boolean, stack: string[]}|null} */
+    this._innerLastDown = null;
     this._hl = true;
     this._hlHold = 0;
     this._hlTimer = 0;
@@ -2167,8 +2225,17 @@ class ScCanvasEditor extends LitElement {
    * Whether the canvas draws the real gauges or plain boxes. Kept in the card
    * rather than in this element, because the switch now sits in another menu -
    * two elements cannot share a field, and they do share the card.
+   *
+   * On regardless while an element's own parts are in hand. Those frames sit
+   * on the drawing - a pointer's frame is where the pointer is drawn - so
+   * with plain boxes there is nothing for them to sit on, and the button
+   * that opens them used to be greyed out with a note asking for the switch
+   * to be thrown first. A button that explains what to do instead of doing
+   * it is a button doing half its job: opening an element now brings the
+   * drawing with it, and closing it takes it away again. Nothing is
+   * committed - the switch keeps saying what the card was set to.
    */
-  get _live() { return this.slot?.live_preview !== false; }
+  get _live() { return this._innerOn || this.slot?.live_preview !== false; }
 
   connectedCallback() {
     super.connectedCallback();
@@ -2232,6 +2299,7 @@ class ScCanvasEditor extends LitElement {
       this._inner = null;
       this._innerRects = null;
       this._innerSel = null;
+      this._innerLastDown = null;
     }
     // An element left any other way - a click beside the canvas, a different
     // element taken up - keeps the zoom where it is and only forgets where it
@@ -2486,18 +2554,27 @@ class ScCanvasEditor extends LitElement {
          press, and the badge, which answers from across the canvas. The border
          goes solid-grey so a locked surface stops reading as a dashed one. */
       .el.pinned { cursor: default; border-color: #9e9e9e; border-style: solid; }
-      /* Top right, and twice the size it was: whether a lock is open or shut
-         is the one thing about it worth reading from across the canvas, and at
-         9px the two glyphs were the same small smudge. The top left is the
-         ring steppers' corner now. A pseudo-element cannot hold an inline
-         SVG, so this one is the same drawing as a mask - which is also why it
-         takes a drop-shadow filter rather than a text-shadow. */
-      .el.pinned::before { content: ''; position: absolute; top: 6px; right: 6px;
-                           width: 18px; height: 18px; z-index: 6;
-                           background: #fff;
-                           filter: drop-shadow(0 1px 2px #000) drop-shadow(0 0 3px #000);
-                           -webkit-mask: var(--sc-lock-mask) center / contain no-repeat;
-                           mask: var(--sc-lock-mask) center / contain no-repeat; }
+      /* Top right, where the lock badge used to be drawn: it is a button now,
+         and it is on every box rather than only on the locked ones. A badge
+         that only appears once the lock is shut answers "is this locked" and
+         nothing else - the way to shut it was a selection and a second button
+         under the canvas, which is a long way round for one box. The one
+         under the canvas stays, because a group is the thing it is good at.
+
+         An open lock is quiet and a shut one is not: sixteen bright locks
+         over sixteen gauges would be a row of buttons with a drawing behind
+         it, and the state worth reading from across the canvas is the shut
+         one. Hover and focus bring the quiet ones up. */
+      .el-lock { position: absolute; top: 6px; right: 6px; z-index: 7;
+        width: 24px; height: 24px; padding: 0; font-size: 15px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; cursor: pointer; touch-action: none;
+        border: 1px solid transparent; background: none; color: #fff;
+        opacity: 0.32; filter: drop-shadow(0 1px 2px #000) drop-shadow(0 0 3px #000);
+        transition: opacity 0.12s; }
+      .el-lock:hover, .el-lock:focus-visible { opacity: 1; }
+      .el.sel > .el-lock { opacity: 0.6; }
+      .el.pinned > .el-lock { opacity: 1; }
       /* Which boxes answer a push, and so take that click away from the card
          underneath them. Bottom left, clear of the lock above it and of the
          resize handle opposite. The card's own badge sits on the canvas frame.
@@ -2580,11 +2657,11 @@ class ScCanvasEditor extends LitElement {
          frame; amber is the one part in hand, and it is warm rather than loud
          because it lies over artwork somebody is trying to look at. */
       :host { --sc-part: #8ce0ff; --sc-part-sel: #f2b544; --sc-part-sel-ink: #1b1200; }
-      /* The lock the pinned badge is masked with, here because a content
+      /* The drawing the push badge is masked with, here because a content
          property cannot hold an element and a mask has to come from
-         somewhere. */
-      :host { --sc-lock-mask: ${unsafeCSS(iconMask('lock'))};
-              --sc-push-mask: ${unsafeCSS(iconMask('pointer'))}; }
+         somewhere. The lock had one too until it became a button, which can
+         simply hold the icon. */
+      :host { --sc-push-mask: ${unsafeCSS(iconMask('pointer'))}; }
       /* The halo and the offset outline both paint *outside* the box, and a
          drag moves the box by rewriting left/top. WebKit then repaints
          only the border box and leaves the ring behind, so a label dragged
@@ -2875,6 +2952,13 @@ class ScCanvasEditor extends LitElement {
       .ring-pick { height: 20px; padding: 0 2px; font-size: 11px; line-height: 1;
         border-radius: 4px; cursor: pointer; max-width: 108px;
         border: 1px solid var(--sc-part-sel); background: rgba(0,0,0,0.5); color: #fff; }
+      /* Home Assistant's picker is a full-height text field with a dropdown,
+         which is a form control in a row of 20px chips. Scaled down rather
+         than restyled: its insides are its own shadow root's, and the two
+         custom properties it does read are the ones below. */
+      .ring-iconpick { max-width: 150px; --mdc-typography-subtitle1-font-size: 11px;
+        --text-field-padding: 0 4px; }
+      .ring-iconpick::part(base) { height: 24px; }
       /* On the edge it runs along, at the point the radius reaches. Above
          everything else on the box, because a corner is where a chip is least
          likely to be but the two can still meet on a small element.
@@ -3486,6 +3570,26 @@ class ScCanvasEditor extends LitElement {
     this._commit(c);
   }
 
+  /**
+   * Lock or unlock one element, from its own button on the box.
+   *
+   * Beside `_lockSelection` rather than through it: that one is about a
+   * selection and answers one press with one state for all of them, while
+   * this is about the box under the finger and must not touch what happens
+   * to be selected - nor select it, which would throw away a selection being
+   * built for something else.
+   *
+   * @param {string} id
+   */
+  _toggleLock(id) {
+    const c = structuredClone(this._canvas);
+    const el = c.elements.find(e => e.id === id);
+    if (!el) return;
+    // Not locked carries no key at all - see `_lockSelection`.
+    if (isPinned(el)) delete el.locked; else el.locked = true;
+    this._commit(c);
+  }
+
   /** Whether every selected element is locked, which is what unlocks them. */
   get _allLocked() {
     const els = this._canvas.elements;
@@ -3981,6 +4085,7 @@ class ScCanvasEditor extends LitElement {
     this._inner = this._innerOn ? null : target.id;
     this._innerRects = null;
     this._innerSel = null;
+    this._innerLastDown = null;
     // The parts being framed are a couple of viewBox units across, and at the
     // zoom a whole canvas is arranged at they cannot be aimed at, let alone
     // dragged - so the gauge fills the window as it is opened, and the canvas
@@ -4072,6 +4177,8 @@ class ScCanvasEditor extends LitElement {
   _letGoOfPart() {
     if (this._innerSel) this._innerSel = null;
     if (this._innerAlso.length) this._innerAlso = [];
+    // Nothing in hand is not a step in a walk down a stack of parts.
+    this._innerLastDown = null;
   }
 
   /**
@@ -4120,6 +4227,63 @@ class ScCanvasEditor extends LitElement {
     this._innerAlso = this._innerAlso.includes(part)
       ? this._innerAlso.filter(p => p !== part)
       : [...this._innerAlso, part];
+    // As on the canvas: a press that changed what is held is not a step in a
+    // walk down a stack.
+    this._innerLastDown = null;
+  }
+
+  /**
+   * Which of an element's parts lie under a pointer position, topmost first.
+   *
+   * The canvas has `_stackAt` for its elements and this is the same thing one
+   * level down: geometry rather than the event's target, because a part the
+   * press cannot reach is exactly what it has to find. The rects are the
+   * measured ones the frames are drawn from, grown by the same slack the
+   * frames are grabbed with, and later in the list draws on top - so reversed
+   * is the order a click meets them.
+   */
+  _partStackAt(e) {
+    const target = this._innerTarget;
+    const box = this._innerBoxRect();
+    const rects = this._innerRects?.parts;
+    if (!target || !box || !rects) return [];
+    const drawn = new Set(target.drawn);
+    const hit = [];
+    for (const part of Object.keys(target.parts)) {
+      const r = drawn.has(part) ? rects[part] : null;
+      if (!r) continue;
+      const l = box.left + r.l / 100 * box.width - PART_GRAB_PX;
+      const t = box.top + r.t / 100 * box.height - PART_GRAB_PX;
+      const w = r.w / 100 * box.width + 2 * PART_GRAB_PX;
+      const h = r.h / 100 * box.height + 2 * PART_GRAB_PX;
+      if (e.clientX >= l && e.clientX <= l + w
+          && e.clientY >= t && e.clientY <= t + h) hit.push(part);
+    }
+    return hit.reverse();
+  }
+
+  /**
+   * One step down the stack of parts under the pointer.
+   *
+   * The walk the canvas does for its elements, done for the parts inside one:
+   * a label lying entirely under the value can be taken hold of no other way,
+   * and a person who has learned the gesture outside the element has no
+   * reason to expect it to stop working inside it.
+   *
+   * On release rather than on the press, and never after a drag, for the
+   * reasons `_onUp` gives for the canvas' own walk. Not while several parts
+   * are held either: the walk replaces what is in hand, which is the opposite
+   * of what holding several of them is for.
+   */
+  _walkParts(d) {
+    const last = this._innerLastDown;
+    if (!d || d.mode !== 'move' || d.started || !last?.same) return;
+    if (this._innerAlso.length || last.stack.length < 2) return;
+    const at = last.stack.indexOf(this._innerSel || '');
+    const next = last.stack[(Math.max(at, 0) + 1) % last.stack.length];
+    if (!next || next === this._innerSel) return;
+    this._innerSel = next;
+    this._revealPart(next);
   }
 
   /**
@@ -4142,6 +4306,10 @@ class ScCanvasEditor extends LitElement {
       this._toggleHeld(part);
       return;
     }
+    // A press on anything but a part's own frame ends whatever walk was
+    // going on - a chip, a ring and a corner grip each name what they act on,
+    // so there is nothing to walk down.
+    if (mode !== 'move') this._innerLastDown = null;
     // A chip is grabbed as itself. It used to pass the press on to its ring,
     // so dragging one resized the thing it named - a lever on a part rather
     // than the part, which the ring's own band already is and does better.
@@ -4182,6 +4350,18 @@ class ScCanvasEditor extends LitElement {
       this._ptr = { x: e.clientX, y: e.clientY };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
       return;
+    }
+    // Pressing the same spot again keeps the part that is already in hand
+    // there rather than jumping back to the top of the stack, so a part
+    // clicked down to can still be dragged. The step itself is taken on
+    // release, in `_walkParts`.
+    if (mode === 'move') {
+      const stack = this._partStackAt(e);
+      const prev = this._innerLastDown;
+      const same = !!prev && Math.abs(prev.x - e.clientX) <= SAME_SPOT_PX
+                          && Math.abs(prev.y - e.clientY) <= SAME_SPOT_PX;
+      this._innerLastDown = { x: e.clientX, y: e.clientY, same, stack };
+      if (same && this._innerSel && stack.includes(this._innerSel)) part = this._innerSel;
     }
     // Read before the selection moves: what is held is the answer to the press
     // that is arriving, and `_innerHeld` puts whatever is in hand at its head.
@@ -5572,6 +5752,19 @@ class ScCanvasEditor extends LitElement {
           <span class="ring-step-val">${st.unit
             ? now(st) + splitUnit(cfg[st.key], st.dflt).unit : now(st)}</span>
         </span>`;
+      // Home Assistant's own icon dropdown, because an icon is picked by
+      // looking at it and by typing a few letters of its name - neither of
+      // which a list of ours would do as well, and both of which every other
+      // icon field in Home Assistant already does this way.
+      if (st.pickIcon) return html`
+        <span class="ring-group">${stepIcon(st)}
+          <ha-icon-picker class="ring-wide ring-iconpick" .hass=${this.hass}
+                          .value=${cfg[st.key] || ''}
+                          title=${`Set the ${st.what}`}
+                          @pointerdown=${keep}
+                          @value-changed=${(/** @type {any} */ e) =>
+                            this._writeInner({ [st.key]: e.detail.value || undefined }, false)}></ha-icon-picker>
+        </span>`;
       if (st.picks) return html`
         <span class="ring-group">${stepIcon(st)}
           <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
@@ -5736,13 +5929,28 @@ class ScCanvasEditor extends LitElement {
     const t = this._innerTarget;
     const box = t && this.shadowRoot?.querySelector(`.el[data-item-id="${t.id}"]`);
     if (!box) return false;
-    const part = drawnPartAt(box, e.clientX, e.clientY, { ...t.parts, ...t.rings });
-    if (!part) return false;
+    const stack = drawnPartsAt(box, e.clientX, e.clientY, { ...t.parts, ...t.rings });
+    if (!stack.length) return false;
+    // Pressing the same spot again walks one step down the stack, the way the
+    // canvas walks down its elements: a tick under a pill can be reached no
+    // other way. On the press rather than on the release, because taking a
+    // drawn part in hand starts no drag of its own - a text is dragged by the
+    // frame this press puts round it, and a ring by its own band.
+    const prev = this._innerLastDown;
+    // Not with a modifier down: that press adds a second part to what is
+    // held, and adding the one already in hand's neighbour is not what the
+    // hand asked for.
+    const mod = e.shiftKey || e.ctrlKey || e.metaKey;
+    const same = !mod && !!prev && Math.abs(prev.x - e.clientX) <= SAME_SPOT_PX
+                                && Math.abs(prev.y - e.clientY) <= SAME_SPOT_PX;
+    const at = stack.indexOf(this._innerSel || '');
+    const part = same && at >= 0 ? stack[(at + 1) % stack.length] : stack[0];
+    this._innerLastDown = { x: e.clientX, y: e.clientY, same, stack };
     e.preventDefault();
     e.stopPropagation();
     // The same modifier that picks a second element on the canvas adds a
     // second text to what is held.
-    if (t.parts[part] && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+    if (t.parts[part] && mod) {
       this._toggleHeld(part);
       return true;
     }
@@ -5834,6 +6042,10 @@ class ScCanvasEditor extends LitElement {
       if (d.mode === 'chip' && d.held && !d.started && this._innerSel === d.part) {
         this._innerSel = null;
       }
+      // Before the reveal, which is then left to the part the walk landed on:
+      // the press that walks is a press on the part already in hand, so it
+      // asked for no reveal of its own.
+      this._walkParts(d);
       // A press that turned into a drag has been answered by the drag, and
       // the part it was about may not even be the one in hand any more.
       const reveal = this._revealOnUp;
@@ -6494,9 +6706,15 @@ class ScCanvasEditor extends LitElement {
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
     const hlTip = 'The part in hand blinks on the drawing itself and is lent a colour that stands out against what it is drawn on - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
-    const liveTip = this._live
-      ? "The real gauges and bars. Text sizes are the card's, not this preview's."
-      : 'Plain boxes - easier to see and to grab.';
+    // The switch says what the card is set to; while an element is open the
+    // preview is on over the top of it, and the tip is what says so - a
+    // switch that reads "on" and cannot be thrown explains nothing on its own.
+    const liveHeld = this._innerOn && this.slot?.live_preview === false;
+    const liveTip = liveHeld
+      ? 'On for as long as this element\'s own parts are in hand - the frames sit on the drawing. Back to plain boxes when it is closed.'
+      : (this._live
+          ? "The real gauges and bars. Text sizes are the card's, not this preview's."
+          : 'Plain boxes - easier to see and to grab.');
 
     return html`
       <div class="canvas-settings">
@@ -6515,7 +6733,7 @@ class ScCanvasEditor extends LitElement {
         <span class="hint">%</span>
         <span class="gap"></span>
         <span class="settings-label">Live preview ${SC.tipDot(liveTip, { right: true })}</span>
-        <ha-switch .checked=${this._live}
+        <ha-switch .checked=${this._live} .disabled=${liveHeld}
                    @change=${e => this._send('live_preview', e.target.checked ? undefined : false)}></ha-switch>
         <span class="gap"></span>
         <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
@@ -6730,14 +6948,21 @@ class ScCanvasEditor extends LitElement {
                 ${live ?? el.id}
                 ${inner?.id === el.id ? html`
                   <button class="inner-open ${this._innerOn ? 'on' : ''}"
-                          title=${!this._live
-                            ? 'Switch the live preview on - the frames sit on the drawing'
-                            : (this._innerOn
-                                ? `Done with this ${inner.k.noun}'s own parts`
-                                : `Take this ${inner.k.noun}'s own parts in hand - ${inner.k.holds}`)}
-                          ?disabled=${!this._live}
+                          title=${this._innerOn
+                            ? `Done with this ${inner.k.noun}'s own parts`
+                            : `Take this ${inner.k.noun}'s own parts in hand - ${inner.k.holds}`
+                              + (this.slot?.live_preview === false
+                                  ? ', with the live preview on for as long as it is open'
+                                  : '')}
                           @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
                           @click=${() => this._toggleInner()}>${icon('pencil')}</button>` : ''}
+                ${this._innerOn ? '' : html`
+                <button class="el-lock"
+                        title=${pinned
+                          ? 'Locked - press to let it be dragged again'
+                          : 'Lock in place, so a stray drag cannot move it'}
+                        @pointerdown=${(/** @type {any} */ e) => { e.stopPropagation(); e.preventDefault(); }}
+                        @click=${() => this._toggleLock(el.id)}>${icon(pinned ? 'lock' : 'lock-open')}</button>`}
                 ${this._innerOn && this._inner === el.id ? this._renderInner() : ''}
                 ${pinned || selected.length > 1 ? '' : html`
                 <div class="handle" @pointerdown=${e => this._onDown(e, idx, 'resize')}></div>`}

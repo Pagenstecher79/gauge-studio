@@ -39,10 +39,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   background where it paints one and the card's otherwise, and handed to the
   renderer as `--sc-hl-ink`. A pill keeps its own colour and only breathes:
   the value stands on it, so inking it would hide the thing being set.
-- **2** - The dim pulse works in Chrome and not in Safari. Needs a real
-  Safari to say why; the suspicion is `filter` on SVG elements. Whatever
-  replaces it has to keep an element's own opacity intact (a frame ring at
-  0.4, the bar's label at 0.8), which is the reason it is a filter today.
+- **2** - ~~The dim pulse works in Chrome and not in Safari.~~ Done, in the
+  same change that wrote this list down, which is why it was never struck
+  through. The suspicion was right: a CSS `filter` reaches the outermost
+  `<svg>` in Safari and not the `<line>` and `<text>` inside it, so Safari
+  computed the animation and painted nothing. The pulse is the `opacity`
+  property now, which every engine paints on an SVG child, and the marks
+  that carry an opacity of their own keep it because the keyframes multiply
+  rather than set: the drawing puts its own number in `--sc-hl-own` and the
+  mark breathes from where it already was.
 
 ## Gauge
 
@@ -148,9 +153,16 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Canvas
 
-- **10** - Show an object's edit button only in live-preview mode - or better,
-  have the button switch to live preview for as long as the object editor is
-  open.
+- **10** - ~~Show an object's edit button only in live-preview mode - or
+  better, have the button switch to live preview for as long as the object
+  editor is open.~~ Done, the better way. The frames sit on the drawing, so
+  with plain boxes there is nothing for them to sit on and the button used to
+  be greyed out with a note asking for the switch to be thrown first - a
+  button explaining what to do instead of doing it. Opening an element now
+  brings the drawing with it and closing it takes it away again. Nothing is
+  committed: `_live` answers yes while the parts are in hand, the switch goes
+  on and out of reach for as long as that lasts and says why, and the card
+  keeps whatever it was set to.
 - **15** - ~~Reset the canvas zoom to its default when the card editor is
   opened again.~~ Done by taking the memory out. The zoom used to be kept for
   the life of the page, keyed by the canvas' shape, so that a glance at
@@ -165,15 +177,46 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   it keeps the element and puts the same instance back, so the zoom survives a
   tab switch by itself. A second opening of the dialog builds a new editor,
   and that is the one case the memory ever covered.
-- **16** - In the ordinary canvas view, show each object's lock button
+- **16** - ~~In the ordinary canvas view, show each object's lock button
   permanently and make it toggle. Keep the lock button under the canvas for
-  locking and unlocking whole groups.
-- **21** - The main icon should only be dragged out square, and be configured
+  locking and unlocking whole groups.~~ Done. The lock in the top right
+  corner of a box was a badge that appeared once the box was locked, so it
+  answered "is this locked" and nothing else - shutting one meant selecting
+  it and pressing the button under the canvas, a long way round for one box.
+  It is a button now, on every box, and it toggles that box alone without
+  touching or taking the selection. The one under the canvas stays, because
+  a group is what it is good at. An open lock is drawn quietly and a shut one
+  is not: sixteen bright locks over sixteen gauges are a row of buttons with a
+  drawing behind them, and the state worth reading across the canvas is the
+  shut one. The frames own the drawing while an element's parts are in hand,
+  so the locks step aside for as long as that lasts.
+- **21** - ~~The main icon should only be dragged out square, and be configured
   on the canvas through its own edit button (picking the icon from HA's
-  dropdown).
-- **22** - Inside an object editor, clicking to select should behave as it
+  dropdown).~~ Done, in two halves. The icon draws on a square em box like a
+  gauge draws on a circle, so its shape is its nature and not a choice:
+  `isSquareLocked` answers for it now, which is one rule fewer than the
+  exception `newBox` used to carry alone, and the corner grip keeps it square
+  wherever it is dragged. The other half is that the icon had no setting
+  anywhere - it took the entity's own icon and there was nothing to say
+  otherwise - so an entity put on a card to mean something else had no say.
+  It is a kind in `INNER_KINDS` now, with one part and one chip, and the chip
+  holds HA's own `ha-icon-picker`; `icon_override` is what it writes and what
+  the core reads before falling back to the entity's icon.
+- **22** - ~~Inside an object editor, clicking to select should behave as it
   does on the main canvas: clicking the same spot cycles through elements
-  that lie over one another.
+  that lie over one another.~~ Done, in both places a part is taken hold of.
+  A press on the drawing answered with the topmost thing under it and nothing
+  else, so a tick lying under the pill and a ring under the pointer could be
+  reached only by hunting along the row of chips - `drawnPartsAt` hands back
+  the whole stack in that same order now, and a second press at the same spot
+  takes the next one. A press on a text's frame walks the frames the same way,
+  measured off the rects the frames are drawn from and grown by the slack they
+  are grabbed with, so the walk finds exactly what the press can hit. The
+  rules are the canvas' own: a press that moved was a drag and picks nothing
+  new, a press with a modifier is adding to what is held rather than walking,
+  bare ground starts over, and the spot that is already in hand stays in hand
+  for as long as the finger is down - so a part clicked down to can still be
+  dragged.
 - **24** - ~~Make the chip menus resizable, with a grip in one of the lower
   corners, bounded so they can be neither too large nor too small.~~ Done. A
   grip in the bottom right corner scales the whole menu between three
