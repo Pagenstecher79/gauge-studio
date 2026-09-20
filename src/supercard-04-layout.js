@@ -5959,10 +5959,27 @@ class ScCanvasEditor extends LitElement {
       ].map(held).filter(clear)
         .sort((/** @type {any} */ p, /** @type {any} */ q) =>
           (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
+      // And no further than the panel's own size. A step beside something is
+      // on the order of the thing stepping: past a pill it is a few pixels,
+      // past a tick ring it is the width of the gauge, and a panel that has
+      // travelled that far has lost its chip - the ticks' numbers ended up in
+      // the far corner from the chip that opened them. A ring is also the
+      // mark that suffers it least: it is drawn all the way round, so a panel
+      // resting on one arc of it hides nothing that cannot be read elsewhere.
+      // Measured from where the panel comes to rest inside the canvas, not
+      // from where it would hang: being brought inside is not wandering, and
+      // counting it made the step past a value box read as far as the step
+      // round a tick ring. Half as much again as the panel's own size tells
+      // the two apart with room to spare - measured on the big gauge, the
+      // value's way out is 126px against a cap of 180, the tick ring's 329
+      // against 159.
+      const reach = Math.max(b.width, b.height) * 1.5;
+      const near = ways.filter((/** @type {any} */ w) =>
+        Math.abs(w.x - best.x) + Math.abs(w.y - best.y) <= reach);
       // Nowhere clear inside the canvas leaves it where it was: a mark that
       // fills the view has no beside, and a panel shoved off the edge to
       // honour the rule would be worse than one lying over it.
-      if (ways.length) best = ways[0];
+      if (near.length) best = near[0];
     }
     if (Math.abs(best.x - was.x) < 0.5 && Math.abs(best.y - was.y) < 0.5) return false;
     box.style.setProperty('--sc-steps-dx', best.x + 'px');
