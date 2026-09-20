@@ -1955,6 +1955,17 @@ const BAR_PARTS = Object.freeze({
         read: () => '',
         patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
           gradientPresetPatch(v, 'bar') },
+      // The list the ramp above writes into, and the one a hand-mixed fill is
+      // made of. A bar reads its positions in per cent and has no bands, so
+      // the two questions a gauge's list carries are not asked here.
+      { stops: true, icon: icon('palette'), what: 'colours',
+        condition: (/** @type {any} */ cfg) => !!cfg.use_gradient,
+        read: (/** @type {any} */ cfg) => normalizeStops(
+          cfg.gradient_stops ?? [{ color: cfg.color1 || '#2196f3', pos: 0 },
+                                 { color: cfg.color2 || '#4caf50', pos: 100 }],
+          { fill: false }),
+        patch: (/** @type {any} */ _cfg, /** @type {any[]} */ list) =>
+          ({ gradient_stops: list }) },
       { key: 'gradient_as_solid', icon: icon('droplet'), flag: true,
         what: 'one colour, read off the ramp',
         condition: (/** @type {any} */ cfg) => !!cfg.use_gradient },

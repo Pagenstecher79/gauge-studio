@@ -366,10 +366,12 @@ Not everything fits on a chip. What worked:
   angle and the effect while the colours themselves sit five folds down is
   exactly the split these frames exist to end - and it is the split the rule
   below forbids. So the stop list goes under the chip wherever a part is
-  coloured from one: a surface's paint, a gauge's ring, and the disc a gauge
-  is drawn on. It takes its unit with it, because a position read on the
-  entity's scale and one read in per cent are the same number meaning two
-  things. `<sc-gradient-stops>` is the one editor rather than a second one
+  coloured from one: a surface's paint, a gauge's ring, the disc a gauge
+  is drawn on, and a bar's fill. It takes its unit with it, because a position
+  read on the entity's scale and one read in per cent are the same number
+  meaning two things - a bar has neither that question nor bands, so its row
+  carries the list alone. `<sc-gradient-stops>` is the one editor rather than
+  a second one
   (`stops` on a step, with `absolute` and `blocks` where the reading of a
   position is a question of the config), and the panel's size grip
   is what makes room for it - a panel at its default width is too narrow to
