@@ -26,6 +26,21 @@ is `field.framedBy` - a field names the part whose frame replaces it, and
 disappears while that part is framed. Add the canvas control and the `framedBy`
 in the same change, never in two.
 
+And then say so at both ends. A fold that has quietly lost three of its five
+rows reads as a fold that is missing something, and a panel on the drawing
+that holds three rows of a menu says nothing about the eight still sitting
+below it. `framed-fields.js` answers both from the same rule: `framedIn` tells
+a fold which part took its rows and how many it has left, so the line standing
+in for them can name the menu and know whether to say *the* settings or
+*parts of the* settings; `menusFor` asks it from the drawing's side, naming
+every fold a part came out of and what is left in each, so a panel points down
+at the menus that have something to show and stays quiet when none has. Folds,
+plural, and that is the part worth knowing: a needle takes its length from
+*Shape & Position* and its material from *Pointer*, so a line that named only
+the first would send someone to the fold without what they were looking for.
+A note that says "this one is on the canvas" is true and useless: eight folds
+down a dialog, what the reader needs is the name of the thing that moved.
+
 ## 2. Grab the thing, not a proxy for it
 
 The needle was first draggable by a ring at its base. It worked, and it could

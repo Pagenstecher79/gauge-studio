@@ -808,7 +808,7 @@ class ScGaugeEditor extends LitElement {
             </summary>
             
             <div class="inner-content">
-              ${this._framedNote(sec.items, entry)}
+              ${this._framedNote(sec.items, entry, sec.title)}
               ${renderItems(sec.items)}
               
               ${sec.subsections.map(subsec => {
@@ -823,7 +823,7 @@ class ScGaugeEditor extends LitElement {
                       <span style="font-size:12px; display:inline-flex; opacity:.6;">${icon('chevron-down')}</span>
                     </summary>
                     <div class="inner-content">
-                      ${this._framedNote(subsec.items, entry)}
+                      ${this._framedNote(subsec.items, entry, subsec.title)}
                       ${renderItems(subsec.items)}
                     </div>
                   </details>
@@ -846,46 +846,54 @@ class ScGaugeEditor extends LitElement {
    * that is missing something. It is drawn wherever those rows were - a
    * section's own list or one of its subsections - because a ring's distance
    * and a value's offsets live at different depths of the same menu.
+   *
+   * It names the fold it stands in, and says whether the fold is empty or
+   * only thinner. "This one is on the canvas" was true and useless: read in
+   * a dialog of a dozen folds, a line that does not say which settings have
+   * gone leaves the reader to work out what is missing from what is left,
+   * which is the one thing a fold that has lost its rows cannot show.
    */
-  _framedNote(items, entry) {
+  _framedNote(items, entry, title) {
     // Through the shared rule, not a second reading of `framedBy`: a field
     // may name several parts, and only one of them is the one in hand.
-    let part = null;
-    for (const f of items) {
-      const p = SC.framedPart(f, entry, this._framed);
-      if (p) { part = p; break; }
-    }
-    if (!part) return '';
+    const taken = SC.framedIn(items, entry, this.slot, this._framed);
+    if (!taken) return '';
+    const { part, rest } = taken;
     // The needle is the one framed part that is dragged by its ends rather
     // than in and out, so it is the one that has to say so.
     // The ring grows inward from an outer edge that stands still, so what is
     // dragged is the inner edge and the note has to say which.
-    return html`<div class="framed-note">${part === 'gauge_ring'
-      ? html`Thickness is on the canvas while this one is selected - drag the
-             ring's inner edge, which is the edge of it that moves - and so is
-             how it is coloured, under its chip. The list of stops stays here:
-             a row of colours to be dragged about is not a control that fits
-             on a dial.`
+    const how = part === 'gauge_ring'
+      ? html`drag the ring's inner edge, which is the edge of it that moves,
+             and its colour stands under its chip. The list of stops stays
+             here: a row of colours to be dragged about is not a control that
+             fits on a dial.`
       : part === 'frame_ring'
       // Two edges that are two different settings, which is worth spelling
       // out: nothing else on a gauge is dragged by the outside of it, and a
       // gauge with no frame drawn still has that outer edge to be sized by.
-      ? html`The frame ring is on the canvas while it is selected, and it has
-             two edges: drag the outside to set how far the gauge reaches, and
-             the inside to set how wide the frame is drawn. A gauge with no
-             frame still shows the outer edge, faintly, because that is what
-             its size is. The rest of what the frame is stands under its chip.`
+      ? html`it has two edges: drag the outside to set how far the gauge
+             reaches, and the inside to set how wide the frame is drawn. A
+             gauge with no frame still shows the outer edge, faintly, because
+             that is what its size is. The rest of what the frame is stands
+             under its chip.`
       : part === 'pointer'
-      ? html`Shape, length and offset are on the canvas while this one is
-             selected - drag either end of the needle, or use the buttons on
-             and under its chip.`
+      ? html`drag either end of the needle, or use the buttons on and under
+             its chip.`
       : RING_PARTS.has(part)
-      ? html`This one is on the canvas while it is selected - its distance is
-             the ring you drag, and the rest of what it is stands under its
-             chip.`
-      : html`This one is on the canvas while it is selected - drag its frame
-             or the corner of it for size and place, and the rest of what it
-             is stands on and under its chip.`}</div>`;
+      ? html`its distance is the ring you drag, and the rest of what it is
+             stands under its chip.`
+      : html`drag its frame or the corner of it for size and place, and the
+             rest of what it is stands on and under its chip.`;
+    const name = title || 'These';
+    return html`<div class="framed-note">${rest
+      // A fold with rows left is not empty, and saying its settings "are on
+      // the canvas" in front of the ones still sitting there would read as a
+      // lie about the very rows underneath the line.
+      ? html`Parts of the ${name} settings are in the canvas options box while
+             this one is selected - ${how}`
+      : html`The ${name} settings are on the canvas while this one is
+             selected - ${how}`}</div>`;
   }
 
   _renderLitField(field, entry, idx, gauges) {
@@ -1296,7 +1304,12 @@ function renderCustomBlock(commitFn, hass, slot) {
     return html`<sc-gauge-editor .commitFn=${commitFn} .hass=${hass} .slot=${slot}></sc-gauge-editor>`;
   }
 
+// `formFields` is the form seen from the drawing: the canvas asks it which
+// fold a part has taken rows from, so a chip's panel can say whether more of
+// the same thing is still waiting below. Nothing renders it - the editor
+// above does that - so it hands back the array as it is.
 return /** @type {SupercardModule} */ ({ editorFields, renderCustomBlock, newEntry,
+                                        formFields: () => STYLE_FIELDS,
                                         ownedByCanvas: true });
 
 })());

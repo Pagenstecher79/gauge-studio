@@ -823,6 +823,19 @@ const NEEDLE_GLASS_MODE = (/** @type {any} */ cfg) =>
   lensFitsPointer(cfg?.pointer_width ?? 2)
     ? GLASS_MODE : GLASS_MODE.filter(o => o.value !== 'glass_liquid');
 
+/**
+ * The two shapes a needle is drawn as.
+ *
+ * This was a button on the chip, stepping between the two - which reads well
+ * with two and says nothing about what the other one is until you press it.
+ * A row in the menu names both, and stands beside the width and the colour
+ * that shape the same needle.
+ */
+const POINTER_SHAPE = Object.freeze([
+  { value: 'needle', label: 'Needle' },
+  { value: 'triangle', label: 'Triangle' },
+]);
+
 /** Whether there is a shadow for the four rows under it to shape. */
 const hasShadow = (/** @type {any} */ cfg) =>
   (cfg.pointer_shadow_type || 'none') !== 'none';
@@ -1310,6 +1323,8 @@ const GAUGE_RINGS = Object.freeze({
     // would be a second answer to a question already asked.
     steps: [
       ...SWEEP_STEPS,
+      { key: 'pointer_type', icon: icon('needle'), what: 'shape', picks: POINTER_SHAPE,
+        read: (/** @type {any} */ cfg) => cfg.pointer_type || 'needle' },
       { key: 'pointer_width', icon: THICK, slide: true, by: 0.1, min: 0.1, max: 10,
         dflt: 2, what: 'pointer width' },
       ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
@@ -1338,11 +1353,6 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_shadow_opacity', icon: icon('contrast'), slide: true, by: 0.05, min: 0,
         max: 1, dflt: 0.35, what: 'shadow opacity', condition: hasShadow },
     ],
-    // Shape is the other thing a needle is, and with only two of them a button
-    // on the chip says it better than a select eight folds down the dialog.
-    shapes: { key: 'pointer_type', dflt: 'needle', order: ['needle', 'triangle'],
-              of: { needle: { glyph: '\u25AC', label: 'a needle' },
-                    triangle: { glyph: '\u25B2', label: 'a triangle' } } },
   },
   pointer_center: {
     label: 'Centre point', section: '_section_pointer',
@@ -1509,13 +1519,20 @@ const SURFACE_PARTS = Object.freeze({
 });
 
 /**
- * What the card's own icon has: which icon it is.
+ * What the card's own icon has: which icon it is, and whether it stands on
+ * anything.
  *
- * One part and one row, because there is only one thing about it the canvas
- * can answer for. The card draws the icon its entity carries, which is the
- * right icon almost always and the wrong one exactly when somebody has put
- * the entity on a card to mean something else - and until now there was
- * nowhere at all to say so. Left empty it goes back to the entity's own.
+ * The card draws the icon its entity carries, which is the right icon almost
+ * always and the wrong one exactly when somebody has put the entity on a card
+ * to mean something else - and until now there was nowhere at all to say so.
+ * Left empty it goes back to the entity's own.
+ *
+ * The round plate under it is the other half. It was drawn unconditionally,
+ * which is right in the content row - a glyph floating in a strip of text
+ * needs something to sit on - and wrong on a canvas, where the icon is an
+ * object of its own placed against whatever the card is painted with. So it
+ * is a switch, and it lives here rather than in the form: the plate is a
+ * thing you see, and the place to take it away is where you can see it.
  */
 const ICON_PARTS = Object.freeze({
   glyph: {
@@ -1523,6 +1540,8 @@ const ICON_PARTS = Object.freeze({
     on: () => true,
     steps: [
       { key: 'icon_override', icon: icon('image'), what: 'icon', pickIcon: true },
+      { key: 'hide_icon_background', icon: icon('circle-off'), flag: true,
+        what: 'no plate behind it' },
     ],
   },
 });
@@ -2171,6 +2190,10 @@ const INNER_KINDS = Object.freeze({
     noun: 'gauge',
     holds: 'its label, its value, its scale, its needle',
     editor: 'sc-gauge-editor',
+    // Which module's form the panel points back at. The editor tag draws it;
+    // this is the same form as a field array, for asking what is left in a
+    // fold after a part has taken its rows.
+    form: 'gauge',
     parts: GAUGE_PARTS,
     rings: GAUGE_RINGS,
     measure: measureGauge,
@@ -2214,6 +2237,7 @@ const INNER_KINDS = Object.freeze({
     noun: 'bar',
     holds: 'its ticks, its pill, its label',
     editor: 'sc-progressbar-editor',
+    form: 'progressbar',
     parts: BAR_LABEL_PARTS,
     rings: BAR_PARTS,
     measure: measureBar,
@@ -3377,6 +3401,15 @@ class ScCanvasEditor extends LitElement {
       .ring-note { grid-column: span 4; justify-self: stretch; max-width: 190px;
         font-size: 10px; line-height: 1.3; color: rgba(255,255,255,0.72);
         padding: 1px 2px 2px; }
+      /* The last line of a panel, and it reads as one: quieter than a row
+         that sets something, and set apart from the rows above so the eye
+         does not take it for another control. It is a step larger than the
+         standing text above it, at the size the rows themselves are set in -
+         a line nobody can read is not quiet, it is absent. */
+      .ring-more { grid-column: span 4; justify-self: stretch; display: flex;
+        align-items: center; gap: 4px; margin-top: 2px; padding: 3px 2px 0;
+        border-top: 1px solid rgba(255,255,255,0.12);
+        font-size: 11px; line-height: 1.3; color: rgba(255,255,255,0.62); }
       .ring-flag { display: flex; align-items: center; gap: 4px; height: 20px;
         font-size: 11px; line-height: 1; color: #fff; cursor: pointer;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -5905,7 +5938,6 @@ class ScCanvasEditor extends LitElement {
             @dblclick=${() => this._putChipBack(part)}
             @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'chip')}>
         ${spec.label}
-        ${spec.shapes && sel ? this._renderSwap(spec.label, spec.shapes, 'Make') : ''}
         ${spec.weight && sel ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
         ${spec.turnOff ? html`
           <button class="chip-btn drop"
@@ -6469,8 +6501,13 @@ class ScCanvasEditor extends LitElement {
       (st.read ? st.read(cfg)
        : st.unit ? splitUnit(cfg[st.key], st.dflt).n
        : SC.safeFloat(cfg[st.key], st.dflt));
+    // One sentence per row, on the icon and on the control alike: the icon
+    // is the nearest thing to hand and used to name only the setting, so
+    // hovering it said less than hovering the slider an inch to its right.
+    const tip = (/** @type {any} */ st) => `${spec.label}: ` +
+      (st.flag ? `turn ${st.what} on or off` : `set the ${st.what}`);
     const stepIcon = (/** @type {any} */ st) => html`
-      <span class="ring-step-icon" title=${`${spec.label}: ${st.what}`}>${st.icon}</span>`;
+      <span class="ring-step-icon" title=${tip(st)}>${st.icon}</span>`;
 
     const group = (/** @type {any} */ st) => {
       // A row that would set something this part has not got is not drawn: a
@@ -6489,7 +6526,7 @@ class ScCanvasEditor extends LitElement {
       if (st.paint) return html`
         <span class="ring-group">${stepIcon(st)}
           <label class="ring-wide ring-swatch" style="background:${now(st)}"
-                 title=${`Set the ${st.what}`} @pointerdown=${keep}>
+                 title=${tip(st)} @pointerdown=${keep}>
             <input type="color" .value=${now(st)}
                    @input=${(/** @type {any} */ e) =>
                      this._writeInner(st.patch(cfg, e.target.value), false)}>
@@ -6500,7 +6537,7 @@ class ScCanvasEditor extends LitElement {
       // with its name beside it.
       if (st.flag) return html`
         <span class="ring-group">${stepIcon(st)}
-          <label class="ring-wide ring-flag" title=${`Turn ${st.what} on or off`}
+          <label class="ring-wide ring-flag" title=${tip(st)}
                  @pointerdown=${(/** @type {any} */ e) => e.stopPropagation()}>
             <input type="checkbox" .checked=${!!cfg[st.key]}
                    @change=${(/** @type {any} */ e) =>
@@ -6514,7 +6551,7 @@ class ScCanvasEditor extends LitElement {
       // only "about here".
       if (st.slide) return html`
         <span class="ring-group">${stepIcon(st)}
-          <input type="range" class="ring-slide" title=${`Set the ${st.what}`}
+          <input type="range" class="ring-slide" title=${tip(st)}
                  min=${st.min} max=${st.max} step=${st.by} .value=${String(now(st))}
                  @pointerdown=${(/** @type {any} */ e) => {
                    e.stopPropagation();
@@ -6539,7 +6576,7 @@ class ScCanvasEditor extends LitElement {
         <span class="ring-group">${stepIcon(st)}
           <ha-icon-picker class="ring-wide ring-iconpick" .hass=${this.hass}
                           .value=${cfg[st.key] || ''}
-                          title=${`Set the ${st.what}`}
+                          title=${tip(st)}
                           @pointerdown=${keep}
                           @value-changed=${(/** @type {any} */ e) =>
                             this._writeInner({ [st.key]: e.detail.value || undefined }, false)}></ha-icon-picker>
@@ -6551,7 +6588,7 @@ class ScCanvasEditor extends LitElement {
       const picks = typeof st.picks === 'function' ? st.picks(cfg) : st.picks;
       return html`
         <span class="ring-group">${stepIcon(st)}
-          <select class="ring-wide ring-pick" title=${`Set the ${st.what}`}
+          <select class="ring-wide ring-pick" title=${tip(st)}
                   @pointerdown=${keep}
                   @change=${(/** @type {any} */ e) => {
                     // A row that sets one key names it; one that drops a whole
@@ -6583,11 +6620,27 @@ class ScCanvasEditor extends LitElement {
           ${btn(-1, '−')}<span class="ring-step-val">${shown}</span>${btn(1, '+')}
         </span>`;
     };
+    // The other side of the note in the form: that one says settings have
+    // come here, and without this the panel is silent about the ones that
+    // stayed. Folds with nothing left are dropped - a part that took a whole
+    // fold with it has nowhere to send anyone - and what remains is usually
+    // two, because a part's geometry and its looks are rarely filed together.
+    const below = (target.k.form
+      ? SC.menusFor(window.SupercardModules?.[target.k.form]?.formFields?.() || [],
+                    cfg, this.slot, this._innerSel)
+      : []).filter((/** @type {any} */ m) => m.rest).map((/** @type {any} */ m) => m.title);
+    const where = below.length > 1
+      ? below.slice(0, -1).join(', ') + ' and ' + below[below.length - 1]
+      : below[0];
     return html`
       <div class="ring-steps ${opts?.up ? 'up' : ''} ${opts?.wide ? 'wide' : ''}"
            data-part=${this._innerSel}
            style="left:${left}%; top:${top}%;">
         ${spec.steps.map(group)}
+        ${where ? html`
+          <span class="ring-group ring-more">
+            ${icon('chevrons-down')} More under ${where}, below the canvas
+          </span>` : ''}
         <div class="steps-grip" title="Drag to make this menu bigger or smaller"
              @pointerdown=${(/** @type {any} */ e) => this._stepsResize(e)}></div>
       </div>`;
@@ -6635,10 +6688,10 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * The button on a chip that steps the part through the shapes it can take.
+   * The button on a chip that steps the part through the few states it takes.
    *
    * On the chip rather than in the corner cluster: the corner holds a number
-   * that is stepped up and down, and a shape is neither - it is the same one
+   * that is stepped up and down, and a weight is neither - it is the same one
    * setting the form's select writes, offered where the part is.
    */
   _renderSwap(label, sw, verb) {
