@@ -979,7 +979,11 @@ class ScProgressbar extends LitElement {
 
     if (this._get('show_value', false)) {
       const vSizeStr = parseDim(this._get('value_font_size', 12), `12${u}`, u); 
-      const vWeight = this._get('value_bold', false) ? 'bold' : 'normal';
+      // As the label's, and for the same reason: `value_bold` is the weight
+      // this had before it had three, and a card nobody has edited since is
+      // still carrying it.
+      const vWeight = this._get('value_font_weight', null)
+        || (this._get('value_bold', false) ? '700' : '400');
       let vColor = this._get('value_color', 'var(--primary-text-color)'); 
       
       if (this._get('value_color_adaptive_bar', false)) vColor = isCirc ? exactHexColor : contrastColor(exactHexColor); 
@@ -1234,7 +1238,7 @@ const STYLE_FIELDS = [
   { id: 'value_color_adaptive_bar',   label: 'Adaptive: contrast to bar color', type: 'checkbox', condition: cfg => cfg.show_value && isLin(cfg) },
   { id: 'value_color_adaptive_bar',   label: 'Take colour from gradient', type: 'checkbox', condition: cfg => cfg.show_value && isCirc(cfg) },
   { id: 'value_color_adaptive_theme', label: 'Adaptive: HA theme (light/dark)',   type: 'checkbox', condition: cfg => cfg.show_value },
-  { id: 'value_bold',          label: 'Bold',   type: 'checkbox', condition: cfg => cfg.show_value },
+  { id: 'value_font_weight',   label: 'Weight', type: 'select', options: [ { value: '400', label: 'Normal' }, { value: '500', label: 'Medium' }, { value: '700', label: 'Bold' } ], condition: cfg => cfg.show_value },
   { id: 'value_decimals',      label: 'Decimals',      type: 'range',  min: 0, max: 3, step: 1, placeholder: '0', condition: cfg => cfg.show_value },
   { id: 'value_unit',          label: 'Custom unit (e.g. %)', type: 'text', placeholder: 'Optional', condition: cfg => cfg.show_value },
   { id: 'value_position',      label: 'Text position',         type: 'select', options: [

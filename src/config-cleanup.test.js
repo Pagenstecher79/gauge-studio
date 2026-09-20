@@ -257,7 +257,7 @@ describe('withoutElementConfig', () => {
   });
 });
 
-describe("stripDeadConfig: the bar label's weight", () => {
+describe("stripDeadConfig: the bar text weights", () => {
   it('turns a bold checkbox into the weight it drew', () => {
     const out = stripDeadConfig({ progressbars: [{ entity: 'sensor.a', label_bold: true }] });
     expect(out.progressbars[0]).toEqual({ entity: 'sensor.a', label_font_weight: '700' });
@@ -286,5 +286,16 @@ describe("stripDeadConfig: the bar label's weight", () => {
   it('leaves the other lists alone', () => {
     const out = stripDeadConfig({ gauges: [{ label_bold: true }], progressbars: [{ label_bold: true }] });
     expect(out.gauges[0]).toEqual({ label_bold: true });
+  });
+
+  it('does the value the same way, and both in one pass', () => {
+    const out = stripDeadConfig({ progressbars: [{ label_bold: false, value_bold: true }] });
+    expect(out.progressbars[0])
+      .toEqual({ label_font_weight: '400', value_font_weight: '700' });
+  });
+
+  it('leaves a value weight that is already there', () => {
+    const out = stripDeadConfig({ progressbars: [{ value_bold: true, value_font_weight: '500' }] });
+    expect(out.progressbars[0]).toEqual({ value_font_weight: '500' });
   });
 });

@@ -56,9 +56,10 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   units. A band drawn in user units was a different line on every gauge - a
   hair on a small one and a rope on a big one, and thicker again at every step
   of the canvas zoom, which is wrong for a measure: the part frames and the
-  grip crosshair are 1px whatever is under them. A band is now `BAND_PX`, half
-  a pixel, which is half what it came to on a gauge of the usual size and half
-  the weight of the frames it is read beside.
+  grip crosshair are 1px whatever is under them. A band is now `BAND_PX`, one
+  pixel, which is thinner than it came to on a gauge of any size and the same
+  weight as the frames it is read beside. Half a pixel was tried first and is
+  too little to see.
 - **7** - Sectors created and shaped on the canvas: a permanent `+ sector`
   button in the top right corner, then a chip per sector holding the options
   that cannot be set by hand (gradient, opacity). Inner and outer radius by
@@ -131,6 +132,9 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   two never sit in one config. The tick labels had no weight at all, and the
   one they are given is written only once somebody sets it - a label with none
   keeps inheriting the card's, which is what every bar drawn so far is doing.
+  The value's `value_bold` went the same way in the same change, so the three
+  texts of a bar are set the same way as a gauge's - it has no chip, being no
+  part of the canvas, so its three weights are in the form alone.
 - **20** - The bar label cannot be dragged out and placed by hand.
 - **35** - Check the pill's automatic alignment, and make sure the pill never
   wraps to two lines - shrinking the font where it must.

@@ -129,17 +129,27 @@ function withoutKeysDeep(value, keys) {
 
 
 /**
- * A bar's label with the weight written the one way it is read.
+ * The bar texts whose weight was a checkbox, and the key that holds it now.
  *
- * `label_bold` was a checkbox: normal or bold, nothing between. The label has
- * three weights now, like the gauge's, and `label_font_weight` holds them -
- * so a saved `label_bold` is turned into the weight it drew and taken away.
- * The renderer still reads it, because a card nobody edits is never rewritten
- * and has to keep drawing what it drew; this is what stops the two from
- * sitting in one config, each looking like the setting.
+ * `label_bold` and `value_bold` were normal or bold, nothing between. Both
+ * have the gauge's three weights now, so a saved checkbox is turned into the
+ * weight it drew and taken away. The renderer still reads the checkbox,
+ * because a card nobody edits is never rewritten and has to keep drawing what
+ * it drew; this is what stops the two from sitting in one config, each
+ * looking like the setting.
  *
- * A card that already carries a weight keeps it: the checkbox cannot have
- * been what drew that label.
+ * @type {Readonly<Record<string, string>>}
+ */
+const BOLD_TO_WEIGHT = Object.freeze({
+  label_bold: 'label_font_weight',
+  value_bold: 'value_font_weight',
+});
+
+/**
+ * A bar's texts with their weight written the one way it is read.
+ *
+ * A text that already carries a weight keeps it: the checkbox cannot have
+ * been what drew it.
  *
  * @param {any} slot
  * @returns {any[]|null} the rewritten bars, or null where nothing changed
@@ -149,12 +159,18 @@ function withLabelWeights(slot) {
   if (!Array.isArray(list)) return null;
   let touched = false;
   const next = list.map(bar => {
-    if (!bar || typeof bar !== 'object' || !('label_bold' in bar)) return bar;
+    if (!bar || typeof bar !== 'object') return bar;
+    const olds = Object.keys(BOLD_TO_WEIGHT).filter(k => k in bar);
+    if (!olds.length) return bar;
     touched = true;
-    const { label_bold: bold, ...rest } = bar;
-    return 'label_font_weight' in rest
-      ? rest
-      : { ...rest, label_font_weight: bold ? '700' : '400' };
+    const copy = { ...bar };
+    for (const old of olds) {
+      const key = BOLD_TO_WEIGHT[old];
+      const bold = copy[old];
+      delete copy[old];
+      if (!(key in copy)) copy[key] = bold ? '700' : '400';
+    }
+    return copy;
   });
   return touched ? next : null;
 }

@@ -476,13 +476,14 @@ const PART_GRAB_PX = 8;
 /**
  * How thick a sizing band is drawn, in screen pixels.
  *
- * Half a pixel, which is half what these lines used to be: a band lies across
- * the very ticks and numbers it is there to place, and at a full pixel it hid
- * them. In pixels rather than in the gauge's own units so that it is the same
- * line whatever the gauge's size - the needle's handles and the crosshair are
- * already measured that way.
+ * In pixels rather than in the gauge's own units so that it is the same line
+ * whatever the gauge's size - the needle's handles and the crosshair are
+ * already measured that way. A pixel: half a pixel was tried and is too
+ * little to see, and this is still thinner than the band was on a gauge of
+ * any size, which is the point - it lies across the very ticks and numbers it
+ * is there to place.
  */
-const BAND_PX = 0.5;
+const BAND_PX = 1;
 
 /**
  * The icon on an alignment button.
@@ -2772,7 +2773,7 @@ class ScCanvasEditor extends LitElement {
          it was the ring in hand, back when every ring had one and the width
          was what told them apart. Only the ring in hand is drawn now, so
          there is nothing left to tell apart and the colour is enough. */
-      .ring-band { fill: none; stroke: var(--sc-part); stroke-width: var(--sc-band-w, 0.175);
+      .ring-band { fill: none; stroke: var(--sc-part); stroke-width: var(--sc-band-w, 0.35);
         stroke-dasharray: 1.2 1.2; opacity: 0.5;
         filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.9)); }
       .ring-band.sel { stroke: var(--sc-part-sel); }
@@ -5195,7 +5196,7 @@ class ScCanvasEditor extends LitElement {
     // big one - so its width is worked back out of the pixels it should come
     // to, the way the needle's handles and the crosshair already are.
     const unit = (this._innerRects?.px?.width || 0) * svgBox.w / 100 / GAUGE_VIEW;
-    const bandW = unit > 0 ? BAND_PX / unit : 0.175;
+    const bandW = unit > 0 ? BAND_PX / unit : 0.35;
     return html`
       ${!bands.length ? '' : html`
       <svg class="ring-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
