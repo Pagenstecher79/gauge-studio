@@ -2947,6 +2947,15 @@ class ScCanvasEditor extends LitElement {
       /* Which of the two the middle-axis buttons would act on. */
       .inner-frame.sel { outline: 2px solid var(--sc-part-sel);
         background: rgba(242,181,68,0.22); }
+      /* A frame nobody has taken hold of shows nothing but its head. Every
+         text a gauge draws has one - the label, the value, the multiplier,
+         the scale - and four boxes drawn over a drawing is a drawing you
+         cannot judge any more. The frame is still there to be grabbed: the
+         box keeps its size and the 8px its ::after adds, so a part is taken
+         hold of by pressing where it is drawn, and it shows itself the
+         moment it is. */
+      .inner-frame.bare { outline: none; background: none; box-shadow: none; }
+      .inner-frame.bare .inner-grip { display: none; }
       /* One surface, with the name at its left and the buttons at its right,
          so a frame's head reads the way a ring's chip does. They used to be
          three things placed separately - the name at the frame's left corner
@@ -5366,7 +5375,8 @@ class ScCanvasEditor extends LitElement {
       const r = rects?.[part] || (editing ? this._editRect : null);
       if ((!drawn.has(part) && !editing) || !r) return '';
       return html`
-        <div class="inner-frame ${this._isHeld(part) ? 'sel' : ''}" data-part=${part}
+        <div class="inner-frame ${this._isHeld(part) ? 'sel' : ''}${
+             this._innerSel === part || editing ? '' : ' bare'}" data-part=${part}
              style="left:${r.l}%; top:${r.t}%; width:${r.w}%; height:${r.h}%;"
              title=${`Drag the ${spec.label.toLowerCase()}, or its corner to resize it`}
              @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'move')}>
@@ -6076,6 +6086,8 @@ class ScCanvasEditor extends LitElement {
     // right to be clear of chips: its drawing, and the field it is being
     // typed into. Its head is not in this list - a head steps aside like any
     // other chip, below.
+    // A bare frame counts too: the outline is gone, but the text it holds is
+    // still drawn there, and that is what a chip must not land on.
     for (const f of /** @type {any[]} */ ([...root.querySelectorAll('.inner-frame')])) {
       for (const el of /** @type {any[]} */ ([f, ...f.querySelectorAll('.inner-text')])) {
         const r = el.getBoundingClientRect();
