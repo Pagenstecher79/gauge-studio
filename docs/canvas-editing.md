@@ -316,10 +316,18 @@ Not everything fits on a chip. What worked:
   distance is right - a count, a length, a thickness, a type size. Under the
   chip, because the ring is already saying one thing by being dragged, and a
   second meaning for the same gesture is no meaning at all.
-- **A swap button on the chip** for a setting with two or three values - a
-  shape, a weight. It steps round; the tooltip says what the *next* press will
-  do, so the preposition belongs in the value's own label
-  (`'to normal'`, `'a triangle'`) or the sentence reads wrong.
+- **A swap button** for a setting with two or three values - a shape, a weight.
+  It steps round; the tooltip says what the *next* press will do, so the
+  preposition belongs in the value's own label (`'to normal'`, `'a triangle'`)
+  or the sentence reads wrong.
+- **A chip carries one button, and it is the one that takes the part away.**
+  Everything else a part can be told is in the panel under it. A chip is a
+  handle before it is a row of controls: it is dragged out of the way, it is
+  double-clicked back, and every button on it is one the finger meets while
+  reaching for that drag. A part that is *framed* on the drawing is the
+  exception - its frame is the handle, so its name can hold the weight button
+  and the pencil that opens the field its text is typed into, both of them
+  beside the words they are about.
 - **A switch, a short list, a swatch.** A checkbox for something that is on or
   off, a `<select>` of two or three words, and a swatch that opens the
   browser's own colour control each take the three cells the buttons and the

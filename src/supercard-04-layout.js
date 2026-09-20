@@ -3837,6 +3837,12 @@ class ScCanvasEditor extends LitElement {
         align-items: center; gap: 4px; margin-top: 2px; padding: 3px 2px 0;
         border-top: 1px solid rgba(255,255,255,0.12);
         font-size: 11px; line-height: 1.3; color: rgba(255,255,255,0.62); }
+      /* A weight in the panel rather than on the chip: the same button, at the
+         size the rows around it are, and left where a control would start. */
+      .ring-own { display: flex; align-items: center; height: 20px; }
+      .ring-own .ring-shape { width: 20px; height: 20px; font-size: 13px;
+        border-color: var(--sc-part-sel); background: rgba(0,0,0,0.5); color: #fff; }
+      .ring-own .ring-shape:hover { background: var(--primary-color,#03a9f4); }
       .ring-flag { display: flex; align-items: center; gap: 4px; height: 20px;
         font-size: 11px; line-height: 1; color: #fff; cursor: pointer;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -6605,9 +6611,12 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * The offer that names a part, takes it in hand, and holds what can be said
-   * about it in a word or a glyph - its shape, and the button that takes it
-   * off again. Under it stand the numbers.
+   * The offer that names a part, takes it in hand, and carries the one button
+   * that takes it off again. Under it stand the numbers, and everything else
+   * a part can be told is among them: a chip is a handle before it is a row
+   * of controls, and a button on it is one the finger meets on the way to the
+   * drag. The parts that are framed on the drawing keep theirs - a frame is
+   * not dragged by its name, and the field a text is typed into is there.
    *
    * Written once for every part that has one: a ring works out where its chip
    * goes from the ring itself, a part with a `spot` is told, and from here on
@@ -6626,14 +6635,14 @@ class ScCanvasEditor extends LitElement {
             @dblclick=${() => this._putChipBack(part)}
             @pointerdown=${(/** @type {any} */ e) => this._innerDown(e, part, 'chip')}>
         ${spec.label}
-        ${spec.weight && sel ? this._renderSwap(spec.label, spec.weight, 'Set') : ''}
         ${spec.turnOff ? html`
           <button class="chip-btn drop"
                   title=${`Take the ${spec.label.toLowerCase()} off this ${target.k.noun}`}
                   @pointerdown=${swallow}
                   @click=${() => this._setInnerRing(part, false)}>${icon('trash-2')}</button>` : ''}
       </span>
-      ${sel ? this._renderSteppers(steps?.l ?? at.l, steps?.t ?? at.t, steps) : ''}`;
+      ${sel ? this._renderSteppers(steps?.l ?? at.l, steps?.t ?? at.t,
+                                   { ...(steps || {}), chip: true }) : ''}`;
   }
 
   /** Put a chip back where the part it names says it should stand. */
@@ -7201,10 +7210,18 @@ class ScCanvasEditor extends LitElement {
   _renderSteppers(left, top, opts = null) {
     const target = this._innerTarget;
     const spec = this._selSpec;
+    // The weight the chip used to carry as a button of its own. A part that is
+    // framed on the drawing keeps it up there, where it sits beside the text it
+    // is about and the field that text is typed into; a part that is only a
+    // chip has no such place, and a chip with buttons on it is one that cannot
+    // be picked up without pressing something.
+    const own = opts?.chip && spec?.weight
+      ? [{ swap: spec.weight, icon: icon('type'), what: 'weight' }] : [];
+    const rows = [...own, ...(spec?.steps || [])];
     // Not every part has something worth a row - a gauge's hub is one size and
     // nothing else - and no cluster at all says so better than one that does
     // nothing.
-    if (!spec?.steps?.length || !target) return '';
+    if (!rows.length || !target) return '';
     const cfg = target.cfg;
     // Which config these rows are about. Most parts are settings of the
     // element itself; one that is an entry in a list of its own reads and
@@ -7248,6 +7265,14 @@ class ScCanvasEditor extends LitElement {
       // columns still pairs its rows up the way it counts on.
       if (st.note) return html`
         <span class="ring-group"><span class="ring-note">${st.note}</span></span>`;
+      // The one row that is a button rather than a control: a weight is a
+      // short list gone round rather than set, so the letter says where it
+      // stands now and the press moves it on.
+      if (st.swap) return html`
+        <span class="ring-group">${stepIcon(st)}
+          <span class="ring-wide ring-own"
+                >${this._renderSwap(spec.label, st.swap, 'Set')}</span>
+        </span>`;
       // A swatch and a select each take the three cells the two buttons and
       // the number would, so every row still reads as one line of the grid.
       if (st.paint) return html`
@@ -7407,7 +7432,7 @@ class ScCanvasEditor extends LitElement {
       <div class="ring-steps ${opts?.up ? 'up' : ''} ${opts?.wide ? 'wide' : ''}"
            data-part=${this._innerSel}
            style="left:${left}%; top:${top}%;">
-        ${spec.steps.map(group)}
+        ${rows.map(group)}
         ${where ? html`
           <span class="ring-group ring-more">
             ${icon('chevrons-down')} More under ${where}, below the canvas
@@ -7459,11 +7484,12 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * The button on a chip that steps the part through the few states it takes.
+   * The button that steps a text through the few weights it takes.
    *
-   * On the chip rather than in the corner cluster: the corner holds a number
-   * that is stepped up and down, and a weight is neither - it is the same one
-   * setting the form's select writes, offered where the part is.
+   * Neither a number nor a list: it is the one setting the form's select
+   * writes, offered as the thing it sets - the letter it is pressed on is
+   * drawn at the weight it is about to leave. On the chip of a part that is
+   * framed, and in the panel for one that is only a chip.
    */
   _renderSwap(label, sw, verb) {
     const target = this._innerTarget;
