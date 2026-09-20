@@ -138,9 +138,9 @@ class ScColorEditor extends LitElement {
         { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
           label: 'The corners are on the canvas - drag either grip, at the bottom '
                + 'left or the top right.' },
-        { type: 'note', class: '', bare: true, style: caption, framedWhen: 'corners',
-          label: 'Each side can be bowed out or in from the grip on its middle. '
-               + 'Double-click one to put that side straight again.' },
+        // The side grips are switched off on the canvas (`sides` on the
+        // surface kind), so the line that pointed at them would be pointing
+        // at nothing. It goes back in with them.
         { id: 'border_radius_auto', label: 'Automatic corner radius', type: 'checkbox',
           value: autoBorder, framedBy: 'corners' },
         { id: 'border_radius', label: 'Corner radius (manual)', type: 'length',
@@ -148,18 +148,19 @@ class ScColorEditor extends LitElement {
           condition: pat => !autoBorder(pat) },
 
         { id: 'wave_count', label: 'Count (density)', type: 'range', min: 1, max: 20, int: true,
-          placeholder: 3, condition: waveColors,
+          placeholder: 3, condition: waveColors, framedBy: 'paint',
           hint: 'The colours are calculated dynamically by the effect.' },
         { id: 'wave_balance', label: 'Balance (peak vs. trough)', type: 'range', min: 5, max: 95,
-          int: true, placeholder: 50, condition: waveColors },
+          int: true, placeholder: 50, condition: waveColors, framedBy: 'paint' },
         { id: 'wave_c1', label: 'Line/wave colour (peak)', type: 'color', fallback: '#03a9f4',
-          textFallback: true, condition: waveColors },
+          textFallback: true, condition: waveColors, framedBy: 'paint' },
         { id: 'wave_c2', label: 'Background colour (trough)', type: 'color', fallback: 'transparent',
-          textFallback: true, condition: waveColors },
+          textFallback: true, condition: waveColors, framedBy: 'paint' },
         { type: 'note', class: '', bare: true, style: caption, label: 'Gradient preview', condition: waveColors },
         { type: 'custom', condition: waveColors, render: ctx => this._wavePreview(ctx, angled(ctx.entry)) },
 
         { id: 'bg_type', label: 'Background type', type: 'select', width: '60%',
+          framedBy: 'paint',
           condition: pat => !waveColors(pat) && !fluid(pat), options: pat => [
             { value: 'solid', label: 'Solid (static)', selected: pat.bg_type === 'solid' },
             { value: 'solid_gradient', label: 'Solid (dynamic from gradient)', selected: pat.bg_type === 'solid_gradient' },
@@ -170,24 +171,26 @@ class ScColorEditor extends LitElement {
           condition: pat => !waveColors(pat) && fluid(pat) },
         { id: 'fluid_style', label: 'Fluid style (viscosity)', type: 'select', width: '60%',
           hint: 'Generates an endless, organically flowing vector animation.',
+          framedBy: 'paint',
           style: 'margin-top:4px;', condition: pat => !waveColors(pat) && fluid(pat), options: pat => [
             { value: 'aurora', label: 'Aurora (gentle mesh, GentleRain)', selected: !pat.fluid_style || pat.fluid_style === 'aurora' },
             { value: 'gooey', label: 'Liquid (lava/water, WbONyK)', selected: pat.fluid_style === 'gooey' },
             { value: 'smoke', label: 'Smoke / fog', selected: pat.fluid_style === 'smoke' },
             { value: 'particles', label: 'Particles / stardust', selected: pat.fluid_style === 'particles' },
           ] },
-        // Only the one colour of a solid pattern is on the drawing. A
-        // gradient is a list of stops and a picture of its own.
+        // All of it, not the solid colour alone: a surface *is* what it is
+        // painted with, and a type, an angle and an effect on the drawing
+        // with the colours left down here is the split the frames exist to
+        // end. So the stop list goes up too, small editor though it is.
         { type: 'note', class: '', bare: true, style: caption, framedWhen: 'paint',
-          label: 'Colour and opacity are on the canvas while this one is selected '
-               + '- use the buttons under its chip.' },
-        { type: 'custom', condition: pat => !waveColors(pat),
-          framedBy: pat => ((pat.bg_type || 'solid') === 'solid'
-                            && pat.animation !== 'fluid' ? 'paint' : null),
+          label: 'Every colour setting is on the canvas while this one is selected '
+               + '- the type, the colours, the angle, the effect and the opacity, '
+               + 'under its chip. Drag the corner of that menu to make room.' },
+        { type: 'custom', condition: pat => !waveColors(pat), framedBy: 'paint',
           render: ctx => this._colorsBlock(ctx) },
 
         { id: 'gradient_angle', label: 'Angle (degrees)', type: 'range', min: 0, max: 360, int: true,
-          placeholder: 90, style: 'margin-top:8px;', condition: angled },
+          placeholder: 90, style: 'margin-top:8px;', condition: angled, framedBy: 'paint' },
         { id: 'opacity', label: 'Opacity (%)', type: 'range', min: 0, max: 100, int: true,
           placeholder: 100, framedBy: 'paint' },
       ] },
@@ -210,7 +213,12 @@ class ScColorEditor extends LitElement {
           ] },
         ] },
 
+      // The pad is a better control than the two sliders that stand in for
+      // it on the canvas - but a second live control for the same pair of
+      // numbers is worse than a coarser one in the right place, so the whole
+      // fold goes while the paint is in hand.
       { type: 'details', icon: icon('crosshair'), label: 'Centre / origin', condition: radialCenter,
+        framedBy: 'paint',
         hint: 'Tap or drag inside the box to freely move the origin point.', fields: [
         { type: 'custom', render: ctx => this._originPad(ctx) },
         { type: 'group', class: 'row', fields: [

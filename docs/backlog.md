@@ -274,8 +274,20 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Surfaces
 
-- **11** - Put every colour option in the chip menu, as a trial: two-colour
-  gradient and multi-colour with the gradient editor.
+- **11** - ~~Put every colour option in the chip menu, as a trial: two-colour
+  gradient and multi-colour with the gradient editor.~~ Done, and all of it:
+  the background type, the ready-made ramps, the stop list itself, a
+  gradient's angle, a radial's origin, the mesh a liquid pattern is, and the
+  two colours an effect mixes its own picture from. The stop list is
+  `<sc-gradient-stops>` under the chip - the same editor, not a second one -
+  which is the rule in `docs/canvas-editing.md` §9 bent for the one case it
+  was wrong about: a surface draws nothing but its paint, so its colours are
+  not a menu's worth of rows among others, they are the object. A trough
+  that is transparent cannot be said by a swatch, so the two answers are a
+  row of their own with the swatch under it. The write path went through
+  `patchPatternStops` in the same change, because the canvas had been
+  writing `gradient_stops` with `patchPattern` and leaving an older card's
+  parallel `colors`/`stops` behind it.
 - **12** - ~~A surface deleted from the canvas must not come back configured
   when a new one is created under the same id - `surface0` deleted and
   recreated should be a fresh surface.~~ Done. A surface *is* its box, so

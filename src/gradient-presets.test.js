@@ -58,6 +58,26 @@ describe('dropping one on a gauge', () => {
   });
 });
 
+describe('dropping one on a colour pattern', () => {
+  it('writes the list and nothing else - the type is not the ramp\'s to say', () => {
+    const patch = gradientPresetPatch('traffic', 'pattern');
+    expect(Object.keys(patch)).toEqual(['gradient_stops']);
+    expect(normalizeStops(patch.gradient_stops))
+      .toEqual([...gradientPreset('traffic').stops]);
+  });
+
+  it('hands over a list that may be edited in place', () => {
+    const a = gradientPresetPatch('band', 'pattern');
+    const b = gradientPresetPatch('band', 'pattern');
+    a.gradient_stops[0].color = '#000000';
+    expect(b.gradient_stops[0].color).toBe(gradientPreset('band').stops[0].color);
+  });
+
+  it('answers nothing for a menu nobody chose from', () => {
+    expect(gradientPresetPatch('', 'pattern')).toBe(null);
+  });
+});
+
 describe('the swatch', () => {
   it('draws the ramp at the positions it actually carries', () => {
     expect(gradientPresetCss(gradientPreset('throughput')))
