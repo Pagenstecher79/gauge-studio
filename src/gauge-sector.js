@@ -26,6 +26,16 @@ export const SECTOR_R_MAX = 50;
 /** The shortest a sector may be dragged to and still be a sector, in per cent. */
 export const SECTOR_MIN_LENGTH = 0.5;
 
+/**
+ * How far past each end of the scale a sector may be carried, in per cent.
+ *
+ * A band that stops exactly where the scale stops reads as a band that ran out
+ * of room. Ten per cent of overhang at either end is what lets one be placed
+ * *against* an end rather than inside it, and it is small enough that a sector
+ * dragged off the dial altogether is not one of the things that can happen.
+ */
+export const SECTOR_OVERHANG = 10;
+
 /** One decimal, the step every one of these four fields is set in. */
 const tenth = (/** @type {number} */ v) => Math.round(v * 10) / 10;
 
@@ -187,6 +197,8 @@ export function sectorAnglePatch(end, deg, sec, sweep) {
  *   has actually gone.
  *
  * The length is left alone, which is the whole of what this gesture is for.
+ * The band may hang over either end of the scale by `SECTOR_OVERHANG`, so one
+ * can be placed against an end instead of stopping short of it.
  *
  * @param {number} deg where the hand is @param {number} deg0 where it took hold
  * @param {number} from `start_percent` when the drag began
@@ -197,7 +209,8 @@ export function sectorSlidePatch(deg, deg0, from, sec, sweep) {
   const round = isRound(sweep);
   const at0 = percentFromDeg(deg0, sweep);
   const by = nearestPercent(percentFromDeg(deg, sweep), at0, round) - at0;
-  const next = clamp(tenth(from + by), 0, Math.max(0, 100 - len));
+  const next = clamp(tenth(from + by), -SECTOR_OVERHANG,
+                     Math.max(-SECTOR_OVERHANG, 100 + SECTOR_OVERHANG - len));
   return { start_percent: next };
 }
 

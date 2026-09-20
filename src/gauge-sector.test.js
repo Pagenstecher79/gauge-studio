@@ -139,11 +139,17 @@ describe('sectorSlidePatch', () => {
       .toEqual({ start_percent: 50 });
   });
 
-  it('keeps the whole sector on the scale', () => {
+  it('lets the sector overhang either end, and no further', () => {
+    // Ten per cent past each end: a band placed *against* an end, never one
+    // carried off the dial. Length 20, so the last start is 110 - 20.
     expect(sectorSlidePatch(percentAsDeg(45), percentAsDeg(0), 40, sec, FULL))
-      .toEqual({ start_percent: 80 });
+      .toEqual({ start_percent: 85 });
     expect(sectorSlidePatch(percentAsDeg(0), percentAsDeg(45), 40, sec, FULL))
-      .toEqual({ start_percent: 0 });
+      .toEqual({ start_percent: -5 });
+    // And no further. A full circle wraps, so there is no travel that reaches
+    // past the clamp on one: the dial that has ends is where it is proved.
+    expect(sectorSlidePatch(semiAsDeg(99), semiAsDeg(10), 40, sec, SEMI)
+      .start_percent).toBe(90);
   });
 
   it('never shortens what it moves', () => {
@@ -157,7 +163,7 @@ describe('sectorSlidePatch', () => {
     // the far end, and the sector belongs at the far end - not carried on
     // through the gap and out of the other one.
     const p = sectorSlidePatch(45, semiAsDeg(70), 70, semi, SEMI);
-    expect(p).toEqual({ start_percent: 80 });
+    expect(p).toEqual({ start_percent: 90 });
   });
 
   it('carries a sector across the top of a dial that does come full circle', () => {

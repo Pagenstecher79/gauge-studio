@@ -1132,7 +1132,7 @@ class ScGaugeEditor extends LitElement {
                       its ends to set what it covers and the band itself to move it
                       round the dial, and what it is painted with stands under its
                       chip.</div>`}
-                    ${framed ? '' : SC.sliderRow('Start (%)', sec.start_percent ?? 75, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].start_percent = v; this.commitFn('gauges', n); }, { min: 0, max: 100, step: 1, width: '50%' })}
+                    ${framed ? '' : SC.sliderRow('Start (%)', sec.start_percent ?? 75, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].start_percent = v; this.commitFn('gauges', n); }, { min: -10, max: 110, step: 1, width: '50%' })}
                     ${framed ? '' : SC.sliderRow('Length (%)', sec.length_percent ?? 25, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].length_percent = v; this.commitFn('gauges', n); }, { min: 0, max: 100, step: 1, width: '50%' })}
                     ${framed ? '' : SC.sliderRow('Inner radius', sec.inner_radius ?? 12, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].inner_radius = v; this.commitFn('gauges', n); }, { min: 0, max: 50, step: 0.1, width: '50%' })}
                     ${framed ? '' : SC.sliderRow('Outer radius', sec.outer_radius ?? 22, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].outer_radius = v; this.commitFn('gauges', n); }, { min: 0, max: 50, step: 0.1, width: '50%' })}

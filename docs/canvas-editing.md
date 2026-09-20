@@ -644,6 +644,10 @@ the hand has hold of, and a hit stroke there would take the sideways gesture
 away. Dragging it carries both radii together, so the band keeps its width and
 stops at the centre rather than folding through it (`sectorReachPatch`).
 
+A sector may hang ten per cent over either end of the scale (`SECTOR_OVERHANG`),
+so one can be placed *against* an end rather than stopping short of it. The
+form's own Start slider reaches the same distance, for the same reason.
+
 **Travel round the dial is measured on the scale, not in degrees.** A
 semicircle has ninety degrees below it that no value lives on, and a sector
 dragged out into that dead space would otherwise count a third of the dial as

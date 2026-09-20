@@ -3279,11 +3279,6 @@ class ScCanvasEditor extends LitElement {
          round the dial, and a filled shape over a gauge would swallow every
          press meant for what is drawn under it. */
       .sector-layer { z-index: 6; }
-      /* The ring that carries the whole band in and out. It runs across the
-         whole dial, where the sector is only a piece of it, so it is drawn
-         fainter than the two edges - it is a track, not a border. */
-      .ring-band.reach { opacity: 0.32; stroke-dasharray: 0.5 1.9; }
-      .ring-band.reach.hot { opacity: 0.9; stroke-dasharray: none; }
       .sector-body { fill: transparent; stroke: none; pointer-events: fill;
         cursor: move; touch-action: none; }
       /* A ring is a distance from the centre, so its frame is a ring too and
@@ -3328,6 +3323,21 @@ class ScCanvasEditor extends LitElement {
          so it has to be reachable - but a longer dash and less of it says it
          is a measure rather than something painted on the card. */
       .ring-band.ghost { stroke-dasharray: 0.6 2.4; opacity: 0.35; }
+      /* A sector's own rings are drawn heavier than the frame's, and that is
+         not a matter of taste: they are read at arm's length on a tablet, over
+         a dial whose ticks and numbers are already under them, and at the
+         frame's hairline width a dashed arc on a bright dial is very nearly
+         invisible. Nearly twice the width, a longer dash, and more of it.
+         After the rules above, because they are as specific and would
+         otherwise win on order. */
+      .sector-layer .ring-band { stroke-width: calc(var(--sc-band-w, 0.35) * 1.9);
+        stroke-dasharray: 1.6 1.3; opacity: 0.8; }
+      /* The ring that carries the whole band in and out runs across the whole
+         dial, where the sector is only a piece of it, so it is the fainter of
+         the two - a track rather than a border - but still heavy enough to be
+         aimed at. */
+      .sector-layer .ring-band.reach { opacity: 0.55; stroke-dasharray: 1 1.7; }
+      .sector-layer .ring-band.hot { stroke-dasharray: none; opacity: 1; }
       /* No width here, and that is not an oversight: it is written per band
          by hitZones, and a width in this rule would beat the attribute -
          a presentation attribute loses to any stylesheet - so every zone
