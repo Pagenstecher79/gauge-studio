@@ -275,6 +275,48 @@ from what the card draws and arranged as bands, which is a new arrangement
 however faithful the contents — so it stays an offer, with a button that says
 so, and the two models it sits between are the content row and the canvas.
 
+### A layout that was switched off is a draft, not a picture
+
+`layout_active` gates the rows renderer, so a card with the switch off draws
+its content row and its rows have never been on screen at all. Their *heights*
+are therefore not a fact to be reproduced but a value somebody stopped typing:
+a row's `flex` is a per cent of the card, and the editor's starting value was
+`1`. Reproduced faithfully, a two-gauge draft left at `flex: 1` becomes two
+boxes two units across on a four-hundred-unit canvas — a card converted out of
+existence, which is what backlog 44 was looking at.
+
+So `rowsToRead` splits the two cases. A layout that is on is reproduced exactly,
+`rowHeights` and all, because that *is* the picture and rows adding up to more
+than 100 really do overflow the card. A layout that is off goes through
+`filledRows`, which scales the heights to fill the card and touches nothing
+else — the widths across a row are the arrangement, and the arrangement is the
+part of a draft that is actually saying something. For the single-row drafts
+these turn out to be in practice, that gives back exactly the two half-width
+gauges the cells describe, which is also what the card was drawing all along.
+
+It is a guess, and it is the only guess that cannot produce specks. The rows
+stay in the config either way.
+
+### The dialog must not come up dirty
+
+Home Assistant compares the edit dialog's working copy against the config it
+opened with. A difference makes the dialog dirty, and a dirty dialog is passed
+`prevent-scrim-close`, which switches Web Awesome's light dismiss off: clicking
+the dashboard beside the dialog then does nothing at all — no close, and no
+confirmation either, so the card reads as stuck. That is right for an edit
+somebody made and wrong for a migration staged while the dialog was opening,
+before anyone had touched a control. It was backlog 45.
+
+Two commits happen without being asked — `ScCanvasAdopt` writing the migration
+down, and the canvas editor switching `layout_active` on for a card that
+carries a canvas nobody can see. Both now call `markDialogClean` afterwards, so
+Home Assistant forgets them and the first *real* edit is what makes the dialog
+dirty. Both look the dialog up with `editingDialog` **before** committing: the
+commit is what replaces the element that made it, and there is no walking up
+out of a detached one. Both are feature-detected — this is Home Assistant's own
+bookkeeping, and a release that renames it should cost a dialog that closes
+differently, not an editor that throws.
+
 Keep `layout_rows` in the config after converting. It costs a few hundred
 bytes and it is the only way back if the migration turns out to be wrong for a
 configuration nobody anticipated.
