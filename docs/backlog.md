@@ -87,8 +87,20 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 - **30 / 48** - Gauge background options reachable from the gauge editor's
   canvas, as a dropdown - the top edge is probably the right place for one.
   If it works, the same for the progress bar.
-- **34** - Glass FX for the pointer and the centre point; possibly a relief FX
-  for ticks and texts.
+- **34** - ~~Glass FX for the pointer and the centre point~~; possibly a
+  relief FX for ticks and texts. The glass half is done, and it was measured
+  before it was built - see `docs/perf-cpu.md`. The cost of glass on a needle
+  is the *movement*: a needle sits on its own layer so its rotation is a
+  compositor transform, and a `backdrop-filter` takes that away. So the shape
+  of the setting follows the measurement. The centre point does not move and
+  is free, so its glass has no gate. The needle gets the half that costs
+  nothing - a translucent body and a lit rim - as plain `glass`. The lens is
+  a second effect and appears only where the needle is wide enough to bend
+  anything (`POINTER_LENS_MIN_WIDTH`, four units): at the default width of
+  two it bends by a single pixel. The blur is a slider that starts at zero
+  and carries the warning, and at zero it writes no `blur()` at all, because
+  `blur(0px)` still pays for a backdrop root. The relief for ticks and texts
+  is still open.
 - **40** - On a very thin frame it is hard to tell whether the inner or the
   outer radius is being grabbed.
 - **46** - ~~Ticks, sub-ticks and every text should answer the gauge
@@ -359,6 +371,9 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   click then made. Two thirds, times `circular_scale: 90`, is the 63%.
   `pendingPatch` is now the one place that knows what the slot gains, and both
   callers ask it.
+- **50** - The main icon draws a background behind itself; there should be an
+  option to take it away, so the icon stands on the card with nothing under
+  it.
 
 ## Card and editor
 

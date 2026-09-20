@@ -499,3 +499,70 @@ The GPU figure is the one the bar change was aimed at, and it is the first time
 it has come down on this dashboard: the earlier rounds moved the renderer and
 left the GPU at 37 %. Both processes now sit near the floor this page has with
 every card hidden.
+
+## What a glass pointer would cost
+
+Backlog 34 asks for glass FX on the pointer and the centre point. The card
+already knows that a lens is nearly free on a pane (see CLAUDE.md), but a pane
+holds still and a needle does not, so the answer had to be measured rather
+than carried over.
+
+Measured 2026-09-20 on `.claude/bench/pointer-glass.html` - a grid of dials
+with a real backdrop (conic ring, ticks, numbers, value) and the needle on its
+own layer, turned by a compositor transform, exactly as `sc-gauge` does it.
+Chrome, 120 Hz, so the budget is 8.3 ms. `lens` is the `dome` profile at the
+editor's maximum refraction, `blur` is `blur(3px)`, `both` is the two
+stacked, and the figures are fps and p99 over a 5 s sample after an 800 ms
+warm-up, with the needles turning continuously.
+
+| gauges | plain | lens | blur | both |
+|---|---|---|---|---|
+| 16 | 120.0 / 9.1 | 120.0 / 9.3 | 120.0 / 9.3 | 120.0 / 9.3 |
+| 24 | - | 120.0 / 9.1 | - | - |
+| 32 | - | 119.2 / 9.3 | 95.4 / 17.5 | 70.9 / 24.9 |
+| 64 | 120.0 / 9.1 | 91.8 / 17.3 | 70.5 / 17.5 | 64.7 / 25.1 |
+
+### The cost is the movement, not the glass
+
+The same page with the needles parked, 64 gauges:
+
+| | plain | lens | both |
+|---|---|---|---|
+| still | 120.0 / 9.3 | 120.0 / 9.4 | 119.8 / 9.4 |
+
+A glassed needle that does not move costs nothing at any count measured; the
+same needle turning costs a third of the frame rate at 64. That is the whole
+finding, and it follows from what the layers are for: a needle is on its own
+layer so that its rotation is a compositor transform and the dial beneath it
+never repaints. A `backdrop-filter` takes that away - the layer has to re-read
+and re-filter the dial under it at every angle it passes through.
+
+The centre point is the same element without the movement, and it measures
+that way: glass on the hub alone, with the needle plain and turning, is
+120.0 / 9.3 at 64 gauges. **The hub can have glass for nothing.**
+
+### Which half to spend
+
+The blur is the expensive half and breaks first - 32 gauges already cost a
+quarter of the frame rate. The lens alone holds to 24 and is still within
+budget at 32. Stacked they are worse than either, which is the rule the pane
+already follows: **never blur and bend the same moving part.**
+
+So a glass pointer is affordable on the dashboards people actually build - a
+card of 16 gauges is free, and a needle only turns while a value change
+animates, not continuously as this page turns it. It stops being affordable on
+a wall panel showing dozens of instruments at once, which is where this card
+is often pointed.
+
+### What it buys, which is less than it costs
+
+The refraction is a share of the pane's shorter side, capped at 12 %. A needle
+is thin by nature: at 5 cqmin on a 190 px gauge it is 9.5 px wide, so the rim
+bends the backdrop by about one pixel. What reads as glass on the needle in
+the bench is the translucency and the rim highlight, not the bend - and those
+two are free, being nothing but a background and a `box-shadow`.
+
+That is the shape of the answer: **the cheap parts are the ones that carry the
+look**. A translucent needle with a lit rim, glass on the hub where it costs
+nothing, and the lens itself offered only where the part is wide enough to
+show one.

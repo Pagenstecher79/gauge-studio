@@ -185,15 +185,28 @@ export function lensFilterMarkup(id, profile, fraction, forSelector, pseudo) {
  * comes from the CDN, and two lit instances in one bundle is a worse trade
  * than a parse.
  *
- * Memoised on the markup: a renderer calls this on every render, and the
- * result only changes when the filter does.
+ * Memoised **per owner**, and that is not a detail. A node is in one place
+ * at a time: memoised on the markup alone, the second component to render
+ * the same filter was handed the very node the first one had already put in
+ * its shadow root, and inserting it there took it back out of the first -
+ * so on a card with several of them, all but the last lost their refraction
+ * silently. Measured on twelve gauges: only the last one drawn still had a
+ * `filter` in its root.
  *
+ * So the cache is keyed by the component, weakly, and each one keeps its own
+ * node for as long as the markup is unchanged - which is what the memo was
+ * for: a renderer calls this on every render, and handing lit a new node
+ * each time would replace the filter in the DOM on every frame.
+ *
+ * @param {object} [owner] the component this filter belongs to. Without one
+ *   there is nothing safe to memoise against, so a fresh node is returned.
  * @returns {Element | null} null where there is nothing to bend, or no DOM
  */
-export function lensFilterElement(id, profile, fraction, forSelector, pseudo) {
+export function lensFilterElement(id, profile, fraction, forSelector, pseudo, owner) {
   const markup = lensFilterMarkup(id, profile, fraction, forSelector, pseudo);
   if (!markup) return null;
-  if (elementCache.has(markup)) return elementCache.get(markup);
+  let mine = owner ? elementCache.get(owner) : null;
+  if (mine && mine.has(markup)) return mine.get(markup);
   let el = null;
   try {
     const doc = new DOMParser().parseFromString(
@@ -201,11 +214,18 @@ export function lensFilterElement(id, profile, fraction, forSelector, pseudo) {
     el = doc.documentElement.firstElementChild;
     if (el) el = document.importNode(el, true);
   } catch (_) { el = null; }
-  elementCache.set(markup, el);
+  if (owner) {
+    if (!mine) { mine = new Map(); elementCache.set(owner, mine); }
+    // One markup at a time per owner: a filter that has changed leaves a
+    // node nothing will ask for again.
+    mine.clear();
+    mine.set(markup, el);
+  }
   return el;
 }
 
-const elementCache = new Map();
+/** @type {WeakMap<object, Map<string, Element | null>>} */
+const elementCache = new WeakMap();
 
 const escapeAttr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 

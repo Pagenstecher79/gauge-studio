@@ -875,7 +875,11 @@ Object.assign(window.SupercardUtils, (() => {
                     'multiplier', 'pointer_center'];
   const INK_TEXT = ['label', 'tick_labels'];
   const INK_PAINT = ['ticks', 'sub_ticks'];
-  const INK_BG = ['indicator_line'];
+  // `pointer_center` is in both this list and INK_FILL, because it has two
+  // drawings: a <circle> while it is plain, and a <div> once it is glass,
+  // which `backdrop-filter` makes it have to be. Neither property reaches
+  // the other's drawing, so one entry each covers both.
+  const INK_BG = ['indicator_line', 'pointer_center'];
 
   /**
    * Which part of its drawing an element is showing as the one in hand.

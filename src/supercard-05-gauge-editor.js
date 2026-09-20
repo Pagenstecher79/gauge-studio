@@ -3,6 +3,7 @@ import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GAUGE_DEFAULT } from "./element-templates.js";
 import { gradientPresetPatch } from "./gradient-presets.js";
 import { icon } from "./icons.js";
+import { isPointerGlass, lensFitsPointer, pointerBlurPx } from "./pointer-glass.js";
 
 const SC = window.SupercardUtils;
 
@@ -226,9 +227,46 @@ const STYLE_FIELDS = [
   { id: 'pointer_center_radius',  label: 'Centre point size',          type: 'range',    min: 0, max: 10, step: 0.1, placeholder: '2', framedBy: 'pointer_center'   },
   { id: 'pointer_color_type', framedBy: 'pointer',     label: 'Pointer colour mode',          type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
   { id: 'pointer_color', framedBy: 'pointer',          label: 'Pointer colour (fixed)',         type: 'color',   condition: cfg => cfg.pointer_color_type !== 'adaptive' },
-  { id: 'pointer_3d_effect', framedBy: 'pointer',      label: '3D effect (plastic)',      type: 'checkbox' },
+  { id: 'pointer_3d_effect', framedBy: 'pointer',      label: '3D effect (plastic)',      type: 'checkbox',
+    condition: cfg => !isPointerGlass(cfg.pointer_glass) },
+  // Glass is a material the needle is made of, so it stands with the shape
+  // and the colour rather than among the shadow's settings. The liquid
+  // option appears only on a needle wide enough to show a bend - see
+  // POINTER_LENS_MIN_WIDTH - because 12 % of a thin needle is half a pixel
+  // and the option would promise something it cannot draw.
+  { id: 'pointer_glass', framedBy: 'pointer', label: 'Pointer glass', type: 'select',
+    options: cfg => [
+      { value: 'none', label: 'None' },
+      { value: 'glass', label: 'Glass' },
+      ...(lensFitsPointer(cfg.pointer_width ?? 2)
+        ? [{ value: 'glass_liquid', label: 'Liquid glass (refracting)' }]
+        : []),
+    ] },
+  { id: 'pointer_glass_blur', framedBy: 'pointer', label: 'Pointer glass blur (px)',
+    type: 'range', min: 0, max: 6, step: 0.5, placeholder: '0',
+    condition: cfg => isPointerGlass(cfg.pointer_glass) },
+  { type: 'note', bare: true, class: '', icon: icon('gauge'),
+    style: 'font-size:11px; color:var(--secondary-text-color); margin:-2px 0 4px 0;',
+    condition: cfg => isPointerGlass(cfg.pointer_glass)
+                   && pointerBlurPx(cfg.pointer_glass_blur) > 0,
+    label: 'A blur behind a turning needle is the expensive half: measured, 32 '
+         + 'gauges cost a quarter of the frame rate and 64 cost a third. At 0 it '
+         + 'is off entirely, and the lit rim costs nothing at all.' },
   { id: 'pointer_dot_color_type', framedBy: 'pointer_center', label: 'Dot colour mode',           type: 'select',  options: [ { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
   { id: 'pointer_dot_color', framedBy: 'pointer_center',      label: 'Dot colour (fixed)',          type: 'color',   condition: cfg => cfg.pointer_dot_color_type !== 'adaptive' },
+  // The centre point does not move, and glass costs nothing that does not
+  // move: measured at 64 gauges with the needles turning beside it, a glassed
+  // hub was still 120 fps. So it is offered whole - both effects and the
+  // blur - with no gate and no warning.
+  { id: 'pointer_center_glass', framedBy: 'pointer_center', label: 'Centre point glass',
+    type: 'select', options: [
+      { value: 'none', label: 'None' },
+      { value: 'glass', label: 'Glass' },
+      { value: 'glass_liquid', label: 'Liquid glass (refracting)' },
+    ] },
+  { id: 'pointer_center_glass_blur', framedBy: 'pointer_center', label: 'Centre point glass blur (px)',
+    type: 'range', min: 0, max: 6, step: 0.5, placeholder: '0',
+    condition: cfg => isPointerGlass(cfg.pointer_center_glass) },
   { id: 'pointer_shadow_type', framedBy: 'pointer',    label: 'Pointer shadow',            type: 'select',  options: [ { value: 'none', label: 'None' }, { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
   { id: 'pointer_shadow_color', framedBy: 'pointer',   label: 'Shadow colour',             type: 'color',   condition: cfg => cfg.pointer_shadow_type === 'fixed' },
   { id: 'pointer_shadow_blur', framedBy: 'pointer',     label: 'Shadow blur',   type: 'range', min: 0,  max: 1, step: 0.01,  placeholder: '0.8', condition: cfg => cfg.pointer_shadow_type !== 'none' },
