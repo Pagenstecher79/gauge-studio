@@ -3016,7 +3016,7 @@ class ScCanvasEditor extends LitElement {
       .inner-adds { position: absolute; top: 6px;
         max-height: calc(100% - 42px);
         transform: translate(var(--sc-chip-dx, 0px), var(--sc-chip-dy, 0px));
-        transition: transform 160ms ease;
+        transition: transform 1.2s cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; flex-flow: column wrap; column-gap: 6px; row-gap: 3px;
         z-index: 6; pointer-events: none; }
       /* Below the pencil, which owns the top left corner. */
@@ -3096,8 +3096,10 @@ class ScCanvasEditor extends LitElement {
         /* Only the stepping aside moves a chip by a transform - where it
            belongs is left/top, and a chip dragged by hand writes those -
            so this animates the dodge and nothing else, and never lags a
-           finger. */
-        transition: transform 160ms ease;
+           finger. Slow, and slowest at both ends: a chip is getting out of
+           the way of something the eye is already on, so it has to be
+           possible to ignore. At a fifth of a second it read as a jump. */
+        transition: transform 1.2s cubic-bezier(0.33, 0, 0.2, 1);
         display: flex; align-items: center; gap: 3px; z-index: 7;
         font-size: 11.5px; line-height: 1; padding: 2px 5px; border-radius: 3px;
         background: var(--primary-color, #03a9f4); color: #fff; white-space: nowrap;
