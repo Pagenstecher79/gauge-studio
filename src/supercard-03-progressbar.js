@@ -291,6 +291,28 @@ class ScProgressbar extends LitElement {
         z-index: ${ELM_BASE};
         container-type: size;
       }
+      /*
+       * A ring is drawn as 100cqmin, the largest square its box holds, so a
+       * box wider than it is tall is a letterbox and is meant to look like
+       * one - that is what lets the canvas stretch a card back and forth
+       * without anything on screen changing. The background was the one thing
+       * that did not play along: it filled the box, and 50% of a box that
+       * is not square is an ellipse. So it gets the ring's square instead,
+       * and the wrap carries nothing.
+       */
+      .sc-pb-wrap.circ {
+        background: none; box-shadow: none; border-radius: 0;
+      }
+      .sc-pb-disc {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100cqmin; height: 100cqmin;
+        border-radius: var(--pb-radius, 50%);
+        background: var(--pb-bg-color, rgba(255,255,255,0.1));
+        box-shadow: var(--pb-shadow, inset 0 1px 3px rgba(0,0,0,0.3));
+        pointer-events: none;
+        z-index: ${ELM_BASE};
+      }
       .sc-liquid-layer {
         position: absolute; inset: 0; filter: none; border-radius: inherit;
       }
@@ -1152,7 +1174,8 @@ class ScProgressbar extends LitElement {
         </defs>
       </svg>` : ''}
       
-      <div class="sc-pb-wrap">
+      <div class="sc-pb-wrap ${isCirc ? 'circ' : ''}">
+        ${isCirc ? html`<div class="sc-pb-disc"></div>` : ''}
         <div class="sc-liquid-layer ${isGooey ? 'gooey' : ''}">
           ${isCirc ? circularHtml : html`<div class="sc-pb-fill ${orientation}" data-sc-part="fill" style="${fillStyle}"></div>`}
           ${indicatorGooeyHtml}
