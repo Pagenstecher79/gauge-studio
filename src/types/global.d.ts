@@ -188,6 +188,8 @@ declare global {
     fieldFramed: (field: any, entry: any, framed?: Set<string>) => boolean;
     /** Which of a field's parts took it, for the line that stands in for it. */
     framedPart: (field: any, entry: any, framed?: Set<string>) => string | null;
+    /** The list a select field offers, whether it is a list or a function. */
+    fieldOptions: (field: any, entry: any, ctx?: any) => any[];
     /** Shared chrome for the card-list module editors (ha-switch family). */
     editorStyles: CSSResult;
     /** Shared chrome for the compact config forms (.toggle family). */

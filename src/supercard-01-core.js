@@ -574,6 +574,28 @@ Object.assign(window.SupercardUtils, (() => {
     </div>`;
 
   /**
+   * The list a `select` field offers.
+   *
+   * It may be a function, because a list of targets depends on what the other
+   * entries have already claimed and a list of shapes on whether the drawing
+   * can show them. Three editors used to read `field.options` straight, and
+   * all three broke the day a field first answered with a function - a
+   * `.map` on a function throws, and a throw inside a render takes the whole
+   * editor with it, so the menus below the canvas simply stopped opening.
+   * One reader, so that cannot happen again in a fourth place.
+   *
+   * @param {any} field
+   * @param {any} entry the config being edited
+   * @param {any} [ctx] whatever the caller's renderer passes on
+   * @returns {any[]}
+   */
+  const fieldOptions = (field, entry, ctx) => {
+    const list = typeof field?.options === 'function'
+      ? field.options(entry, ctx) : field?.options;
+    return Array.isArray(list) ? list : [];
+  };
+
+  /**
    * One field of an editor built from a field array.
    *
    * The gauge and the progressbar are written that way - a field is a record,
@@ -713,10 +735,7 @@ Object.assign(window.SupercardUtils, (() => {
       }
 
       case 'select': {
-        // Options may be a function, because a list of targets depends on what
-        // the other entries already claimed.
-        const options = typeof field.options === 'function'
-          ? field.options(ctx.entry, ctx) : (field.options || []);
+        const options = fieldOptions(field, ctx.entry, ctx);
         const option = o => html`
           <option value=${o.value}
                   ?selected=${o.selected === undefined ? String(val ?? '') === String(o.value) : !!o.selected}
@@ -1114,7 +1133,7 @@ function hassInputsChanged(oldHass, newHass, ids) {
     collectEntityIds, hassInputsChanged,
     colorRow, colorField, lengthRow, lengthField, splitLength, rampGrid,
     slider, sliderRow, sliderField, tipDot,
-    renderField, renderFields, fieldFramed, framedPart,
+    renderField, renderFields, fieldFramed, framedPart, fieldOptions,
     editorStyles, formStyles, partHighlight
   });
 })());
@@ -1622,7 +1641,7 @@ class ScGenericModuleEditor extends LitElement {
     const updateD = (v) => { clearTimeout(this._timeouts[field.id]); this._timeouts[field.id] = setTimeout(() => update(v), 250); };
 
     if (field.type === 'checkbox') return html`<div class="row"><label>${field.label}</label><label class="toggle"><input type="checkbox" .checked=${!!val} @change=${e=>update(e.target.checked)}><span class="toggle-slider"></span></label></div>`;
-    if (field.type === 'select') return html`<div class="row"><label>${field.label}</label><select @change=${e=>update(e.target.value)}>${(field.options||[]).map(o=>html`<option value=${o.value} ?selected=${String(val??'')==String(o.value)}>${o.label}</option>`)}</select></div>`;
+    if (field.type === 'select') return html`<div class="row"><label>${field.label}</label><select @change=${e=>update(e.target.value)}>${fieldOptions(field, this.slot, this).map(o=>html`<option value=${o.value} ?selected=${String(val??'')==String(o.value)}>${o.label}</option>`)}</select></div>`;
     if (field.type === 'range') return sliderField(field.label, val ?? field.placeholder ?? 0, update,
       { min: field.min || 0, max: field.max || 100, step: field.step || 1 });
     if (field.type === 'color') {

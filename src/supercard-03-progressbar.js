@@ -1550,7 +1550,7 @@ class ScProgressbarEditor extends LitElement {
           <div class="row">
             <label>${field.label}</label>
             <select @change=${e => updateDirect(e.target.value)}>
-              ${field.options.map(opt => html`<option value="${opt.value}" ?selected=${val === opt.value}>${opt.label}</option>`)}
+              ${SC.fieldOptions(field, cfg, this).map(opt => html`<option value="${opt.value}" ?selected=${val === opt.value}>${opt.label}</option>`)}
             </select>
           </div>`;
         break;
