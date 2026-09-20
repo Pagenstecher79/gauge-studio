@@ -1357,7 +1357,10 @@ class SupercardCore extends LitElement {
     // FIX: The critical change! Optional chaining (?.) protects against crashes when stateObj is null.
     const uom = stateObj?.attributes?.unit_of_measurement ? ' ' + stateObj.attributes.unit_of_measurement : '';
     const headerText = slot.entity_name_override || stateObj?.attributes?.friendly_name || entityId || 'Unnamed card';
-    const iconId = stateObj?.attributes?.icon || 'mdi:bookmark';
+    // The entity's own icon, unless the canvas was told otherwise: an entity
+    // put on a card to mean something else needs a say, and its chip is the
+    // only place there is one.
+    const iconId = slot.icon_override || stateObj?.attributes?.icon || 'mdi:bookmark';
 
     combinedStyles += `border-radius: ${SC_UTILS.cardRadius(slot) ?? '12px'}; `;
 

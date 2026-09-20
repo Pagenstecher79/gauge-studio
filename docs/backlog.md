@@ -190,9 +190,18 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   drawing behind them, and the state worth reading across the canvas is the
   shut one. The frames own the drawing while an element's parts are in hand,
   so the locks step aside for as long as that lasts.
-- **21** - The main icon should only be dragged out square, and be configured
+- **21** - ~~The main icon should only be dragged out square, and be configured
   on the canvas through its own edit button (picking the icon from HA's
-  dropdown).
+  dropdown).~~ Done, in two halves. The icon draws on a square em box like a
+  gauge draws on a circle, so its shape is its nature and not a choice:
+  `isSquareLocked` answers for it now, which is one rule fewer than the
+  exception `newBox` used to carry alone, and the corner grip keeps it square
+  wherever it is dragged. The other half is that the icon had no setting
+  anywhere - it took the entity's own icon and there was nothing to say
+  otherwise - so an entity put on a card to mean something else had no say.
+  It is a kind in `INNER_KINDS` now, with one part and one chip, and the chip
+  holds HA's own `ha-icon-picker`; `icon_override` is what it writes and what
+  the core reads before falling back to the entity's icon.
 - **22** - Inside an object editor, clicking to select should behave as it
   does on the main canvas: clicking the same spot cycles through elements
   that lie over one another.

@@ -952,12 +952,13 @@ describe('isHeightPinned', () => {
 describe('isSquareLocked', () => {
   const bars = slotBars => ({ progressbars: slotBars });
 
-  it('locks gauges, and nothing else it can answer for alone', () => {
+  it('locks gauges and the main icon, and nothing else it can answer for alone', () => {
     expect(isSquareLocked({ id: 'gauge_0' })).toBe(true);
     expect(isSquareLocked({ id: 'gauge_11' })).toBe(true);
+    expect(isSquareLocked({ id: 'icon' })).toBe(true);
     expect(isSquareLocked({ id: 'progressbar_0' })).toBe(false);
     expect(isSquareLocked({ id: 'label_0' })).toBe(false);
-    expect(isSquareLocked({ id: 'icon' })).toBe(false);
+    expect(isSquareLocked({ id: 'name' })).toBe(false);
   });
 
   it('locks a bar that is drawn as a ring', () => {

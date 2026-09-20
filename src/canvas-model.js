@@ -162,6 +162,12 @@ export function cellWidths(row) {
  * and a bar answers no - that is what every caller that has no slot to give
  * wants, since the alternative is guessing a shape from a name.
  *
+ * The main icon is the third: `ha-state-icon` draws a glyph on a square em
+ * box and centres it, so a wide box is a glyph with air either side of it and
+ * the box stops saying how big the icon is. It was already placed square -
+ * `newBox` said so on its own - and only the corner grip could pull it out of
+ * shape, which is the one place a shape should not be decided.
+ *
  * Surfaces are plain boxes for a pattern to paint and are never locked.
  *
  * @param {any} el
@@ -170,7 +176,7 @@ export function cellWidths(row) {
  */
 export function isSquareLocked(el, slot) {
   if (el?.surface || typeof el?.id !== 'string') return false;
-  if (el.id.startsWith('gauge_')) return true;
+  if (el.id.startsWith('gauge_') || el.id === 'icon') return true;
   const m = /^progressbar_(\d+)$/.exec(el.id);
   if (!m) return false;
   return barIsCircular(slot?.progressbars?.[Number(m[1])]);
@@ -1746,7 +1752,7 @@ function newBox(canvas, id, surface, at, aspect, slot) {
   const snap = v => Math.max(step, Math.round(v / step) * step);
   const side = snap(Math.min(canvas.w, canvas.h) / 5);
 
-  const square = isSquareLocked({ id }, slot) || id === 'icon';
+  const square = isSquareLocked({ id }, slot);
   let w = side, h = side;
   if (!square && aspect > 0) {
     // The long edge is the strip's, so a bar asking for 3 gets exactly the

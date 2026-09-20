@@ -1386,6 +1386,25 @@ const SURFACE_PARTS = Object.freeze({
 });
 
 /**
+ * What the card's own icon has: which icon it is.
+ *
+ * One part and one row, because there is only one thing about it the canvas
+ * can answer for. The card draws the icon its entity carries, which is the
+ * right icon almost always and the wrong one exactly when somebody has put
+ * the entity on a card to mean something else - and until now there was
+ * nowhere at all to say so. Left empty it goes back to the entity's own.
+ */
+const ICON_PARTS = Object.freeze({
+  glyph: {
+    label: 'Icon', spot: { l: 50, t: 50 },
+    on: () => true,
+    steps: [
+      { key: 'icon_override', icon: icon('image'), what: 'icon', pickIcon: true },
+    ],
+  },
+});
+
+/**
  * What a bar has that can be worked on where it is drawn.
  *
  * None of them is a ring, so none has a radius and none is dragged in or out:
@@ -1919,6 +1938,24 @@ const INNER_KINDS = Object.freeze({
       Object.assign(next[t.idx], patch);
       return { key: 'progressbars', value: next };
     },
+  },
+  icon: {
+    // No index to take: there is one card icon, and the id is the whole name.
+    match: /^icon$/,
+    noun: 'icon',
+    holds: 'which icon it draws',
+    // Nothing in the form to bring to the top - the icon had no setting at
+    // all before this one, which is half of why it is worth having here.
+    editor: '',
+    parts: NO_PARTS,
+    rings: ICON_PARTS,
+    measure: boxFrame,
+    // The card's own config: the icon belongs to the card, not to an entry in
+    // a list, so the slot is the entry being edited.
+    config: (/** @type {any} */ slot) => slot,
+    drawn: () => [],
+    write: (/** @type {any} */ _slot, /** @type {any} */ _t, /** @type {any} */ patch) =>
+      ({ key: '__merge__', value: { ...patch } }),
   },
   surface: {
     match: /^surface_(\d+)$/,
@@ -2893,6 +2930,13 @@ class ScCanvasEditor extends LitElement {
       .ring-pick { height: 20px; padding: 0 2px; font-size: 11px; line-height: 1;
         border-radius: 4px; cursor: pointer; max-width: 108px;
         border: 1px solid var(--sc-part-sel); background: rgba(0,0,0,0.5); color: #fff; }
+      /* Home Assistant's picker is a full-height text field with a dropdown,
+         which is a form control in a row of 20px chips. Scaled down rather
+         than restyled: its insides are its own shadow root's, and the two
+         custom properties it does read are the ones below. */
+      .ring-iconpick { max-width: 150px; --mdc-typography-subtitle1-font-size: 11px;
+        --text-field-padding: 0 4px; }
+      .ring-iconpick::part(base) { height: 24px; }
       /* On the edge it runs along, at the point the radius reaches. Above
          everything else on the box, because a corner is where a chip is least
          likely to be but the two can still meet on a small element.
@@ -5609,6 +5653,19 @@ class ScCanvasEditor extends LitElement {
                  }}>
           <span class="ring-step-val">${st.unit
             ? now(st) + splitUnit(cfg[st.key], st.dflt).unit : now(st)}</span>
+        </span>`;
+      // Home Assistant's own icon dropdown, because an icon is picked by
+      // looking at it and by typing a few letters of its name - neither of
+      // which a list of ours would do as well, and both of which every other
+      // icon field in Home Assistant already does this way.
+      if (st.pickIcon) return html`
+        <span class="ring-group">${stepIcon(st)}
+          <ha-icon-picker class="ring-wide ring-iconpick" .hass=${this.hass}
+                          .value=${cfg[st.key] || ''}
+                          title=${`Set the ${st.what}`}
+                          @pointerdown=${keep}
+                          @value-changed=${(/** @type {any} */ e) =>
+                            this._writeInner({ [st.key]: e.detail.value || undefined }, false)}></ha-icon-picker>
         </span>`;
       if (st.picks) return html`
         <span class="ring-group">${stepIcon(st)}
