@@ -6056,9 +6056,14 @@ class ScCanvasEditor extends LitElement {
     // Enough that a chip which has stepped aside reads as standing beside the
     // thing rather than against it.
     const M = 8;
+    // Between two chips, a hair instead. They are the same kind of thing and
+    // there are more of them than there is room, so asking for the full
+    // clearance leaves nowhere free and ends in the overlap it was meant to
+    // prevent - better a chip standing against a chip than one over it.
+    const MC = 2;
     const hits = (/** @type {any} */ h, /** @type {any} */ o) =>
-      h.l < o.right + M && h.l + h.w > o.left - M
-      && h.t < o.bottom + M && h.t + h.h > o.top - M;
+      h.l < o.right + o.m && h.l + h.w > o.left - o.m
+      && h.t < o.bottom + o.m && h.t + h.h > o.top - o.m;
     // The same question without the clearance: touching is not covering, and
     // only covering costs a press.
     const hitsHard = (/** @type {any} */ h, /** @type {any} */ o) =>
@@ -6072,7 +6077,12 @@ class ScCanvasEditor extends LitElement {
     const zoom = canvasEl?.offsetWidth
       ? canvasEl.getBoundingClientRect().width / canvasEl.offsetWidth : 1;
     const panel = box ? box.getBoundingClientRect() : null;
-    const taken = panel ? [panel] : [];
+    /** @type {any[]} */
+    const taken = [];
+    const note = (/** @type {any} */ r, /** @type {any} */ extra) => {
+      taken.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, m: M, ...extra });
+    };
+    if (panel) note(panel, { panel: true });
     // A frame is worked on the way the panel is read, so it gets the same
     // right to be clear of chips: its drawing, and the field it is being
     // typed into. Its head is not in this list - a head steps aside like any
@@ -6080,7 +6090,9 @@ class ScCanvasEditor extends LitElement {
     for (const f of /** @type {any[]} */ ([...root.querySelectorAll('.inner-frame')])) {
       for (const el of /** @type {any[]} */ ([f, ...f.querySelectorAll('.inner-text')])) {
         const r = el.getBoundingClientRect();
-        if (r.width || r.height) taken.push(r);
+        // The frame is its own head's business and not in its way; the field
+        // being typed into is, head or not.
+        if (r.width || r.height) note(r, { own: el === f ? f : null });
       }
     }
     const chips = /** @type {any[]} */ (
@@ -6095,9 +6107,14 @@ class ScCanvasEditor extends LitElement {
     // only way to the bin and the pencil of a part that is drawn where the
     // panel hangs - the label, the value, the multiplier and the scale all
     // sit around a gauge's middle - so it gets its pick of the room.
+    // Then the add buttons, which are a block of several and stand in a
+    // corner: a column that has to fit round four chips rarely can, where
+    // four chips round a column can. Then the frame heads, and the loose
+    // chips last, they being the smallest things and the easiest to place.
     const rank = (/** @type {any} */ el) =>
-      (el.dataset.part === this._innerSel ? 0 : 1)
-      + (el.classList.contains('inner-tag') ? 0 : 1);
+      el.dataset.part === this._innerSel ? 0
+        : el.classList.contains('inner-adds') ? 1
+        : el.classList.contains('inner-tag') ? 2 : 3;
     chips.sort((/** @type {any} */ a, /** @type {any} */ b) => rank(a) - rank(b));
     for (const chip of chips) {
       const was = {
@@ -6126,10 +6143,8 @@ class ScCanvasEditor extends LitElement {
       // Its own frame is not in its way: a head sits against the frame it
       // names on purpose, and the seven pixels between them are less than
       // the clearance everything else is given.
-      const own = chip.closest('.inner-frame')?.getBoundingClientRect();
-      const mine = (/** @type {any} */ o) =>
-        own && o.left === own.left && o.top === own.top
-        && o.right === own.right && o.bottom === own.bottom;
+      const own = chip.closest('.inner-frame');
+      const mine = (/** @type {any} */ o) => !!own && o.own === own;
       const at = (/** @type {any} */ w) => ({ l: h.l + w.x, t: h.t + w.y, w: h.w, h: h.h });
       const free = (/** @type {any} */ w) =>
         !taken.some((/** @type {any} */ o) => !mine(o) && hits(at(w), o));
@@ -6151,18 +6166,43 @@ class ScCanvasEditor extends LitElement {
         const ways = [];
         for (const o of taken) {
           if (mine(o)) continue;
-          ways.push({ x: o.left - M - (h.l + h.w), y: 0 }, { x: o.right + M - h.l, y: 0 },
-                    { x: 0, y: o.top - M - (h.t + h.h) }, { x: 0, y: o.bottom + M - h.t });
+          ways.push({ x: o.left - o.m - (h.l + h.w), y: 0 }, { x: o.right + o.m - h.l, y: 0 },
+                    { x: 0, y: o.top - o.m - (h.t + h.h) }, { x: 0, y: o.bottom + o.m - h.t });
         }
         // A head names the frame under it, so it may only go as far as it can
         // while still reading as that frame's - about its own height either
         // way. A chip of its own has no such tie and may go where it must.
         const far = chip.classList.contains('inner-tag') ? h.h * 2.5 : Infinity;
-        const ok = ways.map(held).filter(inside).filter(free)
-          .filter((/** @type {any} */ w) => Math.abs(w.x) + Math.abs(w.y) <= far)
+        const near = ways.map(held).filter(inside)
+          .filter((/** @type {any} */ w) => Math.abs(w.x) + Math.abs(w.y) <= far);
+        const ok = near.filter(free)
           .sort((/** @type {any} */ p, /** @type {any} */ q) =>
             (Math.abs(p.x) + Math.abs(p.y)) - (Math.abs(q.x) + Math.abs(q.y)));
+        // Nowhere clear is the ordinary case on a small element, where four
+        // chips, a column of add buttons and a panel are all asking for the
+        // same corner. Staying put was the old answer and it is the worst
+        // one: the chip lies wherever it happened to be drawn. Take the
+        // place that covers the least instead, counting the panel for much
+        // more than a chip - a chip half over a chip is untidy, a chip under
+        // the panel cannot be pressed.
         if (ok.length) best = ok[0];
+        else if (near.length) {
+          const cost = (/** @type {any} */ w) => {
+            const a = at(w);
+            let sum = 0;
+            for (const o of taken) {
+              if (mine(o)) continue;
+              const ov = Math.max(0, Math.min(a.l + a.w, o.right) - Math.max(a.l, o.left))
+                       * Math.max(0, Math.min(a.t + a.h, o.bottom) - Math.max(a.t, o.top));
+              sum += ov * (o.panel ? 10 : 1);
+            }
+            return sum;
+          };
+          const by = near.map((/** @type {any} */ w) => ({ w, c: cost(w) }))
+            .sort((/** @type {any} */ p, /** @type {any} */ q) =>
+              p.c - q.c || (Math.abs(p.w.x) + Math.abs(p.w.y)) - (Math.abs(q.w.x) + Math.abs(q.w.y)));
+          if (by[0].c < cost(best)) best = by[0].w;
+        }
       }
       // The last line, for the chip that had nowhere to go: over the panel
       // rather than under it. Behind the panel is the better picture, but a
@@ -6171,8 +6211,8 @@ class ScCanvasEditor extends LitElement {
       const over = panel && hitsHard({ l: h.l + best.x, t: h.t + best.y, w: h.w, h: h.h }, panel);
       if (over) chip.style.zIndex = '9';
       else chip.style.removeProperty('z-index');
-      taken.push(/** @type {any} */ ({ left: h.l + best.x, right: h.l + best.x + h.w,
-                                       top: h.t + best.y, bottom: h.t + best.y + h.h }));
+      note({ left: h.l + best.x, right: h.l + best.x + h.w,
+             top: h.t + best.y, bottom: h.t + best.y + h.h }, { m: MC, own });
       // Wider than it needs to be for a still picture: measuring against a
       // drawing that is itself laid out in fractions of a pixel, two passes
       // can disagree by a pixel over nothing, and rewriting the nudge for
