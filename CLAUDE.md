@@ -245,6 +245,13 @@ passes only what genuinely differs (`width`, `hexOnly`, `int`, a debounced
 `onText`); if a new one needs something else, add the option here rather than a
 second copy of the control there.
 
+A `select`'s list is `SC.fieldOptions(field, entry, ctx)` for the same reason.
+It may be a list or a function of the entry, and three editors read the key
+straight - so the first field that answered with a function threw a `.map` on
+a function inside a render, and a throw in a render takes the whole editor
+with it: the menus below the canvas stopped opening, in a way that named
+neither the field nor the editor. One reader, everywhere.
+
 **Editor styles.** Start from a shared stylesheet and add only what differs:
 
 ```js
