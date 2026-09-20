@@ -39,10 +39,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   background where it paints one and the card's otherwise, and handed to the
   renderer as `--sc-hl-ink`. A pill keeps its own colour and only breathes:
   the value stands on it, so inking it would hide the thing being set.
-- **2** - The dim pulse works in Chrome and not in Safari. Needs a real
-  Safari to say why; the suspicion is `filter` on SVG elements. Whatever
-  replaces it has to keep an element's own opacity intact (a frame ring at
-  0.4, the bar's label at 0.8), which is the reason it is a filter today.
+- **2** - ~~The dim pulse works in Chrome and not in Safari.~~ Done, in the
+  same change that wrote this list down, which is why it was never struck
+  through. The suspicion was right: a CSS `filter` reaches the outermost
+  `<svg>` in Safari and not the `<line>` and `<text>` inside it, so Safari
+  computed the animation and painted nothing. The pulse is the `opacity`
+  property now, which every engine paints on an SVG child, and the marks
+  that carry an opacity of their own keep it because the keyframes multiply
+  rather than set: the drawing puts its own number in `--sc-hl-own` and the
+  mark breathes from where it already was.
 
 ## Gauge
 
