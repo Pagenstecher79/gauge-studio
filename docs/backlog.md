@@ -60,14 +60,26 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   pixel, which is thinner than it came to on a gauge of any size and the same
   weight as the frames it is read beside. Half a pixel was tried first and is
   too little to see.
-- **7** - Sectors created and shaped on the canvas: a permanent `+ sector`
+- **7** - ~~Sectors created and shaped on the canvas: a permanent `+ sector`
   button in the top right corner, then a chip per sector holding the options
   that cannot be set by hand (gradient, opacity). Inner and outer radius by
-  grips on the edges, length and width likewise.
-- **8** - Dragging a sector moves it along a concentric path, without
-  shortening its reach.
-- **9** - The gap between sectors set by a dashed ring, the way every other
-  round element is set.
+  grips on the edges, length and width likewise.~~ Done. A part there may now
+  be several of - `listed` on the kind, a `lens` saying where each one's config
+  lives, a `turnOff` that may be a function, and `adds` for the permanent
+  offer, which is the mechanism and not a special case for sectors
+  (`docs/canvas-editing.md` §11a).
+- **8** - ~~Dragging a sector moves it along a concentric path, without
+  shortening its reach.~~ Done. The band itself is what the hand takes hold
+  of, and the travel is measured on the scale rather than in degrees - in
+  degrees, the ninety a semicircle has no values on counted as a third of a
+  turn and sent a sector dragged to the end out the other side. It may hang
+  ten per cent over either end, so one can be placed against an end.
+- **9** - ~~The gap between sectors set by a dashed ring, the way every other
+  round element is set.~~ Done, as the distance from the gauge's centre, which
+  is what was meant: a dashed ring at the middle of the band, drawn across the
+  whole dial and grabbed outside the sector's own span so the band keeps the
+  sideways gesture. Both radii travel together, so the width is kept and the
+  band stops at the centre rather than folding through it.
 - **23** - ~~The up/down cursor over a gauge's dashed circle should point at
   the gauge's centre - an arrow head that turns with the pointer's position.~~
   Done. `ns-resize` was on every band and it is the truth only at the top and

@@ -986,7 +986,7 @@ class ScGaugeEditor extends LitElement {
               const foldKey = `g${idx}_tick:${ctIdx}`;
               return html`
                 <details class="inner-section" style="margin-bottom:0;" 
-                  ?open=${this._isUnfolded(foldKey)} 
+                  ?open=${this._isUnfolded(foldKey) || framed} 
                   @toggle=${e => this._setUnfolded(foldKey, e.target.open)}
                   @dragstart=${(e) => {
                     e.dataTransfer.effectAllowed = 'move';
@@ -1072,6 +1072,14 @@ class ScGaugeEditor extends LitElement {
             ${sects.map((sec, sIdx) => {
               const foldKey = `g${idx}_sector:${sIdx}`;
               const secPreset = sec.gradient_preset || (sec.use_gradient ? 'classic' : 'none');
+              // What the canvas has taken over while this sector is the part
+              // in hand: where it is, how far it reaches and what it is
+              // painted with are all on the drawing then, and two live
+              // controls for one value is worse than one badly placed
+              // control. The list of colours stays - a row of stops to be
+              // dragged about is not a control that fits on a dial, which is
+              // the same reason the ring's own list stays here.
+              const framed = this._framed.has(`sector:${sIdx}`);
 
               return html`
                 <details class="inner-section" style="margin-bottom:0;" 
@@ -1118,19 +1126,26 @@ class ScGaugeEditor extends LitElement {
                     </div>
                   </summary>
                   <div class="inner-content" style="padding-top:4px; gap:8px;">
-                    ${SC.sliderRow('Start (%)', sec.start_percent ?? 75, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].start_percent = v; this.commitFn('gauges', n); }, { min: 0, max: 100, step: 1, width: '50%' })}
-                    ${SC.sliderRow('Length (%)', sec.length_percent ?? 25, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].length_percent = v; this.commitFn('gauges', n); }, { min: 0, max: 100, step: 1, width: '50%' })}
-                    ${SC.sliderRow('Inner radius', sec.inner_radius ?? 12, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].inner_radius = v; this.commitFn('gauges', n); }, { min: 0, max: 50, step: 0.1, width: '50%' })}
-                    ${SC.sliderRow('Outer radius', sec.outer_radius ?? 22, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].outer_radius = v; this.commitFn('gauges', n); }, { min: 0, max: 50, step: 0.1, width: '50%' })}
-                    ${SC.sliderRow('Opacity', sec.opacity ?? 0.85, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].opacity = v; this.commitFn('gauges', n); }, { min: 0, max: 1, step: 0.05, width: '50%' })}
+                    ${!framed ? '' : html`<div class="framed-note">Parts of the
+                      Sector ${sIdx+1} settings are in the canvas options box while
+                      this one is selected - drag its arcs to set how far it reaches,
+                      its ends to set what it covers and the band itself to move it
+                      round the dial, and what it is painted with stands under its
+                      chip.</div>`}
+                    ${framed ? '' : SC.sliderRow('Start (%)', sec.start_percent ?? 75, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].start_percent = v; this.commitFn('gauges', n); }, { min: -10, max: 110, step: 1, width: '50%' })}
+                    ${framed ? '' : SC.sliderRow('Length (%)', sec.length_percent ?? 25, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].length_percent = v; this.commitFn('gauges', n); }, { min: 0, max: 100, step: 1, width: '50%' })}
+                    ${framed ? '' : SC.sliderRow('Inner radius', sec.inner_radius ?? 12, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].inner_radius = v; this.commitFn('gauges', n); }, { min: 0, max: 50, step: 0.1, width: '50%' })}
+                    ${framed ? '' : SC.sliderRow('Outer radius', sec.outer_radius ?? 22, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].outer_radius = v; this.commitFn('gauges', n); }, { min: 0, max: 50, step: 0.1, width: '50%' })}
+                    ${framed ? '' : SC.sliderRow('Opacity', sec.opacity ?? 0.85, v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].opacity = v; this.commitFn('gauges', n); }, { min: 0, max: 1, step: 0.05, width: '50%' })}
 
-                    <div style="border-top:1px dashed var(--divider-color,#444); margin:4px 0;"></div>
+                    ${framed ? '' : html`<div
+                      style="border-top:1px dashed var(--divider-color,#444); margin:4px 0;"></div>`}
 
-                    <div class="col"><label>Colour (start)</label>
+                    ${framed ? '' : html`<div class="col"><label>Colour (start)</label>
                       ${SC.colorRow(sec.color ?? '#dc3232', v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].color = v; this.commitFn('gauges', n); }, { fallback: '#dc3232', hexOnly: true, textFallback: true })}
-                    </div>
+                    </div>`}
 
-                    <div class="row">
+                    ${framed ? '' : html`<div class="row">
                       <label>Gradient</label>
                       <select @change=${e => {
                         const n = structuredClone(gauges);
@@ -1142,13 +1157,12 @@ class ScGaugeEditor extends LitElement {
                         <option value="classic" ?selected=${secPreset === 'classic'}>Classic (2 colours)</option>
                         <option value="manual" ?selected=${secPreset === 'manual'}>Manual (list)</option>
                       </select>
-                    </div>
+                    </div>`}
 
-                    ${secPreset === 'classic' ? html`
+                    ${framed || secPreset !== 'classic' ? '' : html`
                       <div class="col"><label>Colour (end)</label>
                         ${SC.colorRow(sec.color_end ?? '#ffeb3b', v => { const n = structuredClone(gauges); n[idx].sectors[sIdx].color_end = v; this.commitFn('gauges', n); }, { fallback: '#ffeb3b', hexOnly: true, textFallback: true })}
-                      </div>
-                    ` : ''}
+                      </div>`}
 
                     ${secPreset !== 'none' ? html`
                       <div class="row" style="margin-top:4px;">
