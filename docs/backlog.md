@@ -172,8 +172,17 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   every part, because it is read off the drawing rather than off a list of
   parts. The scale label has no menu to place yet - see 28.
 - **31** - New feature: an interactive glass FX editor for the canvas.
-- **32** - "Layers (3) - the top of the list is drawn on top" - the list seems
-  to work the other way round.
+- **32** - ~~"Layers (3) - the top of the list is drawn on top" - the list seems
+  to work the other way round.~~ Done, though not as a fix to the order: the
+  order was measured and is right. Every element on the canvas computes the
+  same `z-index: 2` and sits in one stacking parent, so what is drawn on top
+  is simply what comes last in the array, the rendered DOM order is that array
+  order, and the list reverses it - the top row really is the front. What was
+  wrong is that the grip beside each row was decoration: the whole row was an
+  HTML5 `draggable`, which has no touch at all, so on a tablet the list could
+  not be reordered by hand and the chevrons were the only way. The grip now
+  carries the row through the list on pointer events, and dragging past
+  either end means the front or the back.
 - **39** - ~~A circular bar placed through `+ add object` appears at about 63%
   of the box it was drawn in.~~ Done. The ghost under the crosshair and the
   click sized the box from different slots: the click asks the slot *with* the

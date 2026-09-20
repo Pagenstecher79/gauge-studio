@@ -2022,6 +2022,7 @@ class ScCanvasEditor extends LitElement {
       _innerAlso: { type: Array, state: true },
       _names: { type: Boolean, state: true },
       _layers: { type: Boolean, state: true },
+      _layerDrag: { type: Object, state: true },
       _undoStack: { type: Array, state: true },
       _redoStack: { type: Array, state: true },
     };
@@ -2106,9 +2107,10 @@ class ScCanvasEditor extends LitElement {
     // The layer panel, folded away until somebody has elements stacked and
     // goes looking for them. Editor state like the zoom, never committed.
     this._layers = false;
-    // Which row a layer drag started on. Not reactive: the row it lands on
-    // renders the drop, and the list re-renders from the commit anyway.
-    this._layerFrom = null;
+    // A layer being carried through the list: where it was picked up and
+    // which row it is over now, both indices into the element array. Null
+    // whenever nothing is in hand.
+    this._layerDrag = null;
     // The way back, and the way forward again. They live as long as the open
     // editor does: what came before it is Home Assistant's own undo.
     this._undoStack = [];
@@ -2414,9 +2416,13 @@ class ScCanvasEditor extends LitElement {
       .layer-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px 6px; }
       .layer { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 6px; border-radius: 4px; background: rgba(255,255,255,0.03); }
       .layer.sel { background: rgba(3,169,244,0.18); box-shadow: inset 0 0 0 1px var(--primary-color,#03a9f4); }
+      /* touch-action, or a finger on the grip scrolls the dialog instead of
+         carrying the layer - the pointer events never arrive. */
       .layer .grip { color: var(--secondary-text-color); cursor: grab; font-size: 14px;
-                     display: inline-flex; align-items: center; }
+                     display: inline-flex; align-items: center; touch-action: none; }
+      .layer .grip:active { cursor: grabbing; }
       .layer.dragging { opacity: 0.4; }
+      .layer.dragging .grip { cursor: grabbing; }
       .layer.drop { outline: 2px dashed var(--primary-color,#03a9f4); outline-offset: -2px; }
       .layer .who { flex: 1; min-width: 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .layer .who .id { color: var(--secondary-text-color); font-size: 11px; margin-left: 4px; }
@@ -6209,6 +6215,65 @@ class ScCanvasEditor extends LitElement {
   _move(idx, dir) { this._reorder(idx, idx + dir); }
 
   /**
+   * Carry one layer through the list, from its grip.
+   *
+   * Pointer events rather than HTML5 drag and drop: that API has no touch at
+   * all, and Home Assistant is driven from a tablet as often as from a desk.
+   * The capture means the grip keeps receiving the move even when the pointer
+   * has left the narrow column it started in, which is most of the gesture.
+   *
+   * Only the grip starts it, so the name beside it stays a click that selects
+   * and the buttons stay buttons - a whole row that is draggable swallows
+   * both.
+   *
+   * @param {PointerEvent} e
+   * @param {number} idx index into the element array, not the row on screen
+   */
+  _layerGrab(e, idx) {
+    e.preventDefault();
+    e.stopPropagation();
+    const grip = /** @type {HTMLElement} */ (e.currentTarget);
+    grip.setPointerCapture(e.pointerId);
+    this._layerDrag = { from: idx, to: idx };
+
+    const move = (/** @type {PointerEvent} */ ev) => {
+      const to = this._layerAt(ev.clientY);
+      if (to !== null && to !== this._layerDrag?.to) this._layerDrag = { from: idx, to };
+    };
+    const up = () => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointercancel', up);
+      const drag = this._layerDrag;
+      this._layerDrag = null;
+      if (drag && drag.to !== drag.from) this._reorder(drag.from, drag.to);
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
+  }
+
+  /**
+   * The row the pointer is over, as an index into the element array.
+   *
+   * Nearest rather than strictly inside, so carrying a layer past either end
+   * of the list means the front or the back - which is what the gesture looks
+   * like it should mean, and saves reaching for the chevrons to finish.
+   *
+   * @param {number} y
+   * @returns {number | null}
+   */
+  _layerAt(y) {
+    let best = null, near = Infinity;
+    for (const row of this.shadowRoot?.querySelectorAll('.layer-list .layer') ?? []) {
+      const r = row.getBoundingClientRect();
+      const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+      if (d < near) { near = d; best = Number(/** @type {HTMLElement} */ (row).dataset.layerIdx); }
+    }
+    return Number.isInteger(best) ? best : null;
+  }
+
+  /**
    * The stack, front at the top.
    *
    * The canvas draws its elements in array order, so the one at the end is
@@ -6229,36 +6294,14 @@ class ScCanvasEditor extends LitElement {
           ${rows.map(({ el, idx }) => {
             const over = overlappingElements(this._canvas, el.id);
             const name = this._label(el.id);
+            const drag = this._layerDrag;
             return html`
-              <div class="layer ${selected.includes(el.id) ? 'sel' : ''}" draggable="true"
-                   @dragstart=${e => {
-                     e.dataTransfer.effectAllowed = 'move';
-                     // A drag inside one list needs no payload, but a drag with
-                     // nothing on it never starts in Firefox.
-                     e.dataTransfer.setData('text/plain', String(idx));
-                     this._layerFrom = idx;
-                     e.currentTarget.classList.add('dragging');
-                   }}
-                   @dragover=${e => {
-                     if (this._layerFrom === null || this._layerFrom === idx) return;
-                     e.preventDefault();
-                     e.dataTransfer.dropEffect = 'move';
-                     e.currentTarget.classList.add('drop');
-                   }}
-                   @dragleave=${e => e.currentTarget.classList.remove('drop')}
-                   @drop=${e => {
-                     e.preventDefault();
-                     e.currentTarget.classList.remove('drop');
-                     // The row it was dropped on is the place it takes, which
-                     // is what dropping something on a list means.
-                     if (this._layerFrom !== null) this._reorder(this._layerFrom, idx);
-                     this._layerFrom = null;
-                   }}
-                   @dragend=${e => {
-                     e.currentTarget.classList.remove('dragging');
-                     this._layerFrom = null;
-                   }}>
-                <span class="grip" title="Drag to move it through the stack">${icon('grip-vertical')}</span>
+              <div class="layer ${selected.includes(el.id) ? 'sel' : ''}
+                          ${drag?.from === idx ? 'dragging' : ''}
+                          ${drag && drag.to === idx && drag.from !== idx ? 'drop' : ''}"
+                   data-layer-idx=${idx}>
+                <span class="grip" title="Drag to move it through the stack"
+                      @pointerdown=${e => this._layerGrab(e, idx)}>${icon('grip-vertical')}</span>
                 <span class="who" title=${el.id} @click=${e => {
                         if (e.shiftKey || e.ctrlKey || e.metaKey) this._toggleSel(el.id);
                         else this._selectOnly(el.id);
