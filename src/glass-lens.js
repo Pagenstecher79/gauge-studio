@@ -499,7 +499,15 @@ export function applyLensGeometry(root, readStyle) {
   });
 }
 
+// The element's own box, not the box it occupies on the screen. A needle is
+// rotated, and `getBoundingClientRect` answers with the upright rectangle
+// that rotation sweeps out - 125 px square for a needle 160 px long and 17
+// wide, at forty-five degrees. The lens takes the *shorter* side as what it
+// bends across, so the shift grew and shrank as the needle turned, and at
+// the diagonal it was six times what it should be. The used width and
+// height are what the filter region actually is, they ignore the transform,
+// and they are the same two numbers the pseudo-element path already reads.
 const boxOf = (el) => {
-  const r = el.getBoundingClientRect();
-  return { width: r.width + 'px', height: r.height + 'px' };
+  const cs = getComputedStyle(el);
+  return { width: cs.width, height: cs.height };
 };

@@ -605,3 +605,18 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   (`zip_release`). See `docs/editor-split.md`.
 - **47** - Glass FX: markedly better spherical distortion and refraction
   towards the edges. After the bugs above.
+- **52** - The canvas should be able to snap objects to one another: an
+  optional mode in which an object's frame is magnetic and catches on the
+  frames already on the canvas - edge to edge, and where two edges are
+  already aligned, along that line. Optional because the snap grid is
+  already there and the two answer different questions: the grid says where
+  a thing sits on the card, snapping says where it sits relative to its
+  neighbours. Off by default, so a canvas that is deliberately loose stays
+  loose.
+- **53** - The editor scrolls away under the hand: opening an object's menu
+  on the canvas moves the view, so the thing being worked on is no longer
+  where it was left. The canvas should hold its position while a menu opens.
+  Seen on an iPad, and not noticed on a desktop browser - which fits a
+  focus-driven scroll, since the panel that opens takes focus and Safari
+  scrolls the focused element into view inside the dialog. Worth checking
+  whether it is that before reaching for a scroll lock.
