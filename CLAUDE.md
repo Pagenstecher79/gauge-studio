@@ -562,4 +562,13 @@ files and `hacs.json` names one `filename`. The workflow zips `dist/*.js` flat
 and uploads that, plus both loose files for a manual install. A release that
 ships the card without its editor chunk is a card whose settings dialog 404s.
 
+That name is also why **HACS Validation is red between the rename and the
+first stable release that carries the zip**. The action resolves `filename`
+against GitHub's *latest release*, not against the repository - which is why
+it passed all along with `dist/` gitignored - and a pre-release is not the
+latest release. So `v2.5.0-beta.1` does not clear it and `v2.5.0` does. Do not
+"fix" it by pointing `filename` back at a single file: that ships a card whose
+editor 404s, which is the real breakage. Expect the daily scheduled run to be
+red for as long as that window lasts, and check it again after the stable tag.
+
 `dist/` is gitignored; the release workflow builds it. Never commit build output.
