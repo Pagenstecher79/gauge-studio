@@ -19,11 +19,14 @@ import { offsetsFromDrag, fontFromResize, snapToCentre, GAUGE_VIEW,
          frameInnerEdge, scaleFromRadius, frameWidthFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { revealBy, scrollParent } from "./reveal-scroll.js";
+import { pinchStep } from "./pinch-gesture.js";
 import { icon, iconMask } from "./icons.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
-import { isPointerGlass, lensFitsPointer } from "./pointer-glass.js";
+import { isPointerGlass, pointerLensFraction } from "./pointer-glass.js";
+import { isLiquidEffect } from "./pill-glass.js";
+import { MAX_IOR } from "./glass-lens.js";
 import { applyCardConfig } from "./card-apply.js";
 import { highlightInk } from "./highlight-ink.js";
 import { withoutElementConfig, TARGET_LISTS } from "./config-cleanup.js";
@@ -478,18 +481,14 @@ const SHADOW_MODE = Object.freeze([
   { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
 ]);
 
-// Glass, as the two chips offer it. The liquid option is dropped from the
-// needle's list where the needle is too thin to bend anything - the same
-// rule the form's select follows, and for the same reason.
+// Glass, as the two chips offer it. Both lists are the same list: the
+// needle's used to lose the liquid option below four units of width, and no
+// longer does - see POINTER_LENS_FRACTION.
 const GLASS_MODE = Object.freeze([
   { value: 'none', label: 'None', short: 'None' },
   { value: 'glass', label: 'Glass', short: 'Glass' },
   { value: 'glass_liquid', label: 'Liquid glass', short: 'Liquid' },
 ]);
-
-const NEEDLE_GLASS_MODE = (/** @type {any} */ cfg) =>
-  lensFitsPointer(cfg?.pointer_width ?? 2)
-    ? GLASS_MODE : GLASS_MODE.filter(o => o.value !== 'glass_liquid');
 
 /**
  * The two shapes a needle is drawn as.
@@ -1114,11 +1113,14 @@ const GAUGE_RINGS = Object.freeze({
       ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
       { key: 'pointer_3d_effect', icon: icon('axis-3d'), flag: true, what: 'plastic 3D',
         condition: (/** @type {any} */ cfg) => !isPointerGlass(cfg.pointer_glass) },
-      { key: 'pointer_glass', icon: icon('gauge'), what: 'glass', picks: NEEDLE_GLASS_MODE,
+      { key: 'pointer_glass', icon: icon('gauge'), what: 'glass', picks: GLASS_MODE,
         read: (/** @type {any} */ cfg) => cfg.pointer_glass || 'none' },
       { key: 'pointer_glass_blur', icon: icon('droplet'), slide: true, by: 0.5, min: 0, max: 6,
         dflt: 0, what: 'glass blur',
         condition: (/** @type {any} */ cfg) => isPointerGlass(cfg.pointer_glass) },
+      { key: 'pointer_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05, min: 1, max: MAX_IOR,
+        dflt: 1, what: 'refraction',
+        condition: (/** @type {any} */ cfg) => pointerLensFraction(cfg.pointer_glass) > 0 },
       { key: 'pointer_shadow_type', icon: icon('moon'), what: 'shadow', picks: SHADOW_MODE,
         read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
       { icon: icon('paintbrush'), what: 'shadow colour', paint: true,
@@ -1158,6 +1160,9 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_center_glass_blur', icon: icon('droplet'), slide: true, by: 0.5,
         min: 0, max: 6, dflt: 0, what: 'glass blur',
         condition: (/** @type {any} */ cfg) => isPointerGlass(cfg.pointer_center_glass) },
+      { key: 'pointer_center_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05,
+        min: 1, max: MAX_IOR, dflt: 1, what: 'refraction',
+        condition: (/** @type {any} */ cfg) => pointerLensFraction(cfg.pointer_center_glass) > 0 },
     ],
   },
 });
@@ -1726,6 +1731,9 @@ const BAR_PARTS = Object.freeze({
                 { value: 'glass_liquid', label: 'Liquid glass', short: 'Liquid' },
                 { value: 'glass_liquid_heavy', label: 'Liquid glass, thick',
                   short: 'Liquid+' }] },
+      { key: 'indicator_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05,
+        min: 1, max: MAX_IOR, dflt: 1, what: 'refraction',
+        condition: (/** @type {any} */ cfg) => isLiquidEffect(cfg.indicator_glass_effect) },
     ],
   },
   ticks: {
@@ -3337,7 +3345,13 @@ class ScCanvasEditor extends LitElement {
          to be a button in the toolbar, where nothing said which element it
          was about - and the corner it stands in is the one the ring's numbers
          left when they moved under their chips. */
-      .inner-open { position: absolute; top: 6px; left: 6px; z-index: 7;
+      /* Above every chip, frame and grip inside the element - the whole
+         inner furniture stacks between 4 and 10 and this stands over all of
+         it. A gauge's parts are drawn where the gauge drew them, so a chip
+         can land in this corner, and one that covers the button covers the
+         only way back out of the mode that put it there. Nothing else in
+         here is allowed above 10. */
+      .inner-open { position: absolute; top: 6px; left: 6px; z-index: 11;
         width: 24px; height: 24px; padding: 0; font-size: 15px; line-height: 1;
         border-radius: 5px; cursor: pointer; touch-action: none;
         border: 1px solid var(--sc-part); background: rgba(0,0,0,0.62);
@@ -4470,14 +4484,23 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * Two fingers on the canvas: the one gesture a touchscreen has for zooming.
+   * Two fingers on the canvas: the touchscreen's scroll, and its zoom.
    *
    * A trackpad's pinch arrives as Ctrl and a wheel and is handled there, but a
-   * touchscreen sends nothing of the sort - only two pointers - so the zoom
-   * is the ratio of how far apart they are now to how far apart they started,
-   * anchored between them. The drag the first finger had started is dropped:
-   * `_dragCanvas` is where an uncommitted drag lives, so letting it go puts
-   * the element back where the config still has it, and nothing is committed.
+   * touchscreen sends nothing of the sort - only two pointers - so both have
+   * to be read out of those. Two fingers that travel together move the
+   * window; two fingers that change their distance zoom, by the ratio of how
+   * far apart they are now to how far apart they were, anchored between them.
+   * Which of the two it is, is `pinchStep`: a scroll until the distance has
+   * changed by more than the slop, because otherwise no drag is ever only a
+   * scroll - two fingers do not hold their distance to the pixel.
+   *
+   * The drag the first finger had started is dropped: `_dragCanvas` is where
+   * an uncommitted drag lives, so letting it go puts the element back where
+   * the config still has it, and nothing is committed. That is also what
+   * makes the gesture reachable at all where it is needed most - a finger
+   * resting on an object, which is the one place a single finger cannot
+   * scroll, because the object has taken the touch for a drag.
    */
   _startPinch() {
     const [a, b] = [...this._touches.values()];
@@ -4488,6 +4511,7 @@ class ScCanvasEditor extends LitElement {
     this._pinch = {
       dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
       zoom: this._zoom,
+      zooming: false,
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
     };
   }
@@ -4495,16 +4519,25 @@ class ScCanvasEditor extends LitElement {
   _pinchTo() {
     const [a, b] = [...this._touches.values()];
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    // Two fingers that travel together move the view, the same as one finger
-    // would - a pinch is nearly always a little of both.
+    // Whichever it turns out to be, the midpoint moves the window: a pinch is
+    // nearly always a little of both, and a scroll is nothing else.
     const view = this._view;
     if (view) {
       view.scrollLeft -= mid.x - this._pinch.mid.x;
       view.scrollTop -= mid.y - this._pinch.mid.y;
     }
     this._pinch.mid = mid;
-    const dist = Math.hypot(a.x - b.x, a.y - b.y);
-    this._applyZoom(this._pinch.zoom * (dist / this._pinch.dist), mid);
+    const step = pinchStep(this._pinch, Math.hypot(a.x - b.x, a.y - b.y));
+    if (!step) return;
+    // Measured from here on, and the zoom left where it is this once, so
+    // crossing the slop does not jump by the slop.
+    if ('rebase' in step) {
+      this._pinch.dist = step.rebase;
+      this._pinch.zoom = this._zoom;
+      this._pinch.zooming = true;
+      return;
+    }
+    this._applyZoom(step.zoom, mid);
   }
 
   _panTo() {
@@ -4584,11 +4617,26 @@ class ScCanvasEditor extends LitElement {
     const z = Math.max(atLeast,
                        margin * Math.min(c.w / Math.max(x1 - x0, 0.001),
                                          c.h * this._viewStretch / Math.max(y1 - y0, 0.001)));
+    const was = this._zoom;
     this._zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+    const zoomed = this._zoom !== was;
     const mid = { x: (x0 + x1) / 2 / c.w, y: (y0 + y1) / 2 / c.h };
     this.updateComplete.then(() => {
       const view = this._view;
       if (!view) return;
+      // Nothing to bring into view, so nothing is moved. `atLeast` already
+      // says the way into a gauge is only ever a way closer, and when it wins
+      // there is no closer to go - but the centring below used to run anyway,
+      // and on a touchscreen that is the whole of what pressing the edit
+      // button appeared to do: a canvas placed by hand, and then shunted out
+      // from under the hand that placed it. So a selection already whole
+      // inside the window, at a zoom that has not changed, is left where its
+      // owner put it.
+      if (!zoomed
+          && x0 / c.w * view.scrollWidth >= view.scrollLeft
+          && x1 / c.w * view.scrollWidth <= view.scrollLeft + view.clientWidth
+          && y0 / c.h * view.scrollHeight >= view.scrollTop
+          && y1 / c.h * view.scrollHeight <= view.scrollTop + view.clientHeight) return;
       view.scrollLeft = mid.x * view.scrollWidth - view.clientWidth / 2;
       view.scrollTop = mid.y * view.scrollHeight - view.clientHeight / 2;
     });
@@ -5527,11 +5575,17 @@ class ScCanvasEditor extends LitElement {
     const head = fold.querySelector('summary') || fold;
     const view = scrollParent(head);
     if (!view) return;
-    // What may not be scrolled away is the element being worked on, not the
-    // whole canvas: its frames and its chips are what the next gesture aims
-    // at, and one with an edge off the screen cannot be dragged by that edge.
+    // What may not be scrolled away is the canvas window, not merely the
+    // element inside it. The element was the first answer and it was too
+    // small: on a tablet the drawing sits high in the window, the free space
+    // above it is tens of pixels, and the nudge spent every one of them - so
+    // opening a part's menu moved a canvas that had just been placed by hand.
+    // The window is what the finger aims at, chips, frames, empty space and
+    // all, so the window is what stays. Where it fills the scroller there is
+    // no room and nothing moves, which is the right answer: the fold is
+    // already first in the form, one flick below the drawing.
     const dy = revealBy(head.getBoundingClientRect(), view.getBoundingClientRect(),
-                        this._innerBoxRect());
+                        this._view?.getBoundingClientRect() || this._innerBoxRect());
     if (dy) view.scrollBy({ top: dy, behavior: 'smooth' });
   }
 
@@ -6720,7 +6774,20 @@ class ScCanvasEditor extends LitElement {
     const note = (/** @type {any} */ r, /** @type {any} */ extra) => {
       taken.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, m: M, ...extra });
     };
-    if (panel) note(panel, { panel: true });
+    if (panel) note(panel, { panel: true, hard: true });
+    // The corner buttons: the way out of this mode, and the middle axis.
+    // They were raised above every chip so that none could cover them, which
+    // only turned the fault the other way up - the chip is now the thing
+    // underneath, and a chip that cannot be read is barely better than one
+    // that cannot be pressed. They are furniture and they never move, so the
+    // room they stand in is simply not the chips' to use. Counted as hard as
+    // the panel, because there is no such thing as a tidy overlap here: both
+    // of these are pressed, and one under the other is a press that goes to
+    // the wrong one.
+    for (const btn of /** @type {any[]} */ ([...root.querySelectorAll('.inner-open')])) {
+      const r = btn.getBoundingClientRect();
+      if (r.width || r.height) note(r, { hard: true });
+    }
     // A frame is worked on the way the panel is read, so it gets the same
     // right to be clear of chips: its drawing, and the field it is being
     // typed into. Its head is not in this list - a head steps aside like any
@@ -6866,7 +6933,7 @@ class ScCanvasEditor extends LitElement {
             for (const o of taken) {
               const ov = Math.max(0, Math.min(a.l + a.w, o.right) - Math.max(a.l, o.left))
                        * Math.max(0, Math.min(a.t + a.h, o.bottom) - Math.max(a.t, o.top));
-              sum += ov * (o.panel ? 10 : 1);
+              sum += ov * (o.hard ? 10 : 1);
             }
             return sum;
           };
@@ -6883,8 +6950,14 @@ class ScCanvasEditor extends LitElement {
       const over = panel && hitsHard({ l: h.l + best.x, t: h.t + best.y, w: h.w, h: h.h }, panel);
       if (over) chip.style.zIndex = '9';
       else chip.style.removeProperty('z-index');
+      // A column of add buttons counts as hard as the panel once it is
+      // placed. It steps aside like any other chip - it is not furniture -
+      // but when the fallback has to choose what to cover, it must not choose
+      // this: every button in it is the only press that adds that part,
+      // where an ordinary chip half over an ordinary chip is merely untidy.
       note({ left: h.l + best.x, right: h.l + best.x + h.w,
-             top: h.t + best.y, bottom: h.t + best.y + h.h }, { m: MC, own });
+             top: h.t + best.y, bottom: h.t + best.y + h.h },
+           { m: MC, own, hard: chip.classList.contains('inner-adds') });
       // Wider than it needs to be for a still picture: measuring against a
       // drawing that is itself laid out in fractions of a pixel, two passes
       // can disagree by a pixel over nothing, and rewriting the nudge for

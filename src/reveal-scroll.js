@@ -9,11 +9,11 @@
  * seen cannot be dragged, which is the whole point of the frames.
  *
  * So the scroll is worked out here instead, with a second rectangle that has
- * to survive it: the element being worked on. What is free above it is all
- * the room the nudge gets. On a roomy dialog that is enough to bring a
- * heading up; on a phone the element fills the view, there is no room, and
- * nothing moves - which is the right answer, because the settings are one
- * flick away and the drawing is what the finger is on.
+ * to survive it. What is free around that rectangle is all the room the
+ * nudge gets. On a roomy dialog that is enough to bring a heading up; where
+ * the rectangle fills the view there is no room and nothing moves - which is
+ * the right answer, because the settings are one flick away and the drawing
+ * is what the finger is on.
  */
 
 /**
@@ -34,7 +34,7 @@ export function revealBy(item, view, keep) {
   const dy = above ? item.top - view.top
                    : Math.min(item.bottom - view.bottom, item.top - view.top);
   if (!dy || !keep) return dy;
-  // `keep` is the element being worked on, and it has to stay whole: a frame
+  // `keep` has to stay whole - it is the canvas window - and a frame
   // with its top edge off the screen cannot be dragged by that edge. Adding
   // to `scrollTop` lifts it, so what is free above it is the most that may be
   // added, and what is free below it the most that may be taken.

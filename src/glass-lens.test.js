@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { lensField, lensScaleFraction, lensFilterMarkup, lensGeometry, applyLensGeometry } from './glass-lens.js';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import {
+  lensField, lensScaleFraction, lensFilterMarkup, lensGeometry, applyLensGeometry,
+  bevelShift, BEVEL_MAX_SLOPE, iorBody, iorDispersion, MAX_IOR,
+} from './glass-lens.js';
 
 /** The map is square; this reads one pixel out of it. */
 const at = (field, size, i, j) => {
@@ -103,18 +106,24 @@ describe('lensGeometry', () => {
 });
 
 describe('applyLensGeometry', () => {
-  const fakeRoot = (selector, w, h) => {
+  const fakeRoot = (selector, w, h, ks = [undefined]) => {
     const img = () => ({ attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } });
     const images = [img(), img()];
-    const disp = { attrs: { scale: '0' }, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; } };
+    const pass = (k) => ({
+      attrs: { scale: '0', ...(k === undefined ? {} : { 'data-sc-lens-k': String(k) }) },
+      setAttribute(key, v) { this.attrs[key] = v; },
+      getAttribute(key) { return this.attrs[key] ?? null; },
+    });
+    const passes = ks.map(pass);
+    const disp = passes[0];
     const filter = {
       getAttribute: (k) => ({ 'data-sc-lens': '0.12', 'data-sc-lens-for': selector, 'data-sc-lens-pseudo': '::after' }[k] ?? null),
-      querySelectorAll: () => images,
+      querySelectorAll: (sel) => (sel === 'feDisplacementMap' ? passes : images),
       querySelector: () => disp,
     };
     const host = {};
     return {
-      images, disp, host,
+      images, disp, passes, host,
       querySelectorAll: (sel) => (sel === 'filter[data-sc-lens-for]' ? [filter] : []),
       querySelector: (sel) => (sel === selector ? host : null),
     };
@@ -143,5 +152,163 @@ describe('applyLensGeometry', () => {
   it('survives a root with nothing in it', () => {
     expect(() => applyLensGeometry(null)).not.toThrow();
     expect(() => applyLensGeometry({})).not.toThrow();
+  });
+});
+
+describe('bevelShift', () => {
+  it('runs from nothing to everything', () => {
+    expect(bevelShift(0)).toBe(0);
+    expect(bevelShift(1)).toBe(1);
+  });
+
+  it('spends its strength at the rim, not across the pane', () => {
+    // This is the whole difference from the linear ramp it replaced: half way
+    // across the bevel a quarter-round has barely turned, and the last tenth
+    // carries more than the first half does.
+    expect(bevelShift(0.5)).toBeLessThan(0.5);
+    expect(bevelShift(0.9)).toBeGreaterThan(0.9);
+    expect(bevelShift(0.9) - bevelShift(0.8))
+      .toBeGreaterThan(bevelShift(0.5) - bevelShift(0));
+  });
+
+  it('never goes backwards', () => {
+    for (let u = 0; u < 1; u += 0.01) {
+      expect(bevelShift(u + 0.01)).toBeGreaterThanOrEqual(bevelShift(u));
+    }
+  });
+
+  it('saturates where the face is steeper than the map can say', () => {
+    const atMax = BEVEL_MAX_SLOPE / Math.sqrt(1 + BEVEL_MAX_SLOPE * BEVEL_MAX_SLOPE);
+    expect(bevelShift(atMax)).toBeCloseTo(1, 6);
+    expect(bevelShift(atMax + 0.001)).toBe(1);
+  });
+
+  it('holds still for the values a config can arrive with', () => {
+    for (const v of [undefined, null, '', NaN, -1, 2, 'nonsense']) {
+      const got = bevelShift(/** @type {any} */ (v));
+      expect(got).toBeGreaterThanOrEqual(0);
+      expect(got).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('the direction a bevel faces', () => {
+  const SIZE = 64;
+
+  it('bends straight through the middle of an edge, not towards the centre', () => {
+    // Two thirds of the way up the left edge, the old field tilted the shift
+    // a third of the way into the vertical, and a straight line of backdrop
+    // crossing that edge came through with a kink in it. A face that is flat
+    // along the edge bends across it and nowhere else.
+    const f = lensField('dome', SIZE);
+    const up = at(f, SIZE, 0, 48);
+    expect(up.r).toBeGreaterThan(240);
+    expect(Math.abs(up.g - 128)).toBeLessThan(10);
+  });
+
+  it('bends diagonally in a corner, because a corner is where it turns', () => {
+    const f = lensField('dome', SIZE);
+    const c = at(f, SIZE, 0, 0);
+    expect(c.r).toBeGreaterThan(190);
+    expect(c.r).toBe(c.g);
+  });
+
+  it('reaches full deflection at the rim, so the strength slider means it', () => {
+    const f = lensField('dome', SIZE);
+    expect(at(f, SIZE, 0, SIZE / 2).r).toBe(255);
+    expect(at(f, SIZE, SIZE - 1, SIZE / 2).r).toBeLessThan(2);
+  });
+
+  it('bends a disc along its radius', () => {
+    const f = lensField('disc', SIZE);
+    const diag = at(f, SIZE, 4, 4);
+    expect(diag.r).toBe(diag.g);
+    expect(diag.r).toBeGreaterThan(190);
+  });
+});
+
+
+describe('the refractive index', () => {
+  const SIZE = 64;
+
+  it('is off at 1, and at anything that is not a number', () => {
+    for (const v of [1, 0, undefined, null, '', 'n', NaN, -3]) {
+      expect(iorBody(v)).toBe(0);
+      expect(iorDispersion(v)).toBe(0);
+    }
+  });
+
+  it('leaves the field byte for byte alone at 1', () => {
+    expect(Array.from(lensField('dome', SIZE, iorBody(1))))
+      .toEqual(Array.from(lensField('dome', SIZE)));
+  });
+
+  it('caps, so a hand-written config cannot make a marble of the pane', () => {
+    expect(iorBody(9)).toBe(iorBody(MAX_IOR));
+    expect(iorDispersion(9)).toBe(iorDispersion(MAX_IOR));
+  });
+
+  it('bends the body of the pane, where the bevel alone left it flat', () => {
+    const flat = at(lensField('dome', SIZE), SIZE, 20, SIZE / 2);
+    const thick = at(lensField('dome', SIZE, iorBody(2)), SIZE, 20, SIZE / 2);
+    expect(Math.abs(flat.r - 128)).toBeLessThan(2);
+    expect(thick.r - 128).toBeGreaterThan(20);
+  });
+
+  it('bends the body more towards the sides than in the middle', () => {
+    const f = lensField('dome', SIZE, iorBody(2));
+    const near = at(f, SIZE, SIZE / 2 - 4, SIZE / 2).r;
+    const far = at(f, SIZE, 8, SIZE / 2).r;
+    expect(far).toBeGreaterThan(near);
+    expect(near).toBeGreaterThan(128);
+  });
+
+  it('still saturates at the rim rather than wrapping round', () => {
+    const f = lensField('dome', SIZE, iorBody(2));
+    expect(at(f, SIZE, 0, SIZE / 2).r).toBe(255);
+    expect(at(f, SIZE, SIZE - 1, SIZE / 2).r).toBeLessThan(2);
+  });
+});
+
+/**
+ * The markup needs a canvas to draw the map on, and there is none in Node.
+ * The module is loaded again against a stub that answers with one, so the
+ * empty maps the rest of this file gets are not what these tests see.
+ */
+describe('the filter the index writes', () => {
+  /** @type {typeof import('./glass-lens.js')} */
+  let lens;
+  const markup = (ior) => lens.lensFilterMarkup('f', 'dome', 0.05, '.pane', undefined, ior === undefined ? undefined : { ior });
+
+  beforeAll(async () => {
+    globalThis.document = /** @type {any} */ ({
+      createElement: () => ({
+        getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }),
+        toDataURL: () => 'data:image/png;base64,MAP',
+      }),
+    });
+    vi.resetModules();
+    lens = await import('./glass-lens.js');
+  });
+  afterAll(() => { delete globalThis.document; });
+
+  it('draws one displacement pass at 1 and three above it', () => {
+    expect(markup()).toBe(markup(1));
+    expect(markup(1).match(/feDisplacementMap/g)).toHaveLength(1);
+    expect(markup(2).match(/feDisplacementMap/g)).toHaveLength(3);
+    expect(markup(2)).toContain('result="cRG"');
+  });
+
+  it('keeps every pass opaque, or premultiplied arithmetic eats the fringe', () => {
+    expect(markup(2).match(/0 0 0 0 1"/g)).toHaveLength(3);
+  });
+
+  it('bends blue further than red, which is which way a prism goes', () => {
+    const ks = [...markup(2).matchAll(/data-sc-lens-k="([\d.]+)"/g)].map(m => Number(m[1]));
+    expect(ks).toEqual([1 - lens.iorDispersion(2), 1 + lens.iorDispersion(2)]);
+  });
+
+  it('draws a different map for a different index', () => {
+    expect(markup(1)).not.toBe(markup(2));
   });
 });

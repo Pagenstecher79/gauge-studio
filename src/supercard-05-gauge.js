@@ -104,10 +104,18 @@ class ScGauge extends LitElement {
          rotation is a compositor transform and the gauge below it never
          repaints. See docs/perf-cpu.md. */
       /* The layer is the square the gauge's viewBox is letterboxed into, not
-         the wrap's box: a percentage transform-origin measures the element,
-         and only on that square does it land on the pivot. transform-box with
-         view-box would be the direct way to say this, but on an outer svg it
-         does not move the origin into viewBox units - measured, not assumed. */
+         the wrap's box: only on that square does an origin given as a share
+         of the layer land on the pivot. transform-box with view-box would be
+         the direct way to say this, but on an outer svg it does not move the
+         origin into viewBox units - measured, not assumed.
+
+         The share is written in cqmin rather than in per cent to say which
+         square it is a share of, and no more than that. It was tried as a
+         cure for a needle that stepped off the hub and back, and it is not
+         one: the layer has a width and a height of its own, a per cent
+         resolves against that border box and not against the ink the
+         overflow-visible svg spills past it, so the two units give the same
+         pixel in every engine. The step was the rasterisation below. */
       /* Safari re-rasterises a gauge that is not on its own compositing layer
          every time the value changes, and the redrawn picture does not always
          land on the same pixel - the whole instrument twitches once or twice a
@@ -125,6 +133,17 @@ class ScGauge extends LitElement {
       .sc-gauge-layer { position: absolute; inset: 0; margin: auto;
                         width: 100cqmin; height: 100cqmin;
                         pointer-events: none; }
+      /* A layer that turns is promoted on its own, over and above the wrap.
+         Without that, WebKit re-rasterises the needle every time the angle
+         changes, and rounds the fresh bitmap into the layer's own rotated
+         pixel grid - so the needle steps a pixel or two across its own axis
+         and back, once a second, while the hub underneath it stands still.
+         The tell is that the step turns with the needle: across the needle at
+         nine o'clock it reads as up and down, at half past four as in and out.
+         An origin that was off would give a step fixed in the page instead.
+         Only the turning layers, because each promoted layer is a bitmap the
+         compositor keeps, and a canvas holds many gauges. */
+      .sc-gauge-layer[data-sc-spin] { will-change: transform; }
 
       /* --- SUPERCARD LAYER MAPPING --- */
       .layer-elm-base    { z-index: 700; }
@@ -1050,8 +1069,8 @@ class ScGauge extends LitElement {
     // square the viewBox is letterboxed into, so a box given in per cent of
     // it lands exactly where the shape would have been drawn.
     const layer = (originX, originY, rotate, content, needle = false, overlay = '') => html`
-      <div class="sc-gauge-layer" ?data-sc-needle=${needle}
-           style="transform-origin: ${(originX / this.SIZE * 100).toFixed(4)}% ${(originY / this.SIZE * 100).toFixed(4)}%;${
+      <div class="sc-gauge-layer" ?data-sc-needle=${needle} ?data-sc-spin=${!!rotate}
+           style="transform-origin: ${(originX / this.SIZE * 100).toFixed(4)}cqmin ${(originY / this.SIZE * 100).toFixed(4)}cqmin;${
              rotate ? ` transform: rotate(${renderAngle}deg); transition: transform ${this.frozen || !this._isInitialized ? 0 : dur}s ${easingCurve};` : ''}">
         <svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">
           ${content}
@@ -1065,7 +1084,7 @@ class ScGauge extends LitElement {
     // for the re-sampling. See `pointer-glass.js` and docs/perf-cpu.md.
     const ptrGlass = this._get('pointer_glass', 'none');
     const hubGlass = this._get('pointer_center_glass', 'none');
-    const ptrLens = pointerLensFraction(ptrGlass, this._get('pointer_width', 2));
+    const ptrLens = pointerLensFraction(ptrGlass);
     const hubLens = pointerLensFraction(hubGlass);
     const ptrBlur = pointerBlurPx(this._get('pointer_glass_blur', 0));
     const hubBlur = pointerBlurPx(this._get('pointer_center_glass_blur', 0));
@@ -1132,8 +1151,10 @@ class ScGauge extends LitElement {
 
         ${(ptrLens || hubLens) ? html`
         <svg style="position:absolute; width:0; height:0;" aria-hidden="true"><defs>
-          ${ptrLens ? lensFilterElement(PTR_LENS_ID, 'dome', ptrLens, '[data-sc-part="pointer"]', undefined, this) : ''}
-          ${hubLens ? lensFilterElement(HUB_LENS_ID, 'dome', hubLens, '[data-sc-part="pointer_center"]', undefined, this) : ''}
+          ${ptrLens ? lensFilterElement(PTR_LENS_ID, 'dome', ptrLens, '[data-sc-part="pointer"]', undefined, this,
+                        { ior: this._get('pointer_glass_ior', 1) }) : ''}
+          ${hubLens ? lensFilterElement(HUB_LENS_ID, 'dome', hubLens, '[data-sc-part="pointer_center"]', undefined, this,
+                        { ior: this._get('pointer_center_glass_ior', 1) }) : ''}
         </defs></svg>` : ''}
         
         <svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">

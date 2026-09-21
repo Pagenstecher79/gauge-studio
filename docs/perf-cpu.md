@@ -564,5 +564,102 @@ two are free, being nothing but a background and a `box-shadow`.
 
 That is the shape of the answer: **the cheap parts are the ones that carry the
 look**. A translucent needle with a lit rim, glass on the hub where it costs
-nothing, and the lens itself offered only where the part is wide enough to
-show one.
+nothing, and the lens as a second effect that has to be asked for.
+
+The one pixel in the paragraph above is not the needle's fault, and the rule
+it produced has since been withdrawn. The lens used to be offered only above
+four units of width, because 12 % of a thin needle is half a pixel. That
+share came from the pill, which is a slab: a wide pane, flat in the middle,
+bevelled in a narrow band at the edge. A needle is a rod, curved across its
+whole width, and a rod displaces a far larger share of itself. At
+`POINTER_LENS_FRACTION` a needle of two units - the default, a fine one -
+shifts its backdrop by 3.2 px on a 280 px gauge, measured. So the gate is
+gone and the share is right, which costs no more per frame than the wrong
+share did: one displacement pass either way.
+
+## What the refractive index costs
+
+The index (`ior`, *Refractive index (n)* under Optics) does two things to the
+lens: the whole body of the pane bends, not only its rim, and the three
+colours are displaced by slightly different amounts so the edge splits into a
+warm and a cold fringe. The first is free - it changes the numbers in the
+64x64 map and nothing else. The second is not: one `feDisplacementMap`
+becomes three, each followed by an `feColorMatrix`, with two `feComposite`s
+to add them back together. Eight primitives over the oversized filter region
+instead of one.
+
+Measured 2026-09-21 on `.claude/bench/ior-bench.html` - a grid of panes with
+`backdrop-filter` over a moving high-contrast backdrop, at the editor's
+maximum refraction. Chrome, 120 Hz, 1024x768 at dpr 2, fps and p99 over a 5 s
+sample after a 900 ms warm-up. `edge` is n = 1, one pass; `ior` is n = 2,
+three passes; `both` is n = 2 with `blur(4px)` stacked on it.
+
+| panes | off | edge (1 pass) | ior 2 (3 passes) | blur | both |
+|---|---|---|---|---|---|
+| 16 | 120.0 / 10.2 | 120.0 / 10.1 | 120.0 / 9.9 | - | - |
+| 64 | - | 120.0 / 10.0 | 120.0 / 9.7 | 120.0 / 10.3 | - |
+| 128 | - | - | 120.0 / 10.0 | - | 120.0 / 9.8 |
+| 256 | - | 119.8 / 9.8 | 60.0 / 17.8 | - | - |
+
+**Up to 128 panes the index is free, and past that it is the whole cost.** At
+256 the single pass is still at the refresh rate and the three passes have
+halved to a hard vsync-locked 60 - the frame no longer fits in 8.3 ms, so
+every frame waits for the next one. That is three times the filter work
+arriving all at once, which is what eight primitives instead of one buys.
+
+Two things follow. A dashboard of a dozen or two glass panes pays nothing for
+the index, which is every dashboard anybody builds - the break is at a pane
+count nothing real reaches. And the cliff, when it comes, is a cliff and not
+a slope, because the frame rate is locked to the refresh: 128 panes cost
+nothing and 256 cost half the frame rate. So the index is offered as a
+setting rather than spent by default, and at n = 1, which is the default, the
+filter is the single-primitive one this module always wrote, byte for byte.
+
+Stacking the index on a blur is the exception to the pane's usual rule -
+`both` at 128 measures the same as the index alone. The blur is gated on an
+opaque pane and the lens with it, so the two never run where neither shows;
+where they do both run, at the counts people build, neither is the
+bottleneck.
+
+### The same index on the smaller glass
+
+The index is offered on every part that already carries a displacement map,
+which is four: the glass pane, the needle, the centre point and the
+indicator pill. Each defaults to n = 1, the single pass, so nothing a saved
+card draws changes until somebody asks.
+
+What differs between them is not the filter - it is the same three passes -
+but what the part does per frame:
+
+- **The centre point** stands still. Three passes over a backdrop that does
+  not move are paid once, which is the same reason its blur is offered with
+  no gate and no warning.
+- **The needle** turns, so the passes are paid every frame it moves. Its
+  control says so; the guidance is to leave it at 1 on a card with many
+  gauges.
+- **The pill** is the expensive one, and it was measured before this existed:
+  64 pills animating at once held 119 fps on one pass and fell to 53 on
+  three, with 51 dropped frames. That measurement is why the pill's colour
+  fringe is *painted* by default - see `pill-glass.js` - and the index is the
+  way to ask for the real one anyway, on the few large pills where it reads.
+
+The pane's own numbers above do not carry over to the pill, and the
+difference is not a contradiction: a pane is sampled once per change, a pill
+is sampled every frame it moves.
+
+**And only while it moves.** The bar has no endless animation and no CSS
+transition on its position - the fill follows a capped frame loop that ends
+when the value is reached, at which point the pill stands still over a
+backdrop that stands still, and a `backdrop-filter` over an unchanged
+backdrop is not re-evaluated. So the 53 fps is a dip of about a second per
+reading, not a standing load.
+
+What does make it standing is a backdrop that never settles, and there are
+two ways to build one, both of them ordinary choices rather than mistakes:
+an animated colour pattern on the fill underneath the pill, and a
+translucent bar over an animated card background, where what shows through
+the pill is the card and the card is moving. In both the pill re-samples
+every frame for as long as the dashboard is open, whether the value changes
+or not. The pill's own control says so; there is nothing to gate here,
+because the card cannot tell a backdrop that is worth bending from one that
+is not.

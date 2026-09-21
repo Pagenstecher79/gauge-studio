@@ -3,7 +3,8 @@ import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GAUGE_DEFAULT } from "./element-templates.js";
 import { gradientPresetPatch } from "./gradient-presets.js";
 import { icon } from "./icons.js";
-import { isPointerGlass, lensFitsPointer, pointerBlurPx } from "./pointer-glass.js";
+import { isPointerGlass, pointerBlurPx, pointerLensFraction } from "./pointer-glass.js";
+import { MAX_IOR } from "./glass-lens.js";
 import { ListReorder } from "./list-reorder.js";
 
 const SC = window.SupercardUtils;
@@ -232,20 +233,28 @@ const STYLE_FIELDS = [
     condition: cfg => !isPointerGlass(cfg.pointer_glass) },
   // Glass is a material the needle is made of, so it stands with the shape
   // and the colour rather than among the shadow's settings. The liquid
-  // option appears only on a needle wide enough to show a bend - see
-  // POINTER_LENS_MIN_WIDTH - because 12 % of a thin needle is half a pixel
-  // and the option would promise something it cannot draw.
+  // option used to be withheld from a needle under four units wide; it is
+  // not, because a rod bends a large share of its own width - see
+  // POINTER_LENS_FRACTION.
   { id: 'pointer_glass', framedBy: 'pointer', label: 'Pointer glass', type: 'select',
-    options: cfg => [
+    options: [
       { value: 'none', label: 'None' },
       { value: 'glass', label: 'Glass' },
-      ...(lensFitsPointer(cfg.pointer_width ?? 2)
-        ? [{ value: 'glass_liquid', label: 'Liquid glass (refracting)' }]
-        : []),
+      { value: 'glass_liquid', label: 'Liquid glass (refracting)' },
     ] },
   { id: 'pointer_glass_blur', framedBy: 'pointer', label: 'Pointer glass blur (px)',
     type: 'range', min: 0, max: 6, step: 0.5, placeholder: '0',
     condition: cfg => isPointerGlass(cfg.pointer_glass) },
+  // The index is offered wherever the rim already bends, and its default of 1
+  // is the rim alone - the needle a saved card already draws.
+  { id: 'pointer_glass_ior', framedBy: 'pointer', label: 'Pointer refractive index (n)',
+    type: 'range', min: 1, max: MAX_IOR, step: 0.05, placeholder: '1',
+    condition: cfg => pointerLensFraction(cfg.pointer_glass) > 0,
+    hint: 'How dense the needle\'s glass is. At 1 only its rim bends what is '
+        + 'behind it. Higher and the whole needle refracts, and the colours split '
+        + 'along its edges into a warm and a cold fringe. Three passes over the '
+        + 'backdrop instead of one, on a part that turns - leave it at 1 on a '
+        + 'card with many gauges.' },
   { type: 'note', bare: true, class: '', icon: icon('gauge'),
     style: 'font-size:11px; color:var(--secondary-text-color); margin:-2px 0 4px 0;',
     condition: cfg => isPointerGlass(cfg.pointer_glass)
@@ -268,6 +277,14 @@ const STYLE_FIELDS = [
   { id: 'pointer_center_glass_blur', framedBy: 'pointer_center', label: 'Centre point glass blur (px)',
     type: 'range', min: 0, max: 6, step: 0.5, placeholder: '0',
     condition: cfg => isPointerGlass(cfg.pointer_center_glass) },
+  // The hub stands still, so the three passes are paid once and not per frame
+  // - the same reason its blur is offered without a warning.
+  { id: 'pointer_center_glass_ior', framedBy: 'pointer_center', label: 'Centre point refractive index (n)',
+    type: 'range', min: 1, max: MAX_IOR, step: 0.05, placeholder: '1',
+    condition: cfg => pointerLensFraction(cfg.pointer_center_glass) > 0,
+    hint: 'How dense the dot\'s glass is. At 1 only its rim bends. Higher and '
+        + 'the whole dot refracts, with a warm and a cold fringe at the edge. It '
+        + 'does not move, so this costs nothing per frame.' },
   { id: 'pointer_shadow_type', framedBy: 'pointer',    label: 'Pointer shadow',            type: 'select',  options: [ { value: 'none', label: 'None' }, { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
   { id: 'pointer_shadow_color', framedBy: 'pointer',   label: 'Shadow colour',             type: 'color',   condition: cfg => cfg.pointer_shadow_type === 'fixed' },
   { id: 'pointer_shadow_blur', framedBy: 'pointer',     label: 'Shadow blur',   type: 'range', min: 0,  max: 1, step: 0.01,  placeholder: '0.8', condition: cfg => cfg.pointer_shadow_type !== 'none' },

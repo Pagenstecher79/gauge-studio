@@ -11,11 +11,14 @@
  * Two things are deliberately *not* done, both measured on 64 pills animating
  * at once against a 120 Hz budget of 8.3 ms per frame:
  *
- * - The colour fringe is painted, not refracted. A real one means displacing
- *   the red, green and blue channels by different amounts, which is three
- *   displacement passes instead of one: 53 fps and 51 dropped frames, against
- *   119 fps for a single pass. Two tinted rim shadows are indistinguishable
- *   at pill size and cost nothing.
+ * - The colour fringe is painted, not refracted, by default. A real one means
+ *   displacing the red, green and blue channels by different amounts, which is
+ *   three displacement passes instead of one: 53 fps and 51 dropped frames,
+ *   against 119 fps for a single pass. Two tinted rim shadows are
+ *   indistinguishable at pill size and cost nothing, so that is what a pill
+ *   gets unless someone asks otherwise. The refractive index does ask - see
+ *   `indicator_glass_ior` and `iorDispersion` in `glass-lens.js` - and its
+ *   default leaves this untouched.
  * - The displacement is flat across the middle of the pill and steep only at
  *   its rim, which is where a lens actually bends light. A ramp across the
  *   whole pill smears the text behind it.

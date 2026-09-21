@@ -150,9 +150,12 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   of the setting follows the measurement. The centre point does not move and
   is free, so its glass has no gate. The needle gets the half that costs
   nothing - a translucent body and a lit rim - as plain `glass`. The lens is
-  a second effect and appears only where the needle is wide enough to bend
-  anything (`POINTER_LENS_MIN_WIDTH`, four units): at the default width of
-  two it bends by a single pixel. The blur is a slider that starts at zero
+  a second effect that has to be asked for. It used to be withheld below four
+  units of width, on the ground that a thin needle bends by a single pixel -
+  which was true of the share, not of the needle: 12 % came from the pill,
+  and a pill is a slab where a needle is a rod. `POINTER_LENS_FRACTION`
+  replaces both the share and the gate, and a needle of two units now bends
+  by three pixels. The blur is a slider that starts at zero
   and carries the warning, and at zero it writes no `blur()` at all, because
   `blur(0px)` still pays for a backdrop root. The relief for ticks and texts
   is still open.
@@ -602,3 +605,28 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   (`zip_release`). See `docs/editor-split.md`.
 - **47** - Glass FX: markedly better spherical distortion and refraction
   towards the edges. After the bugs above.
+- **52** - The canvas should be able to snap objects to one another: an
+  optional mode in which an object's frame is magnetic and catches on the
+  frames already on the canvas - edge to edge, and where two edges are
+  already aligned, along that line. Optional because the snap grid is
+  already there and the two answer different questions: the grid says where
+  a thing sits on the card, snapping says where it sits relative to its
+  neighbours. Off by default, so a canvas that is deliberately loose stays
+  loose.
+- **53** - *Done.* The editor scrolled away under the hand: opening an
+  object's menu on the canvas, or pressing the button that opens one for
+  editing, moved the view, so the thing being worked on was no longer where
+  it had been left. It looked like a focus-driven scroll, because it showed
+  on an iPad and not on a desktop browser - it was neither. It was two of
+  the editor's own scroll writes, and the desktop dialog is simply roomy
+  enough that both came to nearly nothing:
+
+  - `_zoomToSelection` recentred the window every time, and the way into a
+    gauge passes `atLeast: this._zoom`, so a canvas already placed by hand
+    kept its zoom and was shunted sideways anyway. It now leaves a selection
+    alone that is already whole inside the window at an unchanged zoom.
+  - `_revealPart` nudged the dialog to bring a fold's heading up, and what
+    it refused to push out of view was the object's own box. Above that box
+    a tablet leaves tens of pixels, and the nudge spent them. What may not
+    move is now the canvas window itself, so where the drawing fills the
+    scroller nothing moves at all.

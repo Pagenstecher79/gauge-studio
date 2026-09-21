@@ -20,11 +20,12 @@
  * - **The look is in the cheap parts.** A translucent body and a lit rim are
  *   a background and a `box-shadow`, and they cost nothing at all. They are
  *   what reads as glass at this size, so they are what `glass` is.
- * - **The bend is the expensive half of the look and the smaller half of
- *   it.** The shift is a share of the part's shorter side, and a needle is
- *   thin by nature - see `POINTER_LENS_MIN_WIDTH`. So the lens is a second
- *   effect rather than part of the first, and it is offered only where the
- *   needle is wide enough to show one.
+ * - **The bend is the expensive half of the look.** It re-reads the dial at
+ *   every angle the needle passes through, so it stays a second effect that
+ *   has to be asked for - `glass_liquid` rather than `glass` - and it says
+ *   what it costs. It is no longer withheld from a thin needle: a rod bends
+ *   a large share of its own width, and the share is what was wrong, not
+ *   the needle. See `POINTER_LENS_FRACTION`.
  *
  * The blur is offered too, because a user may want frost rather than glass,
  * but it is the half that breaks first - 32 turning needles cost a quarter
@@ -42,19 +43,29 @@ import { suspendable } from './glass-suspend.js';
 export const POINTER_GLASS_EFFECTS = Object.freeze(['none', 'glass', 'glass_liquid']);
 
 /**
- * How wide a needle has to be, in the gauge's own units, before the lens is
- * worth offering.
+ * How far a rod bends what is behind it, as a share of its own width.
  *
- * The gauge's viewBox is 50 across, so a unit is 2 % of the gauge. The bend
- * is 12 % of the needle's shorter side, which is its width: a needle of 2
- * units - the default - is 4 % of the gauge, about 8 px on a 200 px one, and
- * bends its backdrop by a single pixel. That is the width the bench measured
- * and it is not enough to see.
+ * Not the pill's 0.12. That share was measured on a slab: a wide pane whose
+ * middle is flat and whose bevel is a narrow band at the edge, so the shift
+ * is a small part of a large box. A needle has no flat middle. It is a rod,
+ * curved across its whole width, and a rod displaces a far larger share of
+ * itself - which is why a pen laid behind a glass tube is not nudged but
+ * visibly broken.
  *
- * 4 units is 8 % of the gauge, 16 px on that same gauge, and bends by two -
- * a deliberately thick needle, which is the only kind a lens shows on.
+ * The gauge's viewBox is 50 across, so a unit is 2 % of the gauge. At this
+ * share a needle of two units - the default, a fine one - shifts its
+ * backdrop by about a third of its own width, which is three pixels on the
+ * 280 px gauge this was judged on and holds down to about half that.
+ *
+ * This replaces a width gate. The old rule offered the lens only above four
+ * units, on the ground that 12 % of a thin needle is half a pixel - true of
+ * the share, not of the needle. The gate also measured the wrong thing: it
+ * counted units of the dial, while whether a bend can be seen is a count of
+ * pixels, and the same four units are 16 px on a small gauge and 50 on a
+ * large one. Nothing that was saved changes, because below four units the
+ * option could not be chosen at all.
  */
-export const POINTER_LENS_MIN_WIDTH = 4;
+export const POINTER_LENS_FRACTION = 0.34;
 
 /**
  * @param {unknown} effect
@@ -65,33 +76,19 @@ export function isPointerGlass(effect) {
 }
 
 /**
- * Whether a needle of this width can show a bend.
- *
- * @param {unknown} widthUnits `pointer_width`, in the gauge's units
- * @returns {boolean}
- */
-export function lensFitsPointer(widthUnits) {
-  const w = Number(widthUnits);
-  return Number.isFinite(w) && w >= POINTER_LENS_MIN_WIDTH;
-}
-
-/**
- * How far the rim bends what is behind it, as a share of the part's shorter
+ * How far a glassed part bends what is behind it, as a share of its shorter
  * side - the same share `glass-lens.js` turns into pixels once the part has
  * been laid out.
  *
- * `widthUnits` is the gate and is only asked of the needle: the hub is a
- * disc, its shorter side is its diameter, and a centre point big enough to
- * see is big enough to bend.
+ * The needle and the hub are both rods seen end on, so both get
+ * `POINTER_LENS_FRACTION`; there is no width below which the lens is
+ * withheld, and see that constant for why there used to be.
  *
  * @param {unknown} effect
- * @param {unknown} [widthUnits] the needle's width, omitted for the hub
  * @returns {number} 0 where nothing is bent
  */
-export function pointerLensFraction(effect, widthUnits) {
-  if (effect !== 'glass_liquid') return 0;
-  if (widthUnits !== undefined && !lensFitsPointer(widthUnits)) return 0;
-  return 0.12;
+export function pointerLensFraction(effect) {
+  return effect === 'glass_liquid' ? POINTER_LENS_FRACTION : 0;
 }
 
 /**

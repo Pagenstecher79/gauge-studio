@@ -515,6 +515,15 @@ two rules finish the job:
   axis, because a chip that goes round a corner reads as a chip that has
   wandered. Without the second half of that rule a chip that had dodged the
   panel landed on its neighbour, which is the same fault one step further on.
+- **The corner buttons are not the chips' room.** The pencil that opens and
+  closes a gauge's parts, and the axis button beside it, stand in the
+  element's top-left corner and never move. They are drawn above every chip
+  so that none can cover them - and on its own that only turns the fault the
+  other way up, with the chip now underneath and unreadable. So the two
+  rectangles are obstacles like the panel, and counted as hard as it in the
+  least-overlap fallback: both are pressed, and one under the other is a
+  press that goes to the wrong one. Nothing else inside the element may
+  stack above 10, which is what leaves 11 to them.
 - **Each obstacle asks for the clearance it deserves.** Eight pixels for the
   panel and for the frame being worked on, two between one chip and the next.
   One figure for all of them was the first answer and it produced the very
@@ -522,7 +531,10 @@ two rules finish the job:
   pixels of room around four chips, a column of add buttons and a panel, so
   nothing came back clear, the least-overlap fallback took over and a chip
   ended up lying on an add button. A chip standing against a chip is untidy;
-  a chip over the one press that adds a part is a fault.
+  a chip over the one press that adds a part is a fault. So when the fallback
+  does have to choose what to cover, a column of add buttons weighs as much
+  as the panel: it steps aside like any other chip, it being furniture
+  nowhere, but it is the last thing anything may be laid on.
 - **What is being worked on is kept clear, frame or no frame.** A part with a
   frame is protected by the frame; one whose only mark is a ring - the ticks,
   the pointer - is protected by its measured box where it has one. The rings

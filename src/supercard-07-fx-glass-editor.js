@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { DEAD_PATTERN_TARGETS } from "./config-cleanup.js";
 import { lightParams, bevelShadow, px, isRoundTarget, isReliefTarget, boxRingMask, isCircleRadius } from "./glass-light.js";
-import { lensScaleFraction, lensFilterMarkup, applyLensGeometry } from "./glass-lens.js";
+import { lensScaleFraction, lensFilterMarkup, applyLensGeometry, MAX_IOR } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
 import { patternList, patternFor, patternRadiusCss } from "./color-pattern.js";
@@ -277,6 +277,9 @@ function glassFields() {
       { id: 'glare', label: 'Convex 3D shine (%)', type: 'range', min: 0, max: 100, int: true, placeholder: 0 },
       { id: 'refraction', label: 'Edge refraction (%)', type: 'range', min: 0, max: 100, int: true, placeholder: 0,
         hint: 'Bends what is behind the edge, the way real glass does. With blur at 0 this is clear glass: what is underneath stays readable and only the rim curls. Not shown by Safari or Firefox, which draw the pane without it.' },
+      { id: 'ior', label: 'Refractive index (n)', type: 'range', min: 1, max: MAX_IOR, step: 0.05, placeholder: 1,
+        condition: pat => lensScaleFraction(pat.refraction) > 0,
+        hint: 'How dense the glass is. At 1 only the rim bends. Higher and the whole body refracts - what is behind the pane is drawn inward, more towards the sides than in the middle - and the colours split at the edge into a warm and a cold fringe, the way a prism splits them. Costs more to draw: three passes over the backdrop instead of one.' },
     ] },
 
     { type: 'details', icon: icon('droplet'), label: 'Glass & Blur', fields: [
@@ -390,7 +393,7 @@ function defaultPattern(target) {
     id: Date.now(), enabled: true, target, blur: 10, opacity: 10, padding: 0, padding_unit: 'px',
     border_radius: '', border_radius_unit: 'px', force_square: false, zoom: 1, glare: 0,
     bg_rgb: '#ffffff', shadow_style: 'liquid', light_brightness: 0.4, bevel_width: 2, glass_thickness: 5,
-    refraction: 0,
+    refraction: 0, ior: 1,
     shadow_angle: 90, shadow_distance: 1,
     manual_override: false,
     ring_effect: false, use_custom_ring_width: false, ring_width: 5, ring_center_opacity: 0

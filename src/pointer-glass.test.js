@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  POINTER_GLASS_EFFECTS, POINTER_LENS_MIN_WIDTH,
-  isPointerGlass, lensFitsPointer, pointerLensFraction, pointerBlurPx,
+  POINTER_GLASS_EFFECTS, POINTER_LENS_FRACTION,
+  isPointerGlass, pointerLensFraction, pointerBlurPx,
   pointerBackdrop, pointerGlassPaint, pointerGlassStyle,
 } from './pointer-glass.js';
 
@@ -23,48 +23,21 @@ describe('isPointerGlass', () => {
   });
 });
 
-describe('lensFitsPointer', () => {
-  it('takes a needle at the threshold and above', () => {
-    expect(lensFitsPointer(POINTER_LENS_MIN_WIDTH)).toBe(true);
-    expect(lensFitsPointer(POINTER_LENS_MIN_WIDTH + 0.1)).toBe(true);
-    expect(lensFitsPointer(10)).toBe(true);
-  });
-
-  it('turns down the default needle, which is too thin to show a bend', () => {
-    expect(lensFitsPointer(2)).toBe(false);
-    expect(lensFitsPointer(POINTER_LENS_MIN_WIDTH - 0.01)).toBe(false);
-  });
-
-  it('turns down anything that is not a width', () => {
-    for (const v of [undefined, null, '', NaN, 'wide', -5]) {
-      expect(lensFitsPointer(v)).toBe(false);
-    }
-  });
-
-  it('reads a numeric string, which is what a range input hands back', () => {
-    expect(lensFitsPointer('4')).toBe(true);
-    expect(lensFitsPointer('2')).toBe(false);
-  });
-});
-
 describe('pointerLensFraction', () => {
   it('bends only for the liquid effect', () => {
-    expect(pointerLensFraction('glass_liquid', 6)).toBe(0.12);
-    expect(pointerLensFraction('glass', 6)).toBe(0);
-    expect(pointerLensFraction('none', 6)).toBe(0);
-  });
-
-  it('withholds the bend from a needle too thin to show it', () => {
-    expect(pointerLensFraction('glass_liquid', 2)).toBe(0);
-  });
-
-  it('asks no width of the hub, which has none to give', () => {
-    expect(pointerLensFraction('glass_liquid')).toBe(0.12);
+    expect(pointerLensFraction('glass_liquid')).toBe(POINTER_LENS_FRACTION);
     expect(pointerLensFraction('glass')).toBe(0);
+    expect(pointerLensFraction('none')).toBe(0);
   });
 
-  it('never bends for a value that is not an effect', () => {
-    for (const v of ADVERSARIAL) expect(pointerLensFraction(v, 10)).toBe(0);
+  it('no longer withholds the lens from a thin needle', () => {
+    // The width gate is gone: a rod bends a share of its own width, so a
+    // fine needle bends as much of itself as a thick one does of itself.
+    expect(pointerLensFraction('glass_liquid')).toBeGreaterThan(0);
+  });
+
+  it('is 0 for anything that is not an effect name', () => {
+    for (const v of ADVERSARIAL) expect(pointerLensFraction(v)).toBe(0);
   });
 });
 
