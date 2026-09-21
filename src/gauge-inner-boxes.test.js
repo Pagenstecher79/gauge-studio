@@ -6,7 +6,8 @@ import { offsetsFromDrag, fontFromResize, estimateRect, clamp, snapToCentre,
          needleEnds, needleFromRadius, needleSlide, NEEDLE_CENTRE_SNAP,
          ringInnerEdge, strokeFromRadius, alignParts,
          frameInnerEdge, scaleFromRadius, frameWidthFromRadius,
-         FRAME_WIDTH_MAX, GAUGE_SCALE_MIN } from './gauge-inner-boxes.js';
+         FRAME_WIDTH_MAX, GAUGE_SCALE_MIN,
+         needleGripRadius, nearerNeedleEnd, NEEDLE_GRIP_FLOOR } from './gauge-inner-boxes.js';
 
 describe('offsetsFromDrag', () => {
   it('turns pixels into viewBox units at the measured scale', () => {
@@ -522,5 +523,59 @@ describe('the middle axis takes a part that comes near it', () => {
 
   it('survives a scale of nothing rather than taking everything', () => {
     expect(snapToCentre(20, 0)).toBe(20);
+  });
+});
+
+describe('needleGripRadius', () => {
+  it('leaves a handle alone where the two ends are far apart', () => {
+    expect(needleGripRadius(1.1, { tip: 19, tail: 9 })).toBe(1.1);
+  });
+
+  it('gives way to the gap once the two would overlap', () => {
+    expect(needleGripRadius(1.1, { tip: 19, tail: 18 })).toBeCloseTo(0.5, 10);
+  });
+
+  it('stops at a third of full size rather than becoming a speck', () => {
+    const r = needleGripRadius(1.1, { tip: 19, tail: 18.99 });
+    expect(r).toBeCloseTo(1.1 * NEEDLE_GRIP_FLOOR, 10);
+  });
+
+  it('reads a tail through the pivot as the distance it is, not a radius', () => {
+    expect(needleGripRadius(1.1, { tip: 4, tail: -6 })).toBe(1.1);
+  });
+
+  it('survives the two ends sitting on each other', () => {
+    expect(needleGripRadius(1.1, { tip: 12, tail: 12 })).toBeCloseTo(1.1 / 3, 10);
+  });
+});
+
+describe('nearerNeedleEnd', () => {
+  const ends = { tip: 19, tail: 7 };
+
+  it('answers the end the press is nearer to', () => {
+    expect(nearerNeedleEnd(18, ends)).toBe('tip');
+    expect(nearerNeedleEnd(8, ends)).toBe('tail');
+  });
+
+  it('answers past either end rather than folding back', () => {
+    expect(nearerNeedleEnd(40, ends)).toBe('tip');
+    expect(nearerNeedleEnd(-40, ends)).toBe('tail');
+  });
+
+  it('splits the overlap down the middle, and a tie goes to the tip', () => {
+    expect(nearerNeedleEnd(13, ends)).toBe('tip');
+    expect(nearerNeedleEnd(12.9, ends)).toBe('tail');
+  });
+
+  it('reaches both ends of a needle a few tenths of a unit long', () => {
+    const short = { tip: 19, tail: 18.6 };
+    expect(nearerNeedleEnd(18.9, short)).toBe('tip');
+    expect(nearerNeedleEnd(18.7, short)).toBe('tail');
+  });
+
+  it('answers a tail dragged out the far side of the pivot', () => {
+    const through = { tip: 4, tail: -6 };
+    expect(nearerNeedleEnd(-5, through)).toBe('tail');
+    expect(nearerNeedleEnd(3, through)).toBe('tip');
   });
 });

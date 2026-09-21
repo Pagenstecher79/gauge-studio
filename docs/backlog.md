@@ -460,16 +460,26 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   container is content-box in the content row, so a border that stops
   existing takes two pixels of width with it and the icon would shift as the
   plate was switched off.
-- **51** - The needle's two handles overlap on a small gauge. Each hit
+- **51** - ~~The needle's two handles overlap on a small gauge. Each hit
   circle is 21 pixels across, and on a gauge drawn at an ordinary size the
   tip and the tail are only a few pixels apart - so whichever is drawn second
   takes every press, and the other end cannot be reached without zooming the
-  canvas right in. The handles are placed in the gauge's own units and their
-  size is worked back out of the pixels they should come to, which is why the
-  drawing scales and the reach does not. Either the two are pushed apart once
-  they come within a handle's width of each other, or the tail is only
-  offered where there is room for it. Found while fixing the chip that stood
-  on top of both of them (v2.4.2).
+  canvas right in.~~ Done, both halves, and neither of them by moving a
+  handle: a handle marks an end, and one drawn beside itself would jump the
+  moment it was taken hold of.
+
+  The press picks the end it is *nearer* to rather than the circle the
+  browser handed it to (`nearerNeedleEnd`), so the two overlapping circles
+  split down the middle and each end owns its half. The hit area is
+  deliberately left at full size - shrinking it would take away reach for
+  nothing once order no longer decides.
+
+  And the drawn handle gives way to the needle it belongs to
+  (`needleGripRadius`): never wider than the gap it has to share, down to a
+  third of its full size, so a short needle shows two dots rather than one
+  blob. Measured in the editor: a gap of 7.9 px draws them at 3.96, 4.0 px at
+  1.98, and 1.6 px stops at the floor of 1.67 rather than becoming a speck -
+  while a needle of ordinary length is untouched at 5.
 
 ## Card and editor
 
