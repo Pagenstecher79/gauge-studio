@@ -3212,8 +3212,17 @@ class ScCanvasEditor extends LitElement {
       /* The needle's handles sit above the chips, not below them. A chip is a
          label that happens to be pressable; a handle is the thing being
          dragged, and the tail is dragged in towards the pivot where the hub's
-         own chip stands. */
-      .grip-layer { z-index: 8; }
+         own chip stands.
+         Above the selected chip's 9 and the panel's 8, not the 8 this used to
+         be: the pointer's own chip rides on the middle of the needle, four
+         viewBox units to one side, and a chip in hand is raised to 9 so it
+         stays above its panel. Four units is a few pixels on a gauge drawn at
+         its ordinary size, so that chip landed squarely on both handles and
+         took every press meant for them - the needle read as having no
+         handles at all, and only a canvas zoomed right in gave them back. A
+         handle is 21 pixels across; it costs the chip nothing to stand under
+         two of them. */
+      .grip-layer { z-index: 10; }
       /* Thin, dashed and half transparent: the band lies across the very marks
          it is there to place, and anything heavier hid the ticks and
          sub-ticks under it. It used to go solid and half again as wide when
