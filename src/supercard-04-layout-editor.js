@@ -19,6 +19,7 @@ import { offsetsFromDrag, fontFromResize, snapToCentre, GAUGE_VIEW,
          frameInnerEdge, scaleFromRadius, frameWidthFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
 import { revealBy, scrollParent } from "./reveal-scroll.js";
+import { pinchStep } from "./pinch-gesture.js";
 import { icon, iconMask } from "./icons.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
@@ -3344,7 +3345,13 @@ class ScCanvasEditor extends LitElement {
          to be a button in the toolbar, where nothing said which element it
          was about - and the corner it stands in is the one the ring's numbers
          left when they moved under their chips. */
-      .inner-open { position: absolute; top: 6px; left: 6px; z-index: 7;
+      /* Above every chip, frame and grip inside the element - the whole
+         inner furniture stacks between 4 and 10 and this stands over all of
+         it. A gauge's parts are drawn where the gauge drew them, so a chip
+         can land in this corner, and one that covers the button covers the
+         only way back out of the mode that put it there. Nothing else in
+         here is allowed above 10. */
+      .inner-open { position: absolute; top: 6px; left: 6px; z-index: 11;
         width: 24px; height: 24px; padding: 0; font-size: 15px; line-height: 1;
         border-radius: 5px; cursor: pointer; touch-action: none;
         border: 1px solid var(--sc-part); background: rgba(0,0,0,0.62);
@@ -4477,14 +4484,23 @@ class ScCanvasEditor extends LitElement {
   }
 
   /**
-   * Two fingers on the canvas: the one gesture a touchscreen has for zooming.
+   * Two fingers on the canvas: the touchscreen's scroll, and its zoom.
    *
    * A trackpad's pinch arrives as Ctrl and a wheel and is handled there, but a
-   * touchscreen sends nothing of the sort - only two pointers - so the zoom
-   * is the ratio of how far apart they are now to how far apart they started,
-   * anchored between them. The drag the first finger had started is dropped:
-   * `_dragCanvas` is where an uncommitted drag lives, so letting it go puts
-   * the element back where the config still has it, and nothing is committed.
+   * touchscreen sends nothing of the sort - only two pointers - so both have
+   * to be read out of those. Two fingers that travel together move the
+   * window; two fingers that change their distance zoom, by the ratio of how
+   * far apart they are now to how far apart they were, anchored between them.
+   * Which of the two it is, is `pinchStep`: a scroll until the distance has
+   * changed by more than the slop, because otherwise no drag is ever only a
+   * scroll - two fingers do not hold their distance to the pixel.
+   *
+   * The drag the first finger had started is dropped: `_dragCanvas` is where
+   * an uncommitted drag lives, so letting it go puts the element back where
+   * the config still has it, and nothing is committed. That is also what
+   * makes the gesture reachable at all where it is needed most - a finger
+   * resting on an object, which is the one place a single finger cannot
+   * scroll, because the object has taken the touch for a drag.
    */
   _startPinch() {
     const [a, b] = [...this._touches.values()];
@@ -4495,6 +4511,7 @@ class ScCanvasEditor extends LitElement {
     this._pinch = {
       dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
       zoom: this._zoom,
+      zooming: false,
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
     };
   }
@@ -4502,16 +4519,25 @@ class ScCanvasEditor extends LitElement {
   _pinchTo() {
     const [a, b] = [...this._touches.values()];
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    // Two fingers that travel together move the view, the same as one finger
-    // would - a pinch is nearly always a little of both.
+    // Whichever it turns out to be, the midpoint moves the window: a pinch is
+    // nearly always a little of both, and a scroll is nothing else.
     const view = this._view;
     if (view) {
       view.scrollLeft -= mid.x - this._pinch.mid.x;
       view.scrollTop -= mid.y - this._pinch.mid.y;
     }
     this._pinch.mid = mid;
-    const dist = Math.hypot(a.x - b.x, a.y - b.y);
-    this._applyZoom(this._pinch.zoom * (dist / this._pinch.dist), mid);
+    const step = pinchStep(this._pinch, Math.hypot(a.x - b.x, a.y - b.y));
+    if (!step) return;
+    // Measured from here on, and the zoom left where it is this once, so
+    // crossing the slop does not jump by the slop.
+    if ('rebase' in step) {
+      this._pinch.dist = step.rebase;
+      this._pinch.zoom = this._zoom;
+      this._pinch.zooming = true;
+      return;
+    }
+    this._applyZoom(step.zoom, mid);
   }
 
   _panTo() {
