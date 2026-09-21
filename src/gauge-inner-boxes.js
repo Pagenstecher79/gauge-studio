@@ -512,3 +512,60 @@ export function alignParts(items, edge) {
   }
   return Object.keys(patch).length ? patch : null;
 }
+
+/**
+ * How small a handle may be drawn, as a fraction of the size it would
+ * otherwise have.
+ *
+ * Below this it stops reading as something to take hold of and becomes a
+ * speck, so a needle short enough to push past it gets two handles that
+ * touch rather than two that cannot be seen.
+ */
+export const NEEDLE_GRIP_FLOOR = 1 / 3;
+
+/**
+ * The radius a needle's handle is drawn at, given the radius it would like.
+ *
+ * A handle is sized in pixels and worked back into the gauge's units, so it
+ * is the same thing to reach for on a large dial and a small one - but the
+ * needle it sits on is *not*: its length is in those units, so on a card at
+ * its ordinary size the tip and the tail can end up a few pixels apart with
+ * two handles twice that wide drawn on them. One blob, and no way to see
+ * that there are two ends at all.
+ *
+ * So the handle gives way to the needle it belongs to: never wider than the
+ * gap it has to share, down to a third of its full size. What it does not do
+ * is move - a handle marks an end, and an end drawn beside itself would jump
+ * the moment it was taken hold of.
+ *
+ * The hit area is deliberately not capped with it. Two circles that overlap
+ * are not a problem once the press picks the nearer end rather than the one
+ * drawn last, and shrinking them would take away reach for nothing.
+ *
+ * @param {number} full the radius a handle would have on its own
+ * @param {{tip: number, tail: number}} ends from `needleEnds`
+ */
+export function needleGripRadius(full, ends) {
+  const gap = Math.abs(ends.tip - ends.tail);
+  return Math.max(Math.min(full, gap / 2), full * NEEDLE_GRIP_FLOOR);
+}
+
+/**
+ * Which of the needle's two ends a press is meant for.
+ *
+ * Both handles carry a hit circle wider than they are drawn, so on a short
+ * needle the two overlap and document order decided - which is to say the
+ * tail took every press and the tip could not be reached at all without
+ * zooming the canvas right in. Distance decides instead, so each end owns
+ * the half of the overlap nearest to it.
+ *
+ * A tie goes to the tip. It only arises where the two ends are at the same
+ * radius, and then there is nothing to tell apart.
+ *
+ * @param {number} at the radius pressed, signed along the needle's own line
+ * @param {{tip: number, tail: number}} ends from `needleEnds`
+ * @returns {'tip' | 'tail'}
+ */
+export function nearerNeedleEnd(at, ends) {
+  return Math.abs(at - ends.tip) <= Math.abs(at - ends.tail) ? 'tip' : 'tail';
+}

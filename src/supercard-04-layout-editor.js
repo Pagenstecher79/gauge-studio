@@ -14,6 +14,7 @@ import { needsRowsCompat, rowsAsCanvas } from "./rows-compat.js";
 import { offsetsFromDrag, fontFromResize, snapToCentre, GAUGE_VIEW,
          ringRadius, ringPartRadius, offsetFromRadius,
          needleEnds, needleFromRadius, needleSlide,
+         needleGripRadius, nearerNeedleEnd,
          ringInnerEdge, strokeFromRadius, alignParts, frameBand, gaugeScaleOf, gaugeOuter,
          frameInnerEdge, scaleFromRadius, frameWidthFromRadius } from "./gauge-inner-boxes.js";
 import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-templates.js";
@@ -5002,6 +5003,16 @@ class ScCanvasEditor extends LitElement {
         ? { offset: SC.safeFloat(cfg.pointer_offset, 2),
             length: SC.safeFloat(cfg.pointer_length, 10) }
         : null;
+      // Which of the two handles, decided by the end the press is nearer to
+      // rather than by the circle the browser handed the event to. On a
+      // short needle those circles overlap, and document order answered -
+      // which meant one end took every press and the other could not be
+      // reached at all without zooming the canvas right in.
+      if (mode === 'needle' && end !== 'line') {
+        end = nearerNeedleEnd(
+          this._needleRadius({ x: e.clientX, y: e.clientY }, geo),
+          needleEnds(from.offset, from.length, geo.ring, geo.scale));
+      }
       // Where along the line the hand took hold of it. An end handle is a
       // point and is simply dragged to the pointer; the line is grabbed
       // anywhere along its length, so what it follows is the travel from
@@ -6199,7 +6210,14 @@ class ScCanvasEditor extends LitElement {
       // label box's grip is ten pixels wherever it is, and a handle that is
       // dragged the same way should be the same thing to reach for - so the
       // radius is worked back out of the pixels it has to come to.
-      const gripR = unit > 0 ? 5 / unit : 1.1;
+      const gripFull = unit > 0 ? 5 / unit : 1.1;
+      // Drawn no wider than the gap the two ends have to share, so a short
+      // needle shows two handles rather than one blob; the hit circle keeps
+      // the full size, because `nearerNeedleEnd` splits the overlap.
+      const gripR = needleGripRadius(
+        gripFull, needleEnds(SC.safeFloat(cfg.pointer_offset, 2),
+                             SC.safeFloat(cfg.pointer_length, 10), ring, scale));
+      const hitR = gripFull * 2.2;
       return html`
       <svg class="ring-layer grip-layer" viewBox="0 0 ${GAUGE_VIEW} ${GAUGE_VIEW}"
            style="left:${svgBox.l}%; top:${svgBox.t}%; width:${svgBox.w}%; height:${svgBox.h}%;
@@ -6228,7 +6246,7 @@ class ScCanvasEditor extends LitElement {
               <circle class="ring-grip ${sel ? 'sel' : ''}" data-end=${end}
                       cx=${n[end].x} cy=${n[end].y} r=${gripR}></circle>
               <circle class="ring-grip-hit" data-end=${end}
-                      cx=${n[end].x} cy=${n[end].y} r=${gripR * 2.2}
+                      cx=${n[end].x} cy=${n[end].y} r=${hitR}
                       @pointerdown=${(/** @type {any} */ ev) => this._innerDown(ev, part, 'needle', end)}>
                 <title>${'Drag the needle\'s ' + e2.what + ' to set its length'}</title>
               </circle>`)}`;
