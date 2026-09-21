@@ -4591,11 +4591,26 @@ class ScCanvasEditor extends LitElement {
     const z = Math.max(atLeast,
                        margin * Math.min(c.w / Math.max(x1 - x0, 0.001),
                                          c.h * this._viewStretch / Math.max(y1 - y0, 0.001)));
+    const was = this._zoom;
     this._zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+    const zoomed = this._zoom !== was;
     const mid = { x: (x0 + x1) / 2 / c.w, y: (y0 + y1) / 2 / c.h };
     this.updateComplete.then(() => {
       const view = this._view;
       if (!view) return;
+      // Nothing to bring into view, so nothing is moved. `atLeast` already
+      // says the way into a gauge is only ever a way closer, and when it wins
+      // there is no closer to go - but the centring below used to run anyway,
+      // and on a touchscreen that is the whole of what pressing the edit
+      // button appeared to do: a canvas placed by hand, and then shunted out
+      // from under the hand that placed it. So a selection already whole
+      // inside the window, at a zoom that has not changed, is left where its
+      // owner put it.
+      if (!zoomed
+          && x0 / c.w * view.scrollWidth >= view.scrollLeft
+          && x1 / c.w * view.scrollWidth <= view.scrollLeft + view.clientWidth
+          && y0 / c.h * view.scrollHeight >= view.scrollTop
+          && y1 / c.h * view.scrollHeight <= view.scrollTop + view.clientHeight) return;
       view.scrollLeft = mid.x * view.scrollWidth - view.clientWidth / 2;
       view.scrollTop = mid.y * view.scrollHeight - view.clientHeight / 2;
     });
@@ -5534,11 +5549,17 @@ class ScCanvasEditor extends LitElement {
     const head = fold.querySelector('summary') || fold;
     const view = scrollParent(head);
     if (!view) return;
-    // What may not be scrolled away is the element being worked on, not the
-    // whole canvas: its frames and its chips are what the next gesture aims
-    // at, and one with an edge off the screen cannot be dragged by that edge.
+    // What may not be scrolled away is the canvas window, not merely the
+    // element inside it. The element was the first answer and it was too
+    // small: on a tablet the drawing sits high in the window, the free space
+    // above it is tens of pixels, and the nudge spent every one of them - so
+    // opening a part's menu moved a canvas that had just been placed by hand.
+    // The window is what the finger aims at, chips, frames, empty space and
+    // all, so the window is what stays. Where it fills the scroller there is
+    // no room and nothing moves, which is the right answer: the fold is
+    // already first in the form, one flick below the drawing.
     const dy = revealBy(head.getBoundingClientRect(), view.getBoundingClientRect(),
-                        this._innerBoxRect());
+                        this._view?.getBoundingClientRect() || this._innerBoxRect());
     if (dy) view.scrollBy({ top: dy, behavior: 'smooth' });
   }
 

@@ -613,10 +613,20 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   a thing sits on the card, snapping says where it sits relative to its
   neighbours. Off by default, so a canvas that is deliberately loose stays
   loose.
-- **53** - The editor scrolls away under the hand: opening an object's menu
-  on the canvas moves the view, so the thing being worked on is no longer
-  where it was left. The canvas should hold its position while a menu opens.
-  Seen on an iPad, and not noticed on a desktop browser - which fits a
-  focus-driven scroll, since the panel that opens takes focus and Safari
-  scrolls the focused element into view inside the dialog. Worth checking
-  whether it is that before reaching for a scroll lock.
+- **53** - *Done.* The editor scrolled away under the hand: opening an
+  object's menu on the canvas, or pressing the button that opens one for
+  editing, moved the view, so the thing being worked on was no longer where
+  it had been left. It looked like a focus-driven scroll, because it showed
+  on an iPad and not on a desktop browser - it was neither. It was two of
+  the editor's own scroll writes, and the desktop dialog is simply roomy
+  enough that both came to nearly nothing:
+
+  - `_zoomToSelection` recentred the window every time, and the way into a
+    gauge passes `atLeast: this._zoom`, so a canvas already placed by hand
+    kept its zoom and was shunted sideways anyway. It now leaves a selection
+    alone that is already whole inside the window at an unchanged zoom.
+  - `_revealPart` nudged the dialog to bring a fold's heading up, and what
+    it refused to push out of view was the object's own box. Above that box
+    a tablet leaves tens of pixels, and the nudge spent them. What may not
+    move is now the canvas window itself, so where the drawing fills the
+    scroller nothing moves at all.
