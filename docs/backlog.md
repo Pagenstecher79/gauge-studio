@@ -460,6 +460,16 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   container is content-box in the content row, so a border that stops
   existing takes two pixels of width with it and the icon would shift as the
   plate was switched off.
+- **51** - The needle's two handles overlap on a small gauge. Each hit
+  circle is 21 pixels across, and on a gauge drawn at an ordinary size the
+  tip and the tail are only a few pixels apart - so whichever is drawn second
+  takes every press, and the other end cannot be reached without zooming the
+  canvas right in. The handles are placed in the gauge's own units and their
+  size is worked back out of the pixels they should come to, which is why the
+  drawing scales and the reach does not. Either the two are pushed apart once
+  they come within a handle's width of each other, or the tail is only
+  offered where there is room for it. Found while fixing the chip that stood
+  on top of both of them (v2.4.2).
 
 ## Card and editor
 
