@@ -6950,8 +6950,14 @@ class ScCanvasEditor extends LitElement {
       const over = panel && hitsHard({ l: h.l + best.x, t: h.t + best.y, w: h.w, h: h.h }, panel);
       if (over) chip.style.zIndex = '9';
       else chip.style.removeProperty('z-index');
+      // A column of add buttons counts as hard as the panel once it is
+      // placed. It steps aside like any other chip - it is not furniture -
+      // but when the fallback has to choose what to cover, it must not choose
+      // this: every button in it is the only press that adds that part,
+      // where an ordinary chip half over an ordinary chip is merely untidy.
       note({ left: h.l + best.x, right: h.l + best.x + h.w,
-             top: h.t + best.y, bottom: h.t + best.y + h.h }, { m: MC, own });
+             top: h.t + best.y, bottom: h.t + best.y + h.h },
+           { m: MC, own, hard: chip.classList.contains('inner-adds') });
       // Wider than it needs to be for a still picture: measuring against a
       // drawing that is itself laid out in fractions of a pixel, two passes
       // can disagree by a pixel over nothing, and rewriting the nudge for
