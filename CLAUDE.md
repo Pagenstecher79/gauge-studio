@@ -514,6 +514,46 @@ before deleting the old one. That is how the `showIf` to `condition` move was
 done, and it caught two silent behaviour changes that reading the diff did
 not.
 
+### A number nobody can derive is asked, not chosen
+
+Some constants are neither physics nor arithmetic - how far a shadow stands
+off a needle, how soft a light may get before it says nothing. Those are
+answered by eye, and the way to ask is **a bench page of fixed steps, not a
+slider**. Each row holds everything still but one quantity and draws it in
+five or six labelled stages; the answer is the stage where it tips, which
+cannot be mistyped, mistapped or misremembered. Toggles at the top swap the
+*context* - light dial or dark, thin needle or broad - never the quantity
+being judged. `DROP_PER_WIDTH` and `SPREAD_DIFFUSION` in `pointer-shadow.js`
+were both settled this way in one sitting, and the second turned out to be an
+error rather than a taste: the slider's upper half was doing nothing but
+disappearing.
+
+Five things make such a page trustworthy, and all five were learned by
+getting them wrong first:
+
+- **Import the real module**, never a copy of its arithmetic - the page must
+  be unable to disagree with the code. Where a module constant is the thing
+  in question, scale the *result*, and only where it enters linearly.
+- **Cache-bust the import**: `await import('./x.js?t=' + Date.now())`. A
+  `?v=` on the page does not reach its imports, and a full round was measured
+  against a stale curve before anyone noticed. The page's own `?v=` still has
+  to change too, for Home Assistant's service worker.
+- **Print what actually speaks**, not the raw number. A Gaussian already
+  lightens what it spreads - `erf(w / 2s√2)` survives at the centre of a
+  strip of width `w` - so report the opacity that is left after the blur. On
+  a dark dial report the rim rather than the shadow, or every figure reads as
+  a failure where the design meant it.
+- **Never measure at a point another row has just rejected.** Softness was
+  first judged at a height the same page had already called too high, so that
+  answer had to be re-read as a threshold rather than as a verdict.
+- **Cross-check one number by two routes** and take what lies between. 0.30
+  and 0.21 met at 0.25; neither reading alone would have carried it.
+
+Keep the page in `.claude/bench/` and copy it into `dist/`, which the
+container mounts as `/config/www` - so it is served at
+`/local/<name>.html` on the ordinary test instance, reachable from a tablet
+with no console. `npm run build` may clear `dist/`, so copy again after one.
+
 ## Releasing
 
 **HACS installs from tags, not from `main`.** Pushing a `v*.*.*` tag fires
