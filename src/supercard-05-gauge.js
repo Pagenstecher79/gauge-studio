@@ -1084,7 +1084,7 @@ class ScGauge extends LitElement {
     // for the re-sampling. See `pointer-glass.js` and docs/perf-cpu.md.
     const ptrGlass = this._get('pointer_glass', 'none');
     const hubGlass = this._get('pointer_center_glass', 'none');
-    const ptrLens = pointerLensFraction(ptrGlass, this._get('pointer_width', 2));
+    const ptrLens = pointerLensFraction(ptrGlass);
     const hubLens = pointerLensFraction(hubGlass);
     const ptrBlur = pointerBlurPx(this._get('pointer_glass_blur', 0));
     const hubBlur = pointerBlurPx(this._get('pointer_center_glass_blur', 0));

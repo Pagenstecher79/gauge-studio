@@ -150,9 +150,12 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   of the setting follows the measurement. The centre point does not move and
   is free, so its glass has no gate. The needle gets the half that costs
   nothing - a translucent body and a lit rim - as plain `glass`. The lens is
-  a second effect and appears only where the needle is wide enough to bend
-  anything (`POINTER_LENS_MIN_WIDTH`, four units): at the default width of
-  two it bends by a single pixel. The blur is a slider that starts at zero
+  a second effect that has to be asked for. It used to be withheld below four
+  units of width, on the ground that a thin needle bends by a single pixel -
+  which was true of the share, not of the needle: 12 % came from the pill,
+  and a pill is a slab where a needle is a rod. `POINTER_LENS_FRACTION`
+  replaces both the share and the gate, and a needle of two units now bends
+  by three pixels. The blur is a slider that starts at zero
   and carries the warning, and at zero it writes no `blur()` at all, because
   `blur(0px)` still pays for a backdrop root. The relief for ticks and texts
   is still open.

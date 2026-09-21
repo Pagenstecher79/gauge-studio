@@ -3,7 +3,7 @@ import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GAUGE_DEFAULT } from "./element-templates.js";
 import { gradientPresetPatch } from "./gradient-presets.js";
 import { icon } from "./icons.js";
-import { isPointerGlass, lensFitsPointer, pointerBlurPx, pointerLensFraction } from "./pointer-glass.js";
+import { isPointerGlass, pointerBlurPx, pointerLensFraction } from "./pointer-glass.js";
 import { MAX_IOR } from "./glass-lens.js";
 import { ListReorder } from "./list-reorder.js";
 
@@ -233,16 +233,14 @@ const STYLE_FIELDS = [
     condition: cfg => !isPointerGlass(cfg.pointer_glass) },
   // Glass is a material the needle is made of, so it stands with the shape
   // and the colour rather than among the shadow's settings. The liquid
-  // option appears only on a needle wide enough to show a bend - see
-  // POINTER_LENS_MIN_WIDTH - because 12 % of a thin needle is half a pixel
-  // and the option would promise something it cannot draw.
+  // option used to be withheld from a needle under four units wide; it is
+  // not, because a rod bends a large share of its own width - see
+  // POINTER_LENS_FRACTION.
   { id: 'pointer_glass', framedBy: 'pointer', label: 'Pointer glass', type: 'select',
-    options: cfg => [
+    options: [
       { value: 'none', label: 'None' },
       { value: 'glass', label: 'Glass' },
-      ...(lensFitsPointer(cfg.pointer_width ?? 2)
-        ? [{ value: 'glass_liquid', label: 'Liquid glass (refracting)' }]
-        : []),
+      { value: 'glass_liquid', label: 'Liquid glass (refracting)' },
     ] },
   { id: 'pointer_glass_blur', framedBy: 'pointer', label: 'Pointer glass blur (px)',
     type: 'range', min: 0, max: 6, step: 0.5, placeholder: '0',
@@ -251,7 +249,7 @@ const STYLE_FIELDS = [
   // is the rim alone - the needle a saved card already draws.
   { id: 'pointer_glass_ior', framedBy: 'pointer', label: 'Pointer refractive index (n)',
     type: 'range', min: 1, max: MAX_IOR, step: 0.05, placeholder: '1',
-    condition: cfg => pointerLensFraction(cfg.pointer_glass, cfg.pointer_width ?? 2) > 0,
+    condition: cfg => pointerLensFraction(cfg.pointer_glass) > 0,
     hint: 'How dense the needle\'s glass is. At 1 only its rim bends what is '
         + 'behind it. Higher and the whole needle refracts, and the colours split '
         + 'along its edges into a warm and a cold fringe. Three passes over the '

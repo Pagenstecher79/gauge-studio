@@ -564,8 +564,18 @@ two are free, being nothing but a background and a `box-shadow`.
 
 That is the shape of the answer: **the cheap parts are the ones that carry the
 look**. A translucent needle with a lit rim, glass on the hub where it costs
-nothing, and the lens itself offered only where the part is wide enough to
-show one.
+nothing, and the lens as a second effect that has to be asked for.
+
+The one pixel in the paragraph above is not the needle's fault, and the rule
+it produced has since been withdrawn. The lens used to be offered only above
+four units of width, because 12 % of a thin needle is half a pixel. That
+share came from the pill, which is a slab: a wide pane, flat in the middle,
+bevelled in a narrow band at the edge. A needle is a rod, curved across its
+whole width, and a rod displaces a far larger share of itself. At
+`POINTER_LENS_FRACTION` a needle of two units - the default, a fine one -
+shifts its backdrop by 3.2 px on a 280 px gauge, measured. So the gate is
+gone and the share is right, which costs no more per frame than the wrong
+share did: one displacement pass either way.
 
 ## What the refractive index costs
 

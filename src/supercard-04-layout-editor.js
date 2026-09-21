@@ -23,7 +23,7 @@ import { icon, iconMask } from "./icons.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
-import { isPointerGlass, lensFitsPointer, pointerLensFraction } from "./pointer-glass.js";
+import { isPointerGlass, pointerLensFraction } from "./pointer-glass.js";
 import { isLiquidEffect } from "./pill-glass.js";
 import { MAX_IOR } from "./glass-lens.js";
 import { applyCardConfig } from "./card-apply.js";
@@ -480,18 +480,14 @@ const SHADOW_MODE = Object.freeze([
   { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
 ]);
 
-// Glass, as the two chips offer it. The liquid option is dropped from the
-// needle's list where the needle is too thin to bend anything - the same
-// rule the form's select follows, and for the same reason.
+// Glass, as the two chips offer it. Both lists are the same list: the
+// needle's used to lose the liquid option below four units of width, and no
+// longer does - see POINTER_LENS_FRACTION.
 const GLASS_MODE = Object.freeze([
   { value: 'none', label: 'None', short: 'None' },
   { value: 'glass', label: 'Glass', short: 'Glass' },
   { value: 'glass_liquid', label: 'Liquid glass', short: 'Liquid' },
 ]);
-
-const NEEDLE_GLASS_MODE = (/** @type {any} */ cfg) =>
-  lensFitsPointer(cfg?.pointer_width ?? 2)
-    ? GLASS_MODE : GLASS_MODE.filter(o => o.value !== 'glass_liquid');
 
 /**
  * The two shapes a needle is drawn as.
@@ -1116,15 +1112,14 @@ const GAUGE_RINGS = Object.freeze({
       ...colourRows('pointer_color_type', 'pointer_color', 'pointer', '#ffffff', 'fixed'),
       { key: 'pointer_3d_effect', icon: icon('axis-3d'), flag: true, what: 'plastic 3D',
         condition: (/** @type {any} */ cfg) => !isPointerGlass(cfg.pointer_glass) },
-      { key: 'pointer_glass', icon: icon('gauge'), what: 'glass', picks: NEEDLE_GLASS_MODE,
+      { key: 'pointer_glass', icon: icon('gauge'), what: 'glass', picks: GLASS_MODE,
         read: (/** @type {any} */ cfg) => cfg.pointer_glass || 'none' },
       { key: 'pointer_glass_blur', icon: icon('droplet'), slide: true, by: 0.5, min: 0, max: 6,
         dflt: 0, what: 'glass blur',
         condition: (/** @type {any} */ cfg) => isPointerGlass(cfg.pointer_glass) },
       { key: 'pointer_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05, min: 1, max: MAX_IOR,
         dflt: 1, what: 'refraction',
-        condition: (/** @type {any} */ cfg) =>
-          pointerLensFraction(cfg.pointer_glass, cfg.pointer_width ?? 2) > 0 },
+        condition: (/** @type {any} */ cfg) => pointerLensFraction(cfg.pointer_glass) > 0 },
       { key: 'pointer_shadow_type', icon: icon('moon'), what: 'shadow', picks: SHADOW_MODE,
         read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
       { icon: icon('paintbrush'), what: 'shadow colour', paint: true,
