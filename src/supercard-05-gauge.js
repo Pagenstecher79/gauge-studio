@@ -104,10 +104,20 @@ class ScGauge extends LitElement {
          rotation is a compositor transform and the gauge below it never
          repaints. See docs/perf-cpu.md. */
       /* The layer is the square the gauge's viewBox is letterboxed into, not
-         the wrap's box: a percentage transform-origin measures the element,
-         and only on that square does it land on the pivot. transform-box with
-         view-box would be the direct way to say this, but on an outer svg it
-         does not move the origin into viewBox units - measured, not assumed. */
+         the wrap's box: only on that square does an origin given as a share
+         of the layer land on the pivot. transform-box with view-box would be
+         the direct way to say this, but on an outer svg it does not move the
+         origin into viewBox units - measured, not assumed.
+
+         The share is written in cqmin rather than in per cent, and that is
+         not a tidying. The layer is 100cqmin square, so the two are the same
+         number - but a per cent resolves against a box the engine works out
+         for itself, and this layer holds an overflow-visible svg whose ink
+         spills past it. A needle drawn as HTML - which is what a glassed one
+         is - then turns about whatever point that engine decided on, and a
+         point a few pixels off the hub is a needle whose base walks off the
+         centre dot and back every time the layer is redrawn. cqmin is the
+         wrap's own short side and cannot be read two ways. */
       /* Safari re-rasterises a gauge that is not on its own compositing layer
          every time the value changes, and the redrawn picture does not always
          land on the same pixel - the whole instrument twitches once or twice a
@@ -1051,7 +1061,7 @@ class ScGauge extends LitElement {
     // it lands exactly where the shape would have been drawn.
     const layer = (originX, originY, rotate, content, needle = false, overlay = '') => html`
       <div class="sc-gauge-layer" ?data-sc-needle=${needle}
-           style="transform-origin: ${(originX / this.SIZE * 100).toFixed(4)}% ${(originY / this.SIZE * 100).toFixed(4)}%;${
+           style="transform-origin: ${(originX / this.SIZE * 100).toFixed(4)}cqmin ${(originY / this.SIZE * 100).toFixed(4)}cqmin;${
              rotate ? ` transform: rotate(${renderAngle}deg); transition: transform ${this.frozen || !this._isInitialized ? 0 : dur}s ${easingCurve};` : ''}">
         <svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">
           ${content}
