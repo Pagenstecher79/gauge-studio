@@ -17,12 +17,18 @@
  *
  * Two profiles:
  *
- * - `dome` is the pane: the shift points inward and grows with
+ * - `dome` is the pane: a bevel cut into the rim of the superellipse
  *   `|x|^6 + |y|^6`, so the middle magnifies imperceptibly and the rim
  *   gathers the backdrop the way a thick edge does. Content under the middle
  *   stays readable; the edge is where the glass announces itself.
- * - `disc` is the gauge: the shift is radial and confined to the outer ring,
- *   so the dial reads straight while its edge curls like a watch glass.
+ * - `disc` is the gauge: the bevel is a ring, so the dial reads straight
+ *   while its edge curls like a watch glass.
+ *
+ * Both take their strength and their direction from the same place - the
+ * slope of that bevel and the way it faces, `bevelShift` and the gradient of
+ * the shape. That is what makes the rim read as round: a linear ramp aimed at
+ * the centre of the pane, which is what this was, bends a little everywhere
+ * and never bends hard, which is what a decal looks like.
  *
  * The map is deliberately tiny. The field is smooth, `feImage` scales it to
  * the pane with bilinear filtering, and sampling a smooth function at 64x64
@@ -39,8 +45,9 @@ const MAP_SIZE = 64;
 
 /**
  * The profiles, as the two numbers that separate them: the exponent of the
- * superellipse the shift follows, and where - as a share of the radius - the
- * shift is allowed to start. A ring of 0 means the whole surface takes part.
+ * superellipse whose rim the bevel is cut into, and where - as a share of the
+ * radius - the bevel begins. A ring of 0 means the superellipse itself decides,
+ * which is what keeps the middle of a pane flat without a ring being named.
  */
 const PROFILES = {
   dome: { power: 6, ringFrom: 0 },
@@ -48,11 +55,66 @@ const PROFILES = {
 };
 
 /**
+ * The steepest surface the map is allowed to express, as a slope.
+ *
+ * 2.1 is a face tilted about 65 degrees. Past that a real glass edge stops
+ * magnifying and starts hiding: the backdrop it gathers is compressed into a
+ * line and the rim goes dark, which is a thing to draw with light, not with
+ * displacement. So the bevel reaches full deflection there and holds it - and
+ * it is also, not by accident, the slope the outermost sample of a 64-pixel
+ * map lands on, so the field uses its whole range and the strength slider
+ * means what it says.
+ */
+export const BEVEL_MAX_SLOPE = 2.1;
+
+/**
+ * How far the bevel shifts what is behind it, against how far across it we
+ * are.
+ *
+ * The first version of this field ramped linearly and pointed every shift at
+ * the centre of the pane. Both are wrong in the same way, and the result read
+ * as a sticker rather than as an edge: real glass hardly bends anything until
+ * very near the rim, and then bends it hard enough to swallow a stripe of
+ * backdrop whole.
+ *
+ * So the bevel is treated as what it is - a quarter-round cross-section. At
+ * `u` across it the surface has risen `sqrt(1 - u^2)`, so its slope is
+ * `u / sqrt(1 - u^2)`: nothing at the inner lip, 1 at the halfway point of
+ * the *angle*, and vertical at the rim. Refraction through a thin slab is
+ * proportional to that slope, so the slope is the curve - a quarter of the
+ * way across the bevel it is a tenth of full, three quarters of the way it is
+ * a half, and the last tenth carries as much again as the first nine.
+ * Everything past `BEVEL_MAX_SLOPE` is the rim.
+ *
+ * @param {number} u 0 at the inner lip of the bevel, 1 at the rim
+ * @returns {number} 0-1, the share of full deflection
+ */
+export function bevelShift(u) {
+  const t = Math.min(Math.max(Number(u) || 0, 0), 1);
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return Math.min(1, t / Math.sqrt(1 - t * t) / BEVEL_MAX_SLOPE);
+}
+
+/**
  * One displacement map, as raw RGBA bytes.
  *
- * The shift always points at the centre of the pane: a pixel of backdrop is
- * fetched from nearer the middle than where it lands, which is magnification,
- * which is what a lens does. Strength is what the profile decides.
+ * Two things decide a pixel: how far across the bevel it sits, and which way
+ * that bevel faces there.
+ *
+ * The direction is the part that used to be guessed. Pointing every shift at
+ * the centre of the pane is right along the middle of an edge and wrong
+ * everywhere else: two thirds of the way up the left edge it tilts the shift
+ * a third of the way towards the horizontal, and a straight line of backdrop
+ * crossing that edge came through with a kink in it. The direction a surface
+ * bends light is its own normal, and for a superellipse `|x|^p + |y|^p` that
+ * is the gradient, `(|x|^(p-1), |y|^(p-1))` - which along an edge is almost
+ * purely perpendicular to it, and only swings round in the corners, where a
+ * corner is. For the disc it is simply radial.
+ *
+ * The shift points *inward* along that normal: a pixel of backdrop is fetched
+ * from nearer the middle than where it lands, which is magnification, which
+ * is what a lens does.
  *
  * @param {'dome' | 'disc'} profile
  * @param {number} [size] edge length in pixels
@@ -67,16 +129,25 @@ export function lensField(profile, size = MAP_SIZE) {
     const py = ((j + 0.5) / size) * 2 - 1;
     for (let i = 0; i < size; i++) {
       const px = ((i + 0.5) / size) * 2 - 1;
-      let amount;
+      let u, gx, gy;
       if (ringFrom) {
         const r = Math.sqrt(px * px + py * py);
-        amount = Math.min(1, Math.max(0, (r - ringFrom) / (1 - ringFrom)));
+        u = r <= ringFrom ? 0 : Math.min(1, (r - ringFrom) / (1 - ringFrom));
+        gx = r ? px / r : 0;
+        gy = r ? py / r : 0;
       } else {
-        amount = Math.min(1, Math.pow(Math.abs(px), power) + Math.pow(Math.abs(py), power));
+        u = Math.min(1, Math.pow(Math.abs(px), power) + Math.pow(Math.abs(py), power));
+        gx = Math.sign(px) * Math.pow(Math.abs(px), power - 1);
+        gy = Math.sign(py) * Math.pow(Math.abs(py), power - 1);
+        // Dead centre of an odd-sized map there is no gradient to normalise,
+        // and nothing there bends anyway.
+        const len = Math.sqrt(gx * gx + gy * gy);
+        if (len > 0) { gx /= len; gy /= len; } else { gx = 0; gy = 0; }
       }
+      const shift = bevelShift(u) * 127;
       const k = (i + j * size) * 4;
-      out[k] = 128 - px * amount * 127;
-      out[k + 1] = 128 - py * amount * 127;
+      out[k] = 128 - gx * shift;
+      out[k + 1] = 128 - gy * shift;
       out[k + 2] = 0;
       out[k + 3] = 255;
     }

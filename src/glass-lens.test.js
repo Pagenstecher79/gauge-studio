@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { lensField, lensScaleFraction, lensFilterMarkup, lensGeometry, applyLensGeometry } from './glass-lens.js';
+import {
+  lensField, lensScaleFraction, lensFilterMarkup, lensGeometry, applyLensGeometry,
+  bevelShift, BEVEL_MAX_SLOPE,
+} from './glass-lens.js';
 
 /** The map is square; this reads one pixel out of it. */
 const at = (field, size, i, j) => {
@@ -143,5 +146,77 @@ describe('applyLensGeometry', () => {
   it('survives a root with nothing in it', () => {
     expect(() => applyLensGeometry(null)).not.toThrow();
     expect(() => applyLensGeometry({})).not.toThrow();
+  });
+});
+
+describe('bevelShift', () => {
+  it('runs from nothing to everything', () => {
+    expect(bevelShift(0)).toBe(0);
+    expect(bevelShift(1)).toBe(1);
+  });
+
+  it('spends its strength at the rim, not across the pane', () => {
+    // This is the whole difference from the linear ramp it replaced: half way
+    // across the bevel a quarter-round has barely turned, and the last tenth
+    // carries more than the first half does.
+    expect(bevelShift(0.5)).toBeLessThan(0.5);
+    expect(bevelShift(0.9)).toBeGreaterThan(0.9);
+    expect(bevelShift(0.9) - bevelShift(0.8))
+      .toBeGreaterThan(bevelShift(0.5) - bevelShift(0));
+  });
+
+  it('never goes backwards', () => {
+    for (let u = 0; u < 1; u += 0.01) {
+      expect(bevelShift(u + 0.01)).toBeGreaterThanOrEqual(bevelShift(u));
+    }
+  });
+
+  it('saturates where the face is steeper than the map can say', () => {
+    const atMax = BEVEL_MAX_SLOPE / Math.sqrt(1 + BEVEL_MAX_SLOPE * BEVEL_MAX_SLOPE);
+    expect(bevelShift(atMax)).toBeCloseTo(1, 6);
+    expect(bevelShift(atMax + 0.001)).toBe(1);
+  });
+
+  it('holds still for the values a config can arrive with', () => {
+    for (const v of [undefined, null, '', NaN, -1, 2, 'nonsense']) {
+      const got = bevelShift(/** @type {any} */ (v));
+      expect(got).toBeGreaterThanOrEqual(0);
+      expect(got).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('the direction a bevel faces', () => {
+  const SIZE = 64;
+
+  it('bends straight through the middle of an edge, not towards the centre', () => {
+    // Two thirds of the way up the left edge, the old field tilted the shift
+    // a third of the way into the vertical, and a straight line of backdrop
+    // crossing that edge came through with a kink in it. A face that is flat
+    // along the edge bends across it and nowhere else.
+    const f = lensField('dome', SIZE);
+    const up = at(f, SIZE, 0, 48);
+    expect(up.r).toBeGreaterThan(240);
+    expect(Math.abs(up.g - 128)).toBeLessThan(10);
+  });
+
+  it('bends diagonally in a corner, because a corner is where it turns', () => {
+    const f = lensField('dome', SIZE);
+    const c = at(f, SIZE, 0, 0);
+    expect(c.r).toBeGreaterThan(190);
+    expect(c.r).toBe(c.g);
+  });
+
+  it('reaches full deflection at the rim, so the strength slider means it', () => {
+    const f = lensField('dome', SIZE);
+    expect(at(f, SIZE, 0, SIZE / 2).r).toBe(255);
+    expect(at(f, SIZE, SIZE - 1, SIZE / 2).r).toBeLessThan(2);
+  });
+
+  it('bends a disc along its radius', () => {
+    const f = lensField('disc', SIZE);
+    const diag = at(f, SIZE, 4, 4);
+    expect(diag.r).toBe(diag.g);
+    expect(diag.r).toBeGreaterThan(190);
   });
 });
