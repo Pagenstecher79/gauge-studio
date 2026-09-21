@@ -6774,7 +6774,20 @@ class ScCanvasEditor extends LitElement {
     const note = (/** @type {any} */ r, /** @type {any} */ extra) => {
       taken.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, m: M, ...extra });
     };
-    if (panel) note(panel, { panel: true });
+    if (panel) note(panel, { panel: true, hard: true });
+    // The corner buttons: the way out of this mode, and the middle axis.
+    // They were raised above every chip so that none could cover them, which
+    // only turned the fault the other way up - the chip is now the thing
+    // underneath, and a chip that cannot be read is barely better than one
+    // that cannot be pressed. They are furniture and they never move, so the
+    // room they stand in is simply not the chips' to use. Counted as hard as
+    // the panel, because there is no such thing as a tidy overlap here: both
+    // of these are pressed, and one under the other is a press that goes to
+    // the wrong one.
+    for (const btn of /** @type {any[]} */ ([...root.querySelectorAll('.inner-open')])) {
+      const r = btn.getBoundingClientRect();
+      if (r.width || r.height) note(r, { hard: true });
+    }
     // A frame is worked on the way the panel is read, so it gets the same
     // right to be clear of chips: its drawing, and the field it is being
     // typed into. Its head is not in this list - a head steps aside like any
@@ -6920,7 +6933,7 @@ class ScCanvasEditor extends LitElement {
             for (const o of taken) {
               const ov = Math.max(0, Math.min(a.l + a.w, o.right) - Math.max(a.l, o.left))
                        * Math.max(0, Math.min(a.t + a.h, o.bottom) - Math.max(a.t, o.top));
-              sum += ov * (o.panel ? 10 : 1);
+              sum += ov * (o.hard ? 10 : 1);
             }
             return sum;
           };
