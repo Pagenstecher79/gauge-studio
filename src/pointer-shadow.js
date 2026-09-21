@@ -50,13 +50,20 @@ export const MAX_HEIGHT = 1;
 export const MAX_DIFFUSION = 1;
 
 /**
- * At full height the shadow lies about one needle width away.
+ * At full height the shadow lies a quarter of a needle width away.
  *
- * Measured off instruments rather than chosen: a needle standing as far off
- * its dial as it is wide is already a tall one, and its shadow at a normal
- * light comes out beside it, not across the dial.
+ * Judged by eye rather than derived, and twice over so that one impression
+ * could not carry it: freely, against a dial at half height, and again
+ * against a row of fixed steps. The two answers were 0.30 and 0.21 needle
+ * widths, so the number between them is this one.
+ *
+ * A whole width, which this was at first, is too far - the shadow separates
+ * and reads as a second needle. It is also more than an instrument does: a
+ * broad pointer sits a few millimetres off its dial, not a whole pointer's
+ * width, and only a low sun would stretch that into an offset as long as the
+ * needle is wide.
  */
-export const DROP_PER_WIDTH = 1;
+export const DROP_PER_WIDTH = 0.25;
 
 /** Diffuse light has less direction, so the shadow creeps back underneath. */
 const DROP_DIFFUSE_PULL = 0.35;
@@ -64,13 +71,26 @@ const DROP_DIFFUSE_PULL = 0.35;
 /** The penumbra, in needle widths: a floor, then height, then softness. */
 const BLUR_FLOOR = 0.04;
 const BLUR_PER_HEIGHT = 0.25;
-const BLUR_PER_DIFFUSION = 0.5;
+const BLUR_PER_DIFFUSION = 0.18;
 
 /** A needle lying on its dial, under a hard light. Nothing is darker. */
 export const DARKEST = 0.55;
-/** What spreading the same occlusion over more area costs the core. */
+/**
+ * What spreading the same occlusion over more area costs the core.
+ *
+ * Only what the blur does not already take. A Gaussian of width s leaves
+ * `erf(w / (2s√2))` at the centre of a strip of width w, so softening a
+ * shadow lightens its core whether or not anything here says so, and the
+ * first draft said so a second time: over the diffusion slider's travel the
+ * visible core fell by a factor of four, and everything past the first
+ * quarter of it was too faint to see at all. A slider whose upper half does
+ * nothing but disappear is the same fault this module was written to fix.
+ *
+ * Height keeps its full share - a shadow thrown further really does spread -
+ * and diffusion keeps only the part the blur cannot account for.
+ */
 const SPREAD_HEIGHT = 1.2;
-const SPREAD_DIFFUSION = 1.8;
+const SPREAD_DIFFUSION = 0.3;
 
 /** The contact dark, which is strongest where the needle nearly touches. */
 const CONTACT_DARKEST = 0.45;
