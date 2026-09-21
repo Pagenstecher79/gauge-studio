@@ -566,3 +566,47 @@ That is the shape of the answer: **the cheap parts are the ones that carry the
 look**. A translucent needle with a lit rim, glass on the hub where it costs
 nothing, and the lens itself offered only where the part is wide enough to
 show one.
+
+## What the refractive index costs
+
+The index (`ior`, *Refractive index (n)* under Optics) does two things to the
+lens: the whole body of the pane bends, not only its rim, and the three
+colours are displaced by slightly different amounts so the edge splits into a
+warm and a cold fringe. The first is free - it changes the numbers in the
+64x64 map and nothing else. The second is not: one `feDisplacementMap`
+becomes three, each followed by an `feColorMatrix`, with two `feComposite`s
+to add them back together. Eight primitives over the oversized filter region
+instead of one.
+
+Measured 2026-09-21 on `.claude/bench/ior-bench.html` - a grid of panes with
+`backdrop-filter` over a moving high-contrast backdrop, at the editor's
+maximum refraction. Chrome, 120 Hz, 1024x768 at dpr 2, fps and p99 over a 5 s
+sample after a 900 ms warm-up. `edge` is n = 1, one pass; `ior` is n = 2,
+three passes; `both` is n = 2 with `blur(4px)` stacked on it.
+
+| panes | off | edge (1 pass) | ior 2 (3 passes) | blur | both |
+|---|---|---|---|---|---|
+| 16 | 120.0 / 10.2 | 120.0 / 10.1 | 120.0 / 9.9 | - | - |
+| 64 | - | 120.0 / 10.0 | 120.0 / 9.7 | 120.0 / 10.3 | - |
+| 128 | - | - | 120.0 / 10.0 | - | 120.0 / 9.8 |
+| 256 | - | 119.8 / 9.8 | 60.0 / 17.8 | - | - |
+
+**Up to 128 panes the index is free, and past that it is the whole cost.** At
+256 the single pass is still at the refresh rate and the three passes have
+halved to a hard vsync-locked 60 - the frame no longer fits in 8.3 ms, so
+every frame waits for the next one. That is three times the filter work
+arriving all at once, which is what eight primitives instead of one buys.
+
+Two things follow. A dashboard of a dozen or two glass panes pays nothing for
+the index, which is every dashboard anybody builds - the break is at a pane
+count nothing real reaches. And the cliff, when it comes, is a cliff and not
+a slope, because the frame rate is locked to the refresh: 128 panes cost
+nothing and 256 cost half the frame rate. So the index is offered as a
+setting rather than spent by default, and at n = 1, which is the default, the
+filter is the single-primitive one this module always wrote, byte for byte.
+
+Stacking the index on a blur is the exception to the pane's usual rule -
+`both` at 128 measures the same as the index alone. The blur is gated on an
+opaque pane and the lens with it, so the two never run where neither shows;
+where they do both run, at the counts people build, neither is the
+bottleneck.

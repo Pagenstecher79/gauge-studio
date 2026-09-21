@@ -320,7 +320,7 @@ function update({ hass, config }) {
         // a pane, however rounded, and gathers the backdrop at its rim.
         // `isCircleRadius` catches a surface someone has made round by hand.
         const profile = isRoundTarget(pat.target) || isCircleRadius(borderRadius) ? 'disc' : 'dome';
-        lensDefs += lensFilterMarkup(lensId, profile, lensFraction, selector, '::after');
+        lensDefs += lensFilterMarkup(lensId, profile, lensFraction, selector, '::after', { ior: pat.ior });
       }
       const backdropCSS = [blursBackdrop ? `blur(${u(blur)})` : '', lensFraction ? `url(#${lensId})` : '']
         .filter(Boolean).join(' ');

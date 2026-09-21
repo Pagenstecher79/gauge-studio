@@ -36,8 +36,15 @@
  * was taken from spends 81 texture fetches per pixel on a two-pixel blur; the
  * lesson is the one that saves.)
  *
- * `lensField` is pure and testable; everything that needs a canvas sits in
- * `lensMapUri`, which caches its two results.
+ * On top of the two profiles sits one number, the **refractive index**. At 1
+ * the pane is a bevel and nothing else - the field is the bevel field and the
+ * filter is one displacement pass, which is what this module drew for its
+ * first two versions. Above 1 the body joins in (`iorBody`) and the three
+ * colours come apart (`iorDispersion`): a thick lens, not a thick rim.
+ *
+ * `lensField`, `iorBody` and `iorDispersion` are pure and testable;
+ * everything that needs a canvas sits in `lensMapUri`, which caches its
+ * results per profile and index.
  */
 
 /** How many pixels across each map is drawn. A smooth field needs no more. */
@@ -120,8 +127,9 @@ export function bevelShift(u) {
  * @param {number} [size] edge length in pixels
  * @returns {Uint8ClampedArray} `size * size * 4` bytes, RGBA
  */
-export function lensField(profile, size = MAP_SIZE) {
+export function lensField(profile, size = MAP_SIZE, body = 0) {
   const { power, ringFrom } = PROFILES[profile] || PROFILES.dome;
+  const b = Math.min(1, Math.max(0, Number(body) || 0));
   const out = new Uint8ClampedArray(size * size * 4);
   for (let j = 0; j < size; j++) {
     // Sample pixel centres, or the two edge columns sit half a pixel short of
@@ -129,12 +137,13 @@ export function lensField(profile, size = MAP_SIZE) {
     const py = ((j + 0.5) / size) * 2 - 1;
     for (let i = 0; i < size; i++) {
       const px = ((i + 0.5) / size) * 2 - 1;
-      let u, gx, gy;
+      let u, gx, gy, across;
       if (ringFrom) {
         const r = Math.sqrt(px * px + py * py);
         u = r <= ringFrom ? 0 : Math.min(1, (r - ringFrom) / (1 - ringFrom));
         gx = r ? px / r : 0;
         gy = r ? py / r : 0;
+        across = Math.min(1, r);
       } else {
         u = Math.min(1, Math.pow(Math.abs(px), power) + Math.pow(Math.abs(py), power));
         gx = Math.sign(px) * Math.pow(Math.abs(px), power - 1);
@@ -143,8 +152,16 @@ export function lensField(profile, size = MAP_SIZE) {
         // and nothing there bends anyway.
         const len = Math.sqrt(gx * gx + gy * gy);
         if (len > 0) { gx /= len; gy /= len; } else { gx = 0; gy = 0; }
+        // Chebyshev, not Euclidean: a pane's body is a rectangle, and the
+        // corner of one is no further out of the glass than the middle of
+        // its edge. On the disc above, where the body *is* round, it is r.
+        across = Math.min(1, Math.max(Math.abs(px), Math.abs(py)));
       }
-      const shift = bevelShift(u) * 127;
+      // The body is a lens surface, the rim is a bevel, and the two add:
+      // a parabolic face has a slope linear in how far out it is, so the
+      // body term is `across` itself, and where the bevel takes over the
+      // sum simply saturates.
+      const shift = Math.min(1, bevelShift(u) + b * across) * 127;
       const k = (i + j * size) * 4;
       out[k] = 128 - gx * shift;
       out[k + 1] = 128 - gy * shift;
@@ -161,14 +178,20 @@ const mapCache = new Map();
  * The map for a profile, as a data URI `feImage` can load.
  *
  * Cached: the field never changes, and every pane on a dashboard that uses
- * the same profile uses the same bytes.
+ * the same profile and the same index uses the same bytes.
  *
  * @param {'dome' | 'disc'} profile
+ * @param {number} [body] from `iorBody`
  * @returns {string} empty where there is no canvas to draw on
  */
-export function lensMapUri(profile) {
+export function lensMapUri(profile, body = 0) {
   const key = profile === 'disc' ? 'disc' : 'dome';
-  if (mapCache.has(key)) return mapCache.get(key);
+  // Two decimals, because the slider has twenty steps and a map is 16 kB of
+  // canvas: without the quantisation a dragged slider would mint a new one
+  // per pixel of travel and keep every one of them for the life of the page.
+  const b = Math.round(Math.min(1, Math.max(0, Number(body) || 0)) * 100) / 100;
+  const cacheKey = key + ':' + b;
+  if (mapCache.has(cacheKey)) return mapCache.get(cacheKey);
   let uri = '';
   try {
     const canvas = document.createElement('canvas');
@@ -176,11 +199,11 @@ export function lensMapUri(profile) {
     canvas.height = MAP_SIZE;
     const ctx = canvas.getContext('2d');
     const img = ctx.createImageData(MAP_SIZE, MAP_SIZE);
-    img.data.set(lensField(key));
+    img.data.set(lensField(key, MAP_SIZE, b));
     ctx.putImageData(img, 0, 0);
     uri = canvas.toDataURL('image/png');
   } catch (_) { uri = ''; }
-  mapCache.set(key, uri);
+  mapCache.set(cacheKey, uri);
   return uri;
 }
 
@@ -211,6 +234,61 @@ export function lensScaleFraction(refraction) {
 }
 
 /**
+ * The highest index the editor offers. Past 2 the pane stops reading as
+ * glass and starts reading as a marble: the body gathers half the backdrop
+ * and the colours come apart far enough to see as colours rather than as an
+ * edge.
+ */
+export const MAX_IOR = 2;
+
+/**
+ * How much of the *whole* pane bends, for a given index.
+ *
+ * The bevel alone is an edge effect - it is what a rim does, and the middle
+ * of the pane is deliberately flat, so what is under the glass stays
+ * readable. A thick body with an index of its own does not leave the middle
+ * alone: everything behind it is pulled towards the centre, a little in the
+ * middle and more towards the sides, because the face is curved and its
+ * slope grows with how far out you are.
+ *
+ * The share is `1 - 1/n`, which is the lateral displacement through a slab
+ * per unit of tilt - 0 at n = 1, a third at 1.5, a half at 2. At n = 1 the
+ * term vanishes and the map is the bevel map, byte for byte, so the index
+ * costs nothing until somebody asks for it.
+ *
+ * @param {unknown} ior the index, 1 and up
+ * @returns {number} 0-1, the body's share of full deflection at the sides
+ */
+export function iorBody(ior) {
+  const n = Number(ior);
+  if (!Number.isFinite(n) || n <= 1) return 0;
+  return Math.round((1 - 1 / Math.min(n, MAX_IOR)) * 100) / 100;
+}
+
+/**
+ * How far apart the index drives the three colours, as a share of the shift.
+ *
+ * A real index is a different number for every wavelength - that is what a
+ * prism is - and the visible consequence is that the three colours land in
+ * three slightly different places, so a hard edge seen through thick glass
+ * gets a warm fringe on one side and a cold one on the other. Blue bends
+ * most, red least.
+ *
+ * Real glass splits by about one part in sixty, which at the two or three
+ * pixels a pane displaces is nothing anybody would ever see. This index is
+ * virtual, so the split is exaggerated to where it draws: 30 % of the shift
+ * at n = 2, which on a 60 px pane is a fringe about two pixels wide.
+ *
+ * @param {unknown} ior the index, 1 and up
+ * @returns {number} 0 when there is nothing to split
+ */
+export function iorDispersion(ior) {
+  const n = Number(ior);
+  if (!Number.isFinite(n) || n <= 1) return 0;
+  return Math.round((Math.min(n, MAX_IOR) - 1) * 0.3 * 100) / 100;
+}
+
+/**
  * The filter, as SVG markup ready to drop into the card's overlay.
  *
  * The map and the displacement are left without geometry on purpose: both
@@ -225,10 +303,14 @@ export function lensScaleFraction(refraction) {
  * @param {string} forSelector the CSS selector of the element the pane sits on
  * @param {string} [pseudo] the pseudo-element the pane is drawn as, where it
  *   is one - a pane painted as an `::after` has no box of its own to measure
+ * @param {{ior?: unknown}} [opts] `ior` is the refractive index; at 1, which
+ *   is the default, the markup is the single-primitive filter it always was
  * @returns {string}
  */
-export function lensFilterMarkup(id, profile, fraction, forSelector, pseudo) {
-  const map = fraction ? lensMapUri(profile) : '';
+export function lensFilterMarkup(id, profile, fraction, forSelector, pseudo, opts) {
+  const ior = opts ? opts.ior : undefined;
+  const spread = iorDispersion(ior);
+  const map = fraction ? lensMapUri(profile, iorBody(ior)) : '';
   if (!map) return '';
   // The region is oversized because a displaced pixel can come from outside
   // the pane's own box - at the rim, that is the entire point. The map
@@ -241,9 +323,46 @@ export function lensFilterMarkup(id, profile, fraction, forSelector, pseudo) {
     + (pseudo ? ' data-sc-lens-pseudo="' + escapeAttr(pseudo) + '"' : '')
     + ' x="-35%" y="-35%" width="170%" height="170%">'
     + '<feImage result="lmap" preserveAspectRatio="none" href="' + map + '"/>'
-    + '<feDisplacementMap in="SourceGraphic" in2="lmap" scale="0"'
-    + ' xChannelSelector="R" yChannelSelector="G"/>'
+    + (spread ? dispersionPipeline(spread) : displace(1))
     + '</filter>';
+}
+
+/**
+ * One displacement pass. `scale` is filled in by `applyLensGeometry`, which
+ * multiplies the pane's shift by the factor left here.
+ */
+function displace(k, result) {
+  return '<feDisplacementMap in="SourceGraphic" in2="lmap" scale="0"'
+    + (k === 1 ? '' : ' data-sc-lens-k="' + k + '"')
+    + ' xChannelSelector="R" yChannelSelector="G"'
+    + (result ? ' result="' + result + '"' : '') + '/>';
+}
+
+/**
+ * Three passes, one per colour, added back together.
+ *
+ * `feDisplacementMap` carries one scale for all three channels, so splitting
+ * the colours means running it three times and keeping one channel of each.
+ * Keeping a channel is where this gets fussy: `feComposite`'s arithmetic
+ * works on *premultiplied* colour, so a layer whose alpha has been zeroed
+ * contributes nothing at all - zero out the alpha of the red pass to keep it
+ * from tripling the alpha and the red fringe disappears with it. Each pass
+ * is therefore forced fully opaque instead, and the sum saturates back to
+ * opaque, which is what a backdrop is anyway: the output is clipped to the
+ * pane's own box, so the alpha the filter produces outside it never shows.
+ *
+ * @param {number} spread from `iorDispersion`
+ */
+function dispersionPipeline(spread) {
+  const keep = (row, from) => '<feColorMatrix in="' + from + '" type="matrix" values="'
+    + row + '" result="c' + from.slice(1) + '"/>';
+  const r = Math.round((1 - spread) * 100) / 100;
+  const b = Math.round((1 + spread) * 100) / 100;
+  return displace(r, 'dR') + keep('1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1', 'dR')
+    + displace(1, 'dG') + keep('0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1', 'dG')
+    + displace(b, 'dB') + keep('0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 1', 'dB')
+    + '<feComposite in="cR" in2="cG" operator="arithmetic" k2="1" k3="1" result="cRG"/>'
+    + '<feComposite in="cRG" in2="cB" operator="arithmetic" k2="1" k3="1"/>';
 }
 
 /**
@@ -271,10 +390,11 @@ export function lensFilterMarkup(id, profile, fraction, forSelector, pseudo) {
  *
  * @param {object} [owner] the component this filter belongs to. Without one
  *   there is nothing safe to memoise against, so a fresh node is returned.
+ * @param {{ior?: unknown}} [opts] as `lensFilterMarkup`
  * @returns {Element | null} null where there is nothing to bend, or no DOM
  */
-export function lensFilterElement(id, profile, fraction, forSelector, pseudo, owner) {
-  const markup = lensFilterMarkup(id, profile, fraction, forSelector, pseudo);
+export function lensFilterElement(id, profile, fraction, forSelector, pseudo, owner, opts) {
+  const markup = lensFilterMarkup(id, profile, fraction, forSelector, pseudo, opts);
   if (!markup) return null;
   let mine = owner ? elementCache.get(owner) : null;
   if (mine && mine.has(markup)) return mine.get(markup);
@@ -370,10 +490,12 @@ export function applyLensGeometry(root, readStyle) {
       img.setAttribute('width', String(geom.width));
       img.setAttribute('height', String(geom.height));
     });
-    const disp = geom.scale === null ? null : filter.querySelector('feDisplacementMap');
-    if (disp && disp.getAttribute('scale') !== String(geom.scale)) {
-      disp.setAttribute('scale', String(geom.scale));
-    }
+    if (geom.scale === null) return;
+    filter.querySelectorAll('feDisplacementMap').forEach((disp) => {
+      const k = parseFloat(disp.getAttribute('data-sc-lens-k') || '1') || 1;
+      const scale = String(Math.round(geom.scale * k * 100) / 100);
+      if (disp.getAttribute('scale') !== scale) disp.setAttribute('scale', scale);
+    });
   });
 }
 
