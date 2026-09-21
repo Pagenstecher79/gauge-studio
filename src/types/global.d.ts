@@ -84,8 +84,11 @@ declare global {
     min?: number; max?: number; step?: number | string;
   }
 
-  /** Shared number/color/target helpers, set up once by supercard-01-core.js. */
-  interface SupercardUtilsApi {
+  /**
+   * The half of `window.SupercardUtils` a card needs to draw itself, set up
+   * by `supercard-01-core.js`. Always there.
+   */
+  interface SupercardUtilsRuntime {
     safeFloat: (v: any, d: number) => number;
     hexToRgb: (hex: string) => [number, number, number] | null;
     rgbToHex: (r: number, g: number, b: number) => string;
@@ -158,6 +161,22 @@ declare global {
      * percentage draws an ellipse rather than a corner.
      */
     cardRadius: (slot: any) => string | null;
+    /**
+     * The stylesheet a renderer adopts so the part in hand can say so - the
+     * mark named by `data-sc-hl` breathes. A renderer's own shadow root is the
+     * only place that can reach its parts, so the rule lives with the
+     * renderers rather than with the editor that sets the attribute.
+     */
+    partHighlight: CSSResult;
+  }
+
+  /**
+   * The other half: every control an editor draws with, and both editor
+   * stylesheets. `supercard-01-core-editor.js` assigns it onto the same
+   * object, so it is only there once the editor bundle has been loaded - which
+   * is what `getConfigElement` awaits. Nothing a card draws may read from here.
+   */
+  interface SupercardUtilsEditor {
     /** The swatch-and-text colour control, drawn the same in every editor. */
     colorRow: (value: string, onInput: (v: string) => void, opts?: {
       fallback?: string; placeholder?: string; hexOnly?: boolean; textFallback?: boolean;
@@ -208,8 +227,21 @@ declare global {
     formStyles: CSSResult;
   }
 
+  /**
+   * Both halves. Every call site is written against this, because an editor
+   * only ever runs once its own half has loaded.
+   */
+  interface SupercardUtilsApi extends SupercardUtilsRuntime, SupercardUtilsEditor {}
+
   interface Window {
     SupercardModules: Record<string, SupercardModule>;
     SupercardUtils: SupercardUtilsApi;
   }
+
+  /**
+   * The editor bundle's file name, with its content hash, written in by the
+   * build (`vite.config.js` reads it from `dist/.editor-chunk`). Nothing else
+   * names that file.
+   */
+  const __SC_EDITOR_CHUNK__: string;
 }

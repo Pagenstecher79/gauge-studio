@@ -61,12 +61,20 @@ lovelace:
 
 ### Manual installation
 
-1. Download `gauge-studio.js` from the [latest release](https://github.com/Pagenstecher79/gauge-studio/releases/latest).
-2. Copy it to `config/www/gauge-studio/gauge-studio.js` in your Home Assistant configuration.
+The card comes as **two files**: `gauge-studio.js`, which your dashboards
+load, and `gauge-studio-editor-<hash>.js`, which it fetches by itself the
+first time you open a card's settings. Copy both, side by side; only the
+first one is registered as a resource.
+
+1. Download `gauge-studio.zip` from the [latest release](https://github.com/Pagenstecher79/gauge-studio/releases/latest).
+2. Unpack it into `config/www/gauge-studio/` in your Home Assistant configuration.
 3. Add the resource under **Settings → Dashboards → ⋮ → Resources**:
    * URL: `/local/gauge-studio/gauge-studio.js`
    * Type: **JavaScript Module**
 4. Reload your browser.
+
+When you update by hand, delete the old `gauge-studio-editor-*.js` as well -
+it is no longer used, and it is only confusing to leave it there.
 
 ### Adding the card
 

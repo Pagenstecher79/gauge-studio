@@ -553,9 +553,10 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
 
 ## Later
 
-- **33** - Tidy the code: the bundle is approaching 750 kB. Fold blocks that
-  do the same job back together, and write the function that covers several
-  similar ones where there is one. See the *v3.0.0 redundancy audit* note.
+- **33** - ~~Tidy the code: the bundle is approaching 750 kB. Fold blocks
+  that do the same job back together, and write the function that covers
+  several similar ones where there is one.~~ Done, but not that way. See the
+  *v3.0.0 redundancy audit* note.
 
   Measured first, and the premise turned out to be wrong. Two clone
   detectors over the whole of `src`, one textual and one token-normalised so
@@ -569,11 +570,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   That is done - 857 kB to 564 kB, 232 kB to 157 kB gzipped, see
   `build/slim-bundle.js`.
 
-  What is left of this item is the one large thing: **64 % of the bundle is
-  editor code** that a dashboard only drawing the card never needs. Splitting
-  it into a chunk that `getConfigElement()` imports on demand would cut what
-  a viewer loads to about 190 kB. It needs `zip_release` in `hacs.json` and
-  a reinstall, which is only affordable while the card has the one user it
-  has.
+  The one large thing that was left of it is done too: **64 % of the bundle
+  was editor code** that a dashboard only drawing the card never needed.
+  Every module is now two - `supercard-NN-thing.js` draws, and
+  `supercard-NN-thing-editor.js` configures - and `getConfigElement()`
+  imports the second bundle when someone opens the settings. A dashboard
+  fetches **159 kB** where it fetched 564, 50 kB gzipped against 157. The
+  editor's 431 kB is fetched once, by whoever is editing.
+
+  The cost is that the card is two files, so HACS installs a zip
+  (`zip_release`). See `docs/editor-split.md`.
 - **47** - Glass FX: markedly better spherical distortion and refraction
   towards the edges. After the bugs above.

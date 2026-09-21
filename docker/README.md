@@ -32,7 +32,7 @@ All of those show up here and only here.
 ## The loop
 
 `npm run watch` in one terminal rebuilds `dist/` on every save. The container
-serves `dist/` read-only at `/local/gauge-studio.js`, so a rebuilt file is live
+serves `dist/` read-only at `/local/`, so a rebuilt file is live
 immediately — but the browser has already cached the URL, so **hard-refresh**
 (⌘⇧R / Ctrl-Shift-R) to pick it up.
 

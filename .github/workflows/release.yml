@@ -31,6 +31,20 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Pack the bundle for HACS
+        run: |
+          set -eu
+          # Two files since v2.5.0: the card, and the editor chunk it fetches
+          # the first time someone opens the settings. HACS installs a single
+          # asset, so the asset is a zip and `hacs.json` says `zip_release` -
+          # everything in it is unpacked next to the card, which is where the
+          # card's own relative import looks.
+          #
+          # The zip is flat: HACS extracts it into the card's directory as it
+          # is, so a folder inside would put the files one level too deep.
+          cd dist && zip -j ../gauge-studio.zip ./*.js && cd ..
+          unzip -l gauge-studio.zip
+
       - name: Take the release intro from the tag message
         run: |
           set -eu
@@ -66,7 +80,13 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/gauge-studio.js
+          # The zip is what HACS installs. The loose files are for a manual
+          # install, and both of them have to be copied - the card alone is a
+          # card whose editor 404s.
+          files: |
+            gauge-studio.zip
+            dist/gauge-studio.js
+            dist/gauge-studio-editor-*.js
           # Prepended to the generated notes by the action.
           body_path: release-intro.md
           generate_release_notes: true
