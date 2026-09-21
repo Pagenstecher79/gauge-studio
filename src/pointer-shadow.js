@@ -50,6 +50,23 @@ export const MAX_HEIGHT = 1;
 export const MAX_DIFFUSION = 1;
 
 /**
+ * The softest light this slider reaches, as a share of the model's own scale.
+ *
+ * An overcast sky really does erase a needle's shadow, so a diffusion axis
+ * that runs all the way there ends in nothing - and a slider whose last
+ * stretch is indistinguishable from its end is a slider that lies about what
+ * it has left. The far end is therefore pulled back to the softest light a
+ * shadow still says something under, judged against a row of fixed steps: 0.6
+ * of the way was still a shadow, the whole way was not.
+ *
+ * Applied once, to the input, rather than to the four constants that read it -
+ * blur, core, offset and rim all describe the same light and have to agree
+ * about how soft its far end is. Moving this number moves all four together,
+ * which is what makes it safe to move.
+ */
+const DIFFUSION_REACH = 0.6;
+
+/**
  * At full height the shadow lies a quarter of a needle width away.
  *
  * Judged by eye rather than derived, and twice over so that one impression
@@ -156,7 +173,7 @@ export function shadowRoom(backdrop) {
  */
 export function needleLift({ height, diffusion = 0, width, angle = 90, backdrop = null }) {
   const h = clamp01(height);
-  const d = clamp01(diffusion);
+  const d = clamp01(diffusion) * DIFFUSION_REACH;
   const w = Number.isFinite(width) && width > 0 ? width : 0;
   const room = shadowRoom(backdrop);
   const rad = (Number.isFinite(angle) ? angle : 90) * Math.PI / 180;

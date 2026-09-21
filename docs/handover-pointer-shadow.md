@@ -62,13 +62,37 @@ and the adversarial values. Nothing draws from it yet.
 `stripDeadConfig` in `src/config-cleanup.js:306` clears the dead keys on the
 next edit.
 
-## The one number still open
+## The numbers that were open - answered 2026-09-21/22
 
-`DROP_PER_WIDTH = 1` in `pointer-shadow.js`: at maximum height the shadow is
-offset by exactly one needle width. Every other constant follows from the
-physics or from the envelope; this one is taste, and the user had not yet
-judged it when the session ended. Ask before step 3 lands - changing it
-afterwards means re-reading every card that was tuned against the old curve.
+Judged against `.claude/bench/needle-height.html`, a page of fixed steps
+rather than sliders; CLAUDE.md *A number nobody can derive is asked, not
+chosen* describes the method and why it is worth repeating.
+
+- **`DROP_PER_WIDTH` 1 -> 0.25.** A whole width separates the shadow and it
+  reads as a second needle. Two independent readings, 0.30 and 0.21, met at
+  0.25. Confirmed afterwards over the whole height row.
+- **`SPREAD_DIFFUSION` 1.8 -> 0.3.** Double counting: a Gaussian already
+  leaves only `erf(w / 2s sqrt2)` at the centre, so the constant lightened a
+  second time what the blur had lightened once. The visible core used to fall
+  22% -> 6% over the slider's travel, with everything past the first quarter
+  invisible.
+- **`BLUR_PER_DIFFUSION` 0.5 -> 0.18**, same reading.
+- **`DIFFUSION_REACH = 0.6`, new.** Even corrected, the far end was still too
+  soft - 15% visible, and the user rejected it while accepting 17%. Rather
+  than nudge four constants that all describe the same light, the input is
+  scaled once, so blur, core, offset and rim stay in agreement. The slider now
+  runs 22% -> 17% visible with the penumbra growing 4.9 px -> 6.8 px on a
+  17 px needle.
+
+Nothing here is open any more, and nothing draws from it yet. **Step 2, the
+card light, is next.**
+
+One thing to watch rather than to decide now: over its travel the diffusion
+slider moves the visible core by five points and the penumbra by 39%. That is
+a real difference at half height (2.8 px -> 4.6 px of blur) but a quiet one at
+full height. If it reads as doing nothing once the renderer is wired up, the
+honest answer is one slider, not two - ask the user then rather than widening
+the range, which is what made it unusable in the first place.
 
 ## Loose ends
 
