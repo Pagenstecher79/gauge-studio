@@ -635,4 +635,21 @@ but what the part does per frame:
 
 The pane's own numbers above do not carry over to the pill, and the
 difference is not a contradiction: a pane is sampled once per change, a pill
-is sampled every frame of an animation that never stops.
+is sampled every frame it moves.
+
+**And only while it moves.** The bar has no endless animation and no CSS
+transition on its position - the fill follows a capped frame loop that ends
+when the value is reached, at which point the pill stands still over a
+backdrop that stands still, and a `backdrop-filter` over an unchanged
+backdrop is not re-evaluated. So the 53 fps is a dip of about a second per
+reading, not a standing load.
+
+What does make it standing is a backdrop that never settles, and there are
+two ways to build one, both of them ordinary choices rather than mistakes:
+an animated colour pattern on the fill underneath the pill, and a
+translucent bar over an animated card background, where what shows through
+the pill is the card and the card is moving. In both the pill re-samples
+every frame for as long as the dashboard is open, whether the value changes
+or not. The pill's own control says so; there is nothing to gate here,
+because the card cannot tell a backdrop that is worth bending from one that
+is not.
