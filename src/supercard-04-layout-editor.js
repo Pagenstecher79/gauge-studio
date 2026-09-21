@@ -23,7 +23,9 @@ import { icon, iconMask } from "./icons.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
-import { isPointerGlass, lensFitsPointer } from "./pointer-glass.js";
+import { isPointerGlass, lensFitsPointer, pointerLensFraction } from "./pointer-glass.js";
+import { isLiquidEffect } from "./pill-glass.js";
+import { MAX_IOR } from "./glass-lens.js";
 import { applyCardConfig } from "./card-apply.js";
 import { highlightInk } from "./highlight-ink.js";
 import { withoutElementConfig, TARGET_LISTS } from "./config-cleanup.js";
@@ -1119,6 +1121,10 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_glass_blur', icon: icon('droplet'), slide: true, by: 0.5, min: 0, max: 6,
         dflt: 0, what: 'glass blur',
         condition: (/** @type {any} */ cfg) => isPointerGlass(cfg.pointer_glass) },
+      { key: 'pointer_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05, min: 1, max: MAX_IOR,
+        dflt: 1, what: 'refraction',
+        condition: (/** @type {any} */ cfg) =>
+          pointerLensFraction(cfg.pointer_glass, cfg.pointer_width ?? 2) > 0 },
       { key: 'pointer_shadow_type', icon: icon('moon'), what: 'shadow', picks: SHADOW_MODE,
         read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
       { icon: icon('paintbrush'), what: 'shadow colour', paint: true,
@@ -1158,6 +1164,9 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_center_glass_blur', icon: icon('droplet'), slide: true, by: 0.5,
         min: 0, max: 6, dflt: 0, what: 'glass blur',
         condition: (/** @type {any} */ cfg) => isPointerGlass(cfg.pointer_center_glass) },
+      { key: 'pointer_center_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05,
+        min: 1, max: MAX_IOR, dflt: 1, what: 'refraction',
+        condition: (/** @type {any} */ cfg) => pointerLensFraction(cfg.pointer_center_glass) > 0 },
     ],
   },
 });
@@ -1726,6 +1735,9 @@ const BAR_PARTS = Object.freeze({
                 { value: 'glass_liquid', label: 'Liquid glass', short: 'Liquid' },
                 { value: 'glass_liquid_heavy', label: 'Liquid glass, thick',
                   short: 'Liquid+' }] },
+      { key: 'indicator_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05,
+        min: 1, max: MAX_IOR, dflt: 1, what: 'refraction',
+        condition: (/** @type {any} */ cfg) => isLiquidEffect(cfg.indicator_glass_effect) },
     ],
   },
   ticks: {

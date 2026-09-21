@@ -610,3 +610,29 @@ Stacking the index on a blur is the exception to the pane's usual rule -
 opaque pane and the lens with it, so the two never run where neither shows;
 where they do both run, at the counts people build, neither is the
 bottleneck.
+
+### The same index on the smaller glass
+
+The index is offered on every part that already carries a displacement map,
+which is four: the glass pane, the needle, the centre point and the
+indicator pill. Each defaults to n = 1, the single pass, so nothing a saved
+card draws changes until somebody asks.
+
+What differs between them is not the filter - it is the same three passes -
+but what the part does per frame:
+
+- **The centre point** stands still. Three passes over a backdrop that does
+  not move are paid once, which is the same reason its blur is offered with
+  no gate and no warning.
+- **The needle** turns, so the passes are paid every frame it moves. Its
+  control says so; the guidance is to leave it at 1 on a card with many
+  gauges.
+- **The pill** is the expensive one, and it was measured before this existed:
+  64 pills animating at once held 119 fps on one pass and fell to 53 on
+  three, with 51 dropped frames. That measurement is why the pill's colour
+  fringe is *painted* by default - see `pill-glass.js` - and the index is the
+  way to ask for the real one anyway, on the few large pills where it reads.
+
+The pane's own numbers above do not carry over to the pill, and the
+difference is not a contradiction: a pane is sampled once per change, a pill
+is sampled every frame of an animation that never stops.

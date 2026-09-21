@@ -2,6 +2,8 @@ import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/co
 import { squareBarOnCanvas } from "./canvas-model.js";
 import { icon } from "./icons.js";
 import { gradientPresetPatch } from "./gradient-presets.js";
+import { isLiquidEffect } from "./pill-glass.js";
+import { MAX_IOR } from "./glass-lens.js";
 
 const SC = window.SupercardUtils;
 
@@ -223,6 +225,17 @@ const STYLE_FIELDS = [
     { value: 'glass_liquid', label: 'Liquid glass (refracts the bar)' },
     { value: 'glass_liquid_heavy', label: 'Liquid glass, thick (more refraction)' }
   ], condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value },
+  // Only the two liquid effects carry a displacement map; the rest are paint.
+  // The default of 1 is the rim alone, which is the pill every saved card has.
+  { id: 'indicator_glass_ior', label: 'Pill refractive index (n)', type: 'range', framedBy: 'pill',
+    min: 1, max: MAX_IOR, step: 0.05, placeholder: '1',
+    condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value
+                   && isLiquidEffect(cfg.indicator_glass_effect),
+    hint: 'How dense the pill\'s glass is. At 1 only its rim bends the bar behind '
+        + 'it. Higher and the whole pill refracts, and the bar splits into a warm '
+        + 'and a cold fringe at the edges. The costly one: measured on 64 pills '
+        + 'animating at once, the rim alone held 119 fps and the full index fell '
+        + 'to 53. Worth it on a few large pills, not on a wall of them.' },
   { id: 'indicator_value_color', label: 'Pill text colour',     type: 'color',  placeholder: '#ffffff', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value && cfg.indicator_value_adaptive_mode === 'none', framedBy: 'pill' },
   { id: 'indicator_value_font_size', label: 'Pill font size (CSS text)', type: 'text', placeholder: '10', condition: cfg => isLin(cfg) && cfg.show_indicator && cfg.indicator_value, framedBy: 'pill' },
 ];

@@ -1151,8 +1151,10 @@ class ScGauge extends LitElement {
 
         ${(ptrLens || hubLens) ? html`
         <svg style="position:absolute; width:0; height:0;" aria-hidden="true"><defs>
-          ${ptrLens ? lensFilterElement(PTR_LENS_ID, 'dome', ptrLens, '[data-sc-part="pointer"]', undefined, this) : ''}
-          ${hubLens ? lensFilterElement(HUB_LENS_ID, 'dome', hubLens, '[data-sc-part="pointer_center"]', undefined, this) : ''}
+          ${ptrLens ? lensFilterElement(PTR_LENS_ID, 'dome', ptrLens, '[data-sc-part="pointer"]', undefined, this,
+                        { ior: this._get('pointer_glass_ior', 1) }) : ''}
+          ${hubLens ? lensFilterElement(HUB_LENS_ID, 'dome', hubLens, '[data-sc-part="pointer_center"]', undefined, this,
+                        { ior: this._get('pointer_center_glass_ior', 1) }) : ''}
         </defs></svg>` : ''}
         
         <svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">
