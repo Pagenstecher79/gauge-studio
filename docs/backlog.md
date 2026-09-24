@@ -630,3 +630,24 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
     a tablet leaves tens of pixels, and the nudge spent them. What may not
     move is now the canvas window itself, so where the drawing fills the
     scroller nothing moves at all.
+- **54** - A glass edge should be able to be *chamfered* as well as rounded.
+  `bevelShift` in `glass-lens.js` is `u / sqrt(1 - u^2)`, the slope of a
+  quarter round, so the deflection grows all the way to the rim and the
+  backdrop is gathered ever harder towards it. That reads soft and thick -
+  a domed crystal, a drop of water - and it is right for what the `disc`
+  profile is after. A ground chamfer is the other thing a real edge does,
+  and on watch glasses it is the commoner of the two: a flat face at a
+  constant angle, so the deflection is *even* across the ring and breaks at
+  both ends of it. That reads cut and technical - a box crystal, a
+  chamfered bezel.
+
+  It is a second curve beside `bevelShift`, constant where that one climbs,
+  and nothing else: no new filter primitive, the same one 64x64 map, so no
+  frame cost. Whether it is a third profile or a "rounded to chamfered"
+  slider is open - a slider would have to interpolate between two curves
+  that do not meet at the rim, so the profile is probably the honest one.
+
+  Raised on 2026-09-22 by the user, who has seen plenty of watches with
+  chamfered crystals - after I had claimed in passing that a watch glass
+  does not have a ground edge, which was simply wrong. The rounding in the
+  code is not the error; the missing alternative is.
