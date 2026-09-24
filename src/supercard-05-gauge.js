@@ -1144,6 +1144,12 @@ class ScGauge extends LitElement {
           </defs>` : ''}
           <g data-sc-part="pointer" transform="translate(${pivot.toFixed(2)}, ${pivot.toFixed(2)})">${shape(pCol, is3d ? 'sc-3d-pointer-grad' : null)}</g>`, true)}`;
 
+    // `data-sc-face` names the square the viewBox lands in - the gauge's own
+    // drawing, and what every frame, chip and handle the canvas editor lays
+    // over the gauge is measured against. It has to be named rather than
+    // found by document order: a lens writes a zero-sized <svg> of filters
+    // above it, so the first <svg> in the shadow root is not always the face,
+    // and a rect of no width put every ring and the needle out of reach.
     return html`
       <div class="sc-gauge-wrap" @touchstart=${this._handleTouch} style="${wrapStyle}">
         ${waveStyleBlock}
@@ -1157,7 +1163,7 @@ class ScGauge extends LitElement {
                         { ior: this._get('pointer_center_glass_ior', 1) }) : ''}
         </defs></svg>` : ''}
         
-        <svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">
+        <svg data-sc-face viewBox="0 0 ${this.SIZE} ${this.SIZE}" style="width:100%;height:100%;overflow:visible;display:block;">
           ${bgNode}
 
           ${animType === 'ripple' ? [...Array(this._get('bg_threshold_anim_ripple_multi',false)?3:1)].map((_, i) => svg`

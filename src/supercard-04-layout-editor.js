@@ -1918,6 +1918,21 @@ function splitUnit(value, dflt) {
 const NO_PARTS = Object.freeze({});
 
 /**
+ * The square a gauge's drawing landed in, inside its shadow root.
+ *
+ * `data-sc-face`, not the first `<svg>` there: a pointer or a hub with a lens
+ * writes its filters into an `<svg>` of no width above the face, and both the
+ * frames and the geometry every drag is measured against read a rect off this
+ * one - so the first element took every ring and the needle out of reach the
+ * moment somebody gave the needle glass. No fallback to the first `<svg>`:
+ * that is the reading that was wrong, and a marker that ever went missing
+ * would go on being wrong quietly rather than showing no frames at all.
+ */
+function gaugeFace(gauge) {
+  return gauge?.shadowRoot?.querySelector('svg[data-sc-face]') || null;
+}
+
+/**
  * Measure a gauge's own parts, in per cent of the element's box.
  *
  * Measured rather than worked out: a gauge is letterboxed inside its element,
@@ -1934,7 +1949,7 @@ function measureGauge(box) {
   const gauge = box.querySelector('sc-gauge');
   // The gauge's own square, not the element's box: the viewBox letterboxes
   // inside it, so this is what an offset in viewBox units is a fraction of.
-  const svg = gauge?.shadowRoot?.querySelector('svg');
+  const svg = gaugeFace(gauge);
   const texts = gauge?.shadowRoot?.querySelectorAll('[data-sc-part]') || [];
   const needle = gauge?.shadowRoot?.querySelector('[data-sc-needle]');
   if (!svg) return null;
@@ -5522,7 +5537,7 @@ class ScCanvasEditor extends LitElement {
    */
   _ringGeometry(part) {
     const box = this.shadowRoot?.querySelector(`.el[data-item-id="${this._inner}"]`);
-    const svg = box?.querySelector('sc-gauge')?.shadowRoot?.querySelector('svg');
+    const svg = gaugeFace(box?.querySelector('sc-gauge'));
     const r = svg?.getBoundingClientRect();
     if (!r?.width) return null;
     const cfg = this._innerTarget?.cfg || {};
