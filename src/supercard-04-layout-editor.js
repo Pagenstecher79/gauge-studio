@@ -21,6 +21,7 @@ import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-t
 import { revealBy, scrollParent } from "./reveal-scroll.js";
 import { pinchStep } from "./pinch-gesture.js";
 import { icon, iconMask } from "./icons.js";
+import { cardLight, clampLightAngle, ARC_MIN, ARC_MAX, LIGHT_ANGLE, LIGHT_DISTANCE } from "./card-light.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
@@ -1918,6 +1919,21 @@ function splitUnit(value, dflt) {
 const NO_PARTS = Object.freeze({});
 
 /**
+ * The square a gauge's drawing landed in, inside its shadow root.
+ *
+ * `data-sc-face`, not the first `<svg>` there: a pointer or a hub with a lens
+ * writes its filters into an `<svg>` of no width above the face, and both the
+ * frames and the geometry every drag is measured against read a rect off this
+ * one - so the first element took every ring and the needle out of reach the
+ * moment somebody gave the needle glass. No fallback to the first `<svg>`:
+ * that is the reading that was wrong, and a marker that ever went missing
+ * would go on being wrong quietly rather than showing no frames at all.
+ */
+function gaugeFace(gauge) {
+  return gauge?.shadowRoot?.querySelector('svg[data-sc-face]') || null;
+}
+
+/**
  * Measure a gauge's own parts, in per cent of the element's box.
  *
  * Measured rather than worked out: a gauge is letterboxed inside its element,
@@ -1934,7 +1950,7 @@ function measureGauge(box) {
   const gauge = box.querySelector('sc-gauge');
   // The gauge's own square, not the element's box: the viewBox letterboxes
   // inside it, so this is what an offset in viewBox units is a fraction of.
-  const svg = gauge?.shadowRoot?.querySelector('svg');
+  const svg = gaugeFace(gauge);
   const texts = gauge?.shadowRoot?.querySelectorAll('[data-sc-part]') || [];
   const needle = gauge?.shadowRoot?.querySelector('[data-sc-needle]');
   if (!svg) return null;
@@ -3715,6 +3731,19 @@ class ScCanvasEditor extends LitElement {
    * because `this.slot` still holds the old config then - Home Assistant
    * hands the new one back asynchronously, a render later.
    */
+  /**
+   * Move the card's sun.
+   *
+   * Onto the slot rather than onto anything the canvas holds: the light is the
+   * card's, not any one element's, and the elements read it from there. One
+   * merge for both halves of it, because the pad hands over an angle and a
+   * distance together and two commits in a tick lose the first - `_commit`
+   * clones the config that Home Assistant is still writing back.
+   *
+   * @param {Record<string, number>} patch
+   */
+  _setLight(patch) { this._send('__merge__', patch); }
+
   _send(key, value, keys = HISTORY_KEYS) {
     if (!this.commitFn) return;
     // A write that touches nothing the snapshot holds cannot be undone by
@@ -5522,7 +5551,7 @@ class ScCanvasEditor extends LitElement {
    */
   _ringGeometry(part) {
     const box = this.shadowRoot?.querySelector(`.el[data-item-id="${this._inner}"]`);
-    const svg = box?.querySelector('sc-gauge')?.shadowRoot?.querySelector('svg');
+    const svg = gaugeFace(box?.querySelector('sc-gauge'));
     const r = svg?.getBoundingClientRect();
     if (!r?.width) return null;
     const cfg = this._innerTarget?.cfg || {};
@@ -7536,7 +7565,7 @@ class ScCanvasEditor extends LitElement {
                      && FROZEN_WHILE_HELD.has(this._innerSel || '');
       return html`<sc-gauge .config=${cfg} .hass=${this.hass} .frozen=${frozen}
                             data-sc-hl=${this._hlPart(el.id)}
-                            style=${this._hlStyle(el.id, cfg)}
+                            style=${this._hlStyle(el.id, cfg)} .rootConfig=${slot}
                             .globalEntities=${slot.global_entities} .onCanvas=${true}></sc-gauge>`;
     }
 
@@ -8178,6 +8207,17 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
+    // One sun for the whole card: every bevel on a glass pattern, every relief
+    // on a segmented ring and every shadow a needle stands off its dial in is
+    // lit from it. It used to be a pad on each of those, which is how a card
+    // came to read as several photographs rather than as one object.
+    const light = cardLight(this.slot);
+    const lightTip = 'Where the sun stands over the whole card - every glass bevel, every '
+      + 'lit ring and every needle\'s shadow follows it. Only the upper half of the pad: '
+      + 'below it the sun would be under the card, and a card lit from beneath reads as a '
+      + 'mistake. The canvas itself is the preview, so turn Live preview on to judge it.'
+      + (light.fromCard ? '' : ' Nothing has been set yet, so each pattern is still lit from '
+        + 'its own saved sun; moving this one takes them all over to it.');
     const hlTip = 'The part in hand blinks on the drawing itself and is lent a colour that stands out against what it is drawn on - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
     // The switch says what the card is set to; while an element is open the
     // preview is on over the top of it, and the tip is what says so - a
@@ -8208,6 +8248,23 @@ class ScCanvasEditor extends LitElement {
         <span class="settings-label">Live preview ${SC.tipDot(liveTip, { right: true })}</span>
         <ha-switch .checked=${this._live} .disabled=${liveHeld}
                    @change=${e => this._send('live_preview', e.target.checked ? undefined : false)}></ha-switch>
+        <span class="gap"></span>
+        <span class="settings-label">Light ${SC.tipDot(lightTip, { right: true })}</span>
+        <sc-shadow-pad compact .angle=${light.angle} .distance=${light.distance}
+                       .maxDistance=${5}
+                       @pad-change=${(/** @type {any} */ e) =>
+                         this._setLight({ light_angle: e.detail.angle,
+                                          light_distance: e.detail.distance })}></sc-shadow-pad>
+        <input class="num" type="number" min=${ARC_MIN} max=${ARC_MAX} step="1" .value=${light.angle}
+               @change=${(/** @type {any} */ e) => {
+                 const n = clampLightAngle(parseFloat(e.target.value));
+                 // lit writes `.value` only when the bound value changes, so an
+                 // angle that folds back onto the one already set would leave the
+                 // field showing what was typed instead of what was taken.
+                 e.target.value = String(n);
+                 this._setLight({ light_angle: n });
+               }}>
+        <span class="hint">°</span>
         <span class="gap"></span>
         <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
         <ha-switch .checked=${this._hl}

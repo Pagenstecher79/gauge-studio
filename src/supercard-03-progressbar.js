@@ -709,7 +709,7 @@ class ScProgressbar extends LitElement {
         const hLen = sw + '%'; 
 
         const reliefShadowCSS = reliefPat
-          ? reliefShadow(lightParams(reliefPat), reliefPat, v => (v === 0 ? '0px' : `${Math.round(v * 1000) / 1000}${u}`))
+          ? reliefShadow(lightParams(reliefPat, this.rootConfig), reliefPat, v => (v === 0 ? '0px' : `${Math.round(v * 1000) / 1000}${u}`))
           : 'none';
         
         const segs = [];
@@ -753,7 +753,7 @@ class ScProgressbar extends LitElement {
         // in too, so a depth means the same thing in both branches. A layer's
         // spread has no SVG counterpart and is dropped: it only fills the
         // floor of an engraved groove, which a stroke this thin has none of.
-        const rLayers = reliefPat ? reliefLayers(lightParams(reliefPat), reliefPat) : [];
+        const rLayers = reliefPat ? reliefLayers(lightParams(reliefPat, this.rootConfig), reliefPat) : [];
         const reliefId = 'relief-' + this._uniqueId;
         const circleFilter = [
           showGlow ? `url(#glow-${this._uniqueId})` : null,
