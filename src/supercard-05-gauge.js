@@ -8,6 +8,7 @@ import { isPointerGlass, pointerBlurPx, pointerLensFraction,
          pointerGlassStyle } from "./pointer-glass.js";
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { watchModalSuspend } from "./glass-suspend.js";
+import { cardLight } from "./card-light.js";
 
 // One id each, not one per instance: a filter is looked up inside the
 // shadow root that holds it, and every gauge has its own.
@@ -55,6 +56,12 @@ class ScGauge extends LitElement {
       hass: { type: Object },
       config: { type: Object },
       globalEntities: { type: Array },
+      // The card's own config, for the few things that are the card's and not
+      // this gauge's - where the sun stands is the one so far. A gauge used to
+      // carry its own light, which is how a card with four of them had four
+      // suns; see `card-light.js`. The same property `sc-progressbar` takes,
+      // and the same object.
+      rootConfig: { type: Object },
       // Set by the card when it renders from a canvas, where the element's
       // box is the gauge's size and the gauge's own pixel figure is not.
       onCanvas: { type: Boolean },
@@ -1018,7 +1025,11 @@ class ScGauge extends LitElement {
       // editor writes `pointer_shadow_distance` now; the old key is still read
       // so a config written before the rename keeps its shadow.
       const sDist = safeFloat(this._get('pointer_shadow_distance', this._get('pointer_shadow_offset_y', 0.5)), 0.5);
-      const sAngle = safeFloat(this._get('pointer_shadow_angle', 90), 90); 
+      // The card's sun if it has one, this gauge's own saved angle if not -
+      // so a card drawn before the light was one value keeps its shadows
+      // exactly where they were until somebody moves the sun.
+      const sAngle = cardLight(this.rootConfig,
+                               { angle: this._get('pointer_shadow_angle', undefined) }).angle;
       const sRad = sAngle * Math.PI / 180;
       // 'adaptive' cannot mean here what it means everywhere else in this file.
       // The theme's text color is near-white on a dark card, and the shadow is
@@ -1286,7 +1297,7 @@ Object.assign(window.SupercardModules['gauge'], (() => {
       // canvas has no box for is never moved into the renderer, so it would
       // draw in the card's own flow at its natural size.
       litOverlay: html`${gauges.map((cfg, idx) => SC.showsElement(config, `gauge_${idx}`) ? html`
-        <sc-gauge data-idx="${idx}" .config=${cfg} .hass=${hass} .globalEntities=${config.global_entities} .onCanvas=${!!config.canvas}></sc-gauge>
+        <sc-gauge data-idx="${idx}" .config=${cfg} .hass=${hass} .rootConfig=${config} .globalEntities=${config.global_entities} .onCanvas=${!!config.canvas}></sc-gauge>
       ` : '')}`
     };
   }

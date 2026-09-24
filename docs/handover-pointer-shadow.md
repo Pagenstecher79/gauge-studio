@@ -1,7 +1,7 @@
 # Handover: the pointer shadow redesign
 
-Branch `feat/47-spherical-refraction`, pushed at `e272929`, PR #93 open.
-`Checks` green. Step 1 of four is done; steps 2-4 are below.
+Steps 1 and 2 of four are done and on `main`'s line of development; steps 3
+and 4 are below. **Step 3, the renderer and the editor, is next.**
 
 ## What was decided
 
@@ -32,18 +32,43 @@ the envelope (offset never over one needle width, opacity never over
 `DARKEST`), monotonicity in both inputs, the backdrop trade, width scaling,
 and the adversarial values. Nothing draws from it yet.
 
-## Step 2 - card light
+## Step 2 - card light - done
 
-- One light value on the slot, set through the existing `<sc-shadow-pad>`,
-  which moves from per-pattern to the card.
-- A *Light* entry in the `canvas-settings` row, `supercard-04-layout-editor.js`
-  around line 8193 (beside Grid/snap, Live preview, Highlight) - **not** a
-  third canvas button, and **not** in the fx-glass menu. The user excluded the
-  fx-glass placement explicitly.
-- Both readers fall back to their old per-object key while the card has no
-  light: `src/glass-light.js:46-47` (`shadow_angle`, `shadow_distance`) and
-  `src/supercard-05-gauge.js:1021` (`pointer_shadow_angle`).
-- The fx-glass pad call site is `src/supercard-07-fx-glass-editor.js:354-371`.
+`src/card-light.js`, pure, 16 tests. `light_angle` and `light_distance` on the
+slot; `cardLight(slot, fallback)` is the only reader, and `fallback` is the
+per-object pair it answers with while the card has no light of its own - so a
+card saved before this keeps every shadow exactly where it was until somebody
+moves the sun. A card's own angle is folded onto the arc, a fallback is not:
+that value was set under the old rule, and turning somebody's shadow round on
+the way past is not a migration anybody asked for.
+
+The arc is the upper half, `ARC_MIN` 0 to `ARC_MAX` 180 in shadow angles, and
+it needed no bench page - past either end the sun is under the card. The pad
+draws the other half as ground and `clampLightAngle` folds to the *nearer*
+end, so a finger carried past the edge slides the sun along the horizon
+instead of throwing it across the sky.
+
+- The *Light* entry is in the `canvas-settings` row beside Grid/snap, Live
+  preview and Highlight: `<sc-shadow-pad compact>` - 34 px, no sample, no
+  preview switch - and a number field for the angle. The canvas under it is
+  the preview, which is why the sample went: it is drawn at the size things
+  really are, and a thumbnail is not.
+- `lightParams(pat, slot)` in `glass-light.js` is the glass reader. Callers:
+  `supercard-07-fx-glass.js` (`config` is the slot), `supercard-03-progressbar.js`
+  twice (`this.rootConfig`), and the pad's own preview, which passes no slot
+  because its live angle is ahead of any commit.
+- `sc-gauge` now takes `rootConfig`, the same property and the same object
+  `sc-progressbar` takes. Passed at both real call sites; the template
+  thumbnail passes none and gets the default sun, which is right for a
+  preview that is on no card.
+- The per-pattern pad is **gone**, replaced by `sunLine` in
+  `supercard-07-fx-glass-editor.js` - a line that names where the light is set
+  and says which sun this pattern is drawing by. Two controls for one value is
+  the thing this step exists to end.
+
+`ScShadowPad` stayed in the fx-glass editor and is rendered from the canvas
+editor, the way `<sc-gradient-stops>` is rendered from four editors. It gained
+`compact` (reflected) and the arc.
 
 ## Step 3 - renderer and editor
 
@@ -84,8 +109,8 @@ chosen* describes the method and why it is worth repeating.
   runs 22% -> 17% visible with the penumbra growing 4.9 px -> 6.8 px on a
   17 px needle.
 
-Nothing here is open any more, and nothing draws from it yet. **Step 2, the
-card light, is next.**
+Nothing here is open any more. `needleLift` still draws nothing - step 3 is
+where it is wired up.
 
 One thing to watch rather than to decide now: over its travel the diffusion
 slider moves the visible core by five points and the penumbra by 39%. That is
@@ -99,4 +124,7 @@ the range, which is what made it unusable in the first place.
 - `docker/config/packages/demo_instruments.yaml` still pins
   `sensor.demo_carbon_dioxide` to `"700"`. The original expression is backed up
   in the session scratchpad; decide whether to restore it.
-- PR #93 awaits a merge decision. HACS Validation is red for the known reason.
+- HACS Validation is red for the known reason, until `v2.5.0`.
+- `stripDeadConfig` still leaves `shadow_angle` and `shadow_distance` on every
+  pattern. They are read as the fallback, so they cannot be cleared until the
+  card carries a light - which is step 4's problem, not a loose end here.

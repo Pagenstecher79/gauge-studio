@@ -243,7 +243,7 @@ function update({ hass, config }) {
       // --- 4. Physical light calculation & refraction fake (entirely without the border bug!) ---
       // The same numbers the editor's light-source pad draws its preview
       // with - see glass-light.js.
-      const light = lightParams(pat);
+      const light = lightParams(pat, config);
       const bWidth = light.bevelWidth;
       const mainShadow = bevelShadow(light, u);
 

@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { DEAD_PATTERN_TARGETS } from "./config-cleanup.js";
 import { lightParams, bevelShadow, px, isRoundTarget, isReliefTarget, boxRingMask, isCircleRadius } from "./glass-light.js";
+import { clampLightAngle, hasCardLight, LIGHT_ANGLE, LIGHT_DISTANCE } from "./card-light.js";
 import { lensScaleFraction, lensFilterMarkup, applyLensGeometry, MAX_IOR } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { icon } from "./icons.js";
@@ -20,7 +21,13 @@ class ScShadowPad extends LitElement {
       // thickness, style and brightness are read, and the angle and distance
       // are the pad's own, which are ahead of the pattern while dragging.
       pattern: { type: Object },
-      preview: { type: Boolean }
+      preview: { type: Boolean },
+      // Small enough to stand in a row of settings, with neither the sample
+      // nor the switch that hides it. Nothing is lost by that: the card's own
+      // light is set there, and the card itself is under it - every gauge and
+      // every pattern on the canvas is the preview, at the size they are
+      // really drawn at, which a sample the width of a thumbnail is not.
+      compact: { type: Boolean, reflect: true }
     };
   }
 
@@ -34,12 +41,22 @@ class ScShadowPad extends LitElement {
     // problem the preview exists to solve - but off is a click away, since a
     // lit sample under the sun is also one more thing moving while dragging.
     this.preview = true;
+    this.compact = false;
     this._isDragging = false;
   }
 
   static get styles() {
     return css`
       :host { display: block; width: 100%; max-width: 120px; margin: 0 auto; touch-action: none; }
+      :host([compact]) { max-width: 34px; margin: 0; }
+      /* The half of the sky the sun cannot reach, drawn rather than merely
+         refused: a pad that quietly ignores half of itself reads as broken,
+         and one that shows where the ground is reads as a horizon. */
+      .horizon { position: absolute; left: 0; right: 0; top: 50%; bottom: 0;
+        background: rgba(0,0,0,0.3); pointer-events: none; z-index: 0; }
+      :host([compact]) .pad-container { border-width: 1px; }
+      :host([compact]) .thumb { width: 11px; height: 11px; }
+      :host([compact]) .sun-icon { font-size: 7px; }
       .pad-container {
         position: relative; width: 100%; aspect-ratio: 1 / 1;
         background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.2) 100%);
@@ -113,6 +130,12 @@ class ScShadowPad extends LitElement {
 
     if (distance < (this.maxDistance * 0.05)) { distance = 0; shadowAngle = this.angle; }
 
+    // The sun stops at the horizon rather than setting behind it, and it stops
+    // at the end it is nearer to - so a finger carried on past the edge slides
+    // it along the horizon and leaves it there, instead of throwing it across
+    // the sky. See `clampLightAngle`.
+    shadowAngle = clampLightAngle(shadowAngle);
+
     this.angle = Math.round(shadowAngle);
     this.distance = parseFloat(distance.toFixed(2));
     this.dispatchEvent(new CustomEvent('pad-change', { detail: { angle: this.angle, distance: this.distance }, bubbles: true, composed: true }));
@@ -130,16 +153,18 @@ class ScShadowPad extends LitElement {
                                 shadow_angle: this.angle, shadow_distance: this.distance });
     return html`
       <div class="pad-container" @pointerdown=${this._handlePointerDown} @pointermove=${this._handlePointerMove} @pointerup=${this._handlePointerUp} @pointercancel=${this._handlePointerUp}>
-        ${this.preview ? html`
+        <div class="horizon"></div>
+        ${this.preview && !this.compact ? html`
           <div class="sample ${isRoundTarget(this.pattern?.target) ? 'round' : ''}"
                style="box-shadow: ${bevelShadow(light, px)};"></div>` : ''}
         <div class="thumb" style="left: ${tx}%; top: ${ty}%;"><div class="sun-icon">${icon('sun')}</div></div>
       </div>
+      ${this.compact ? '' : html`
       <label class="preview-toggle" title="A sample lit from where the sun is. Turn it off for a plain pad.">
         <input type="checkbox" .checked=${this.preview}
                @change=${e => { this.preview = e.target.checked; }}>
         Light preview
-      </label>
+      </label>`}
     `;
   }
 }
@@ -299,7 +324,7 @@ function glassFields() {
         { value: 'liquid', label: 'Liquid (physical refraction)', selected: pat.shadow_style === 'liquid' },
       ] },
 
-      { type: 'custom', condition: pat => pat.shadow_style !== 'none', render: ctx => sunPad(ctx) },
+      { type: 'custom', condition: pat => pat.shadow_style !== 'none', render: ctx => sunLine(ctx) },
       { id: 'bevel_width', label: 'Bevel width (px)', type: 'range', min: 0, max: 30, step: 0.1,
         hint: 'Extent of the edge inward', condition: pat => pat.shadow_style !== 'none',
         value: pat => pat.bevel_width ?? pat.bevel_size ?? 2 },
@@ -315,9 +340,9 @@ function glassFields() {
       { id: 'segment_relief', label: 'Light the ring too', type: 'checkbox',
         hint: 'Gives the ring an edge of its own, lit from the same sun as the glass - each pill on a segmented bar, the stroke on a continuous one.' },
       // The sun belongs to the bevel, but the relief borrows it: both are lit
-      // from the same direction, so the pad is shown in whichever section is
-      // currently the one that uses it.
-      { type: 'custom', render: ctx => sunPad(ctx),
+      // from the same direction, so the line that says where it is stands in
+      // whichever section is currently the one that uses it.
+      { type: 'custom', render: ctx => sunLine(ctx),
         condition: pat => pat.segment_relief && pat.shadow_style === 'none' },
       { id: 'segment_relief_mode', label: 'Relief', type: 'select',
         condition: pat => !!pat.segment_relief,
@@ -351,22 +376,34 @@ function paddingRow(ctx) {
     </div>`;
 }
 
-/** The direction the light falls from, as a pad with a lit sample in it. */
-function sunPad(ctx) {
+/**
+ * Where the sun is, said rather than set.
+ *
+ * The pad used to stand here, one per pattern, which is how a card came to
+ * hold six suns that nothing kept in step. There is one now, on the canvas,
+ * and a second control for it here would put the divergence straight back -
+ * so this names the one place it is set and says which light this pattern is
+ * drawing by at the moment.
+ *
+ * Which is not always the card's: a pattern saved before the card had a light
+ * keeps the one it was drawn under until somebody moves the card's, and that
+ * is worth saying plainly, because the numbers it is being lit by are then
+ * still its own and are nowhere on the screen.
+ */
+function sunLine(ctx) {
   const pat = ctx.entry;
+  const onCard = hasCardLight(ctx.slot);
   return html`
-    <div style="background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; border: 1px dashed var(--divider-color, #444); display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 8px 0;">
-      <label style="align-self: flex-start; margin-bottom: -4px;">Light source (sun)</label>
-      <sc-shadow-pad
-        .angle=${pat.shadow_angle ?? 90}
-        .distance=${pat.shadow_distance ?? 1}
-        .maxDistance=${5}
-        .pattern=${pat}
-        @pad-change=${e => ctx.setMany({ shadow_angle: e.detail.angle, shadow_distance: e.detail.distance })}
-      ></sc-shadow-pad>
-      <div style="display: flex; gap: 16px; font-size: 11px; color: var(--secondary-text-color);">
-        <span>Angle: <b style="color:var(--primary-color)">${pat.shadow_angle ?? 90}°</b></span>
-        <span>Distance offset: <b style="color:var(--primary-color)">${pat.shadow_distance ?? 1}x</b></span>
+    <div class="row" style="align-items: flex-start;">
+      <label>Light source (sun)</label>
+      <div style="width:60%; font-size:11px; color: var(--secondary-text-color); line-height:1.45;">
+        ${onCard
+          ? html`From the card's own sun, set under <b>Light</b> in the canvas settings -
+                 one light for every gauge and every pattern on the card.`
+          : html`Still lit from this pattern's own sun,
+                 <b>${pat.shadow_angle ?? LIGHT_ANGLE}°</b> at
+                 <b>${pat.shadow_distance ?? LIGHT_DISTANCE}x</b>. Moving the card's light -
+                 <b>Light</b> in the canvas settings - takes every pattern over to it.`}
       </div>
     </div>`;
 }

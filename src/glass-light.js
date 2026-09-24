@@ -1,3 +1,5 @@
+import { cardLight } from "./card-light.js";
+
 /**
  * The light that falls on a glass pattern, as numbers.
  *
@@ -33,18 +35,26 @@ export const px = (value) => (value === 0 ? '0px' : `${value}px`);
  * moving the sun further out has to mean more offset on a thick edge than on
  * a thin one, or the same angle reads differently on every pattern.
  *
+ * Where the sun is comes from the card and not from the pattern, because one
+ * card is one scene: `cardLight` is that value, and the pattern's own
+ * `shadow_angle` and `shadow_distance` are what it falls back to while the
+ * card has no light of its own. Everything else here is the pattern's, and
+ * stays the pattern's - how thick its glass is and how bright its edge reads
+ * are about the glass, not about the sun.
+ *
  * `bevel_size` is the name `bevel_width` used to have, and saved cards still
  * carry it.
  *
  * @param {any} pat a glass pattern
+ * @param {any} [slot] the card's own config, which is where the light lives
  */
-export function lightParams(pat) {
+export function lightParams(pat, slot) {
   const style = pat?.shadow_style || 'frosted';
   const bevelWidth = pat?.bevel_width ?? pat?.bevel_size ?? 2;
   const glassThickness = pat?.glass_thickness ?? 5;
   const brightness = pat?.light_brightness ?? 0.4;
-  const angle = pat?.shadow_angle ?? 90;
-  const distance = pat?.shadow_distance ?? 1;
+  const { angle, distance } = cardLight(slot, { angle: pat?.shadow_angle,
+                                                distance: pat?.shadow_distance });
 
   const rad = angle * Math.PI / 180;
   const shadowX = distance * Math.cos(rad);

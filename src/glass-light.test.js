@@ -53,6 +53,41 @@ const STYLES = ['none', 'frosted', 'liquid', undefined];
 const NUMBERS = [0, 0.1, 1, 2, 5.5, 30];
 const ANGLES = [0, 45, 90, 179, 180, 271, 360];
 
+describe('lightParams and the card\'s light', () => {
+  const pat = { shadow_angle: 200, shadow_distance: 3, bevel_width: 4, glass_thickness: 8 };
+
+  it('draws by the pattern\'s own sun while the card has none', () => {
+    const l = lightParams(pat, {});
+    expect(l.angle).toBe(200);
+    expect(l.distance).toBe(3);
+  });
+
+  it('takes the card\'s sun over the pattern\'s', () => {
+    const l = lightParams(pat, { light_angle: 30, light_distance: 1.5 });
+    expect(l.angle).toBe(30);
+    expect(l.distance).toBe(1.5);
+  });
+
+  it('leaves everything about the glass itself with the pattern', () => {
+    const l = lightParams(pat, { light_angle: 30 });
+    expect(l.bevelWidth).toBe(4);
+    expect(l.glassThickness).toBe(8);
+  });
+
+  it('is what it always was when nobody passes a card', () => {
+    expect(lightParams(pat).angle).toBe(200);
+    expect(lightParams({}).angle).toBe(90);
+    expect(lightParams({}).distance).toBe(1);
+  });
+
+  it('turns the shadow round with the card\'s sun, both components', () => {
+    const l = lightParams({}, { light_angle: 0, light_distance: 2 });
+    expect(l.shadowX).toBeCloseTo(2);
+    expect(l.shadowY).toBeCloseTo(0);
+    expect(l.lightX).toBeCloseTo(-2);
+  });
+});
+
 describe('bevelShadow', () => {
   it('says exactly what the card said before the formula moved out of it', () => {
     for (const shadow_style of STYLES) {
