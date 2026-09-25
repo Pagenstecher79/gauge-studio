@@ -172,7 +172,7 @@ template:
         unit_of_measurement: "ppm"
         device_class: carbon_dioxide
         state_class: measurement
-        state: "700"
+        state: "{{ [(700 + 600 * sin(now().timestamp() / 164) + 40 * sin(now().timestamp() / 181 + 0.23)) | round(0), 0] | max }}"
       - name: Demo particulate matter 2.5
         unique_id: demo_pm25
         unit_of_measurement: "µg/m³"
