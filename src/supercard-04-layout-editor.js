@@ -3094,12 +3094,22 @@ class ScCanvasEditor extends LitElement {
       /* The middle axis: a hairline, because it is a guide and not a mark on
          the card - and dashed, so it is not read as something the gauge
          draws. Under the frames and past every press: it is there to be
-         aimed at, never to be taken hold of. */
+         aimed at, never to be taken hold of.
+         Red, and not the amber it was: a guide has to be a colour the card
+         itself will not be wearing, and amber at half opacity over a lit dial
+         is a hairline among that dial's own warm colours - it was there and
+         went unseen. Red is the one hue the editor keeps for itself. The dark
+         outline beside it is what carries it across a light dial, where a thin
+         red line on white would go just as quiet. */
       .axis-line { position: absolute; width: 0; z-index: 4; pointer-events: none;
-        border-left: 1px dashed rgba(242,181,68,0.55); }
+        border-left: 1px dashed rgba(244,67,54,0.85);
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
+      /* Something is sitting on it, which is the whole of the feedback the
+         pull needs. Solid and whole: the dashes are what say "aim here", and
+         a line that has been landed on is no longer being aimed at. */
       .axis-line.on { border-left-style: solid;
-        border-left-color: var(--sc-part-sel);
-        box-shadow: 0 0 0 1px rgba(242,181,68,0.25); }
+        border-left-color: rgb(244,67,54);
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 6px 1px rgba(244,67,54,0.55); }
       .inner-frame { position: absolute; outline: 1px dashed var(--sc-part);
         outline-offset: 3px; box-shadow: 0 0 0 4px rgba(0,0,0,0.55);
         background: rgba(3,169,244,0.14); cursor: move;
