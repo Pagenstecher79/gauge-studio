@@ -72,8 +72,8 @@ editor, the way `<sc-gradient-stops>` is rendered from four editors. It gained
 
 ## Step 3 - renderer and editor - done 2026-09-25
 
-The gauge now draws the three layers `needleLift` describes. Two keys,
-`pointer_lift` and `pointer_lift_diffusion`, both 0..1.
+The gauge now draws the three layers `needleLift` describes. One key,
+`pointer_lift`, 0..1.
 
 - `liftFromLegacy({ distance, width })` in `src/pointer-shadow.js` inverts
   `dist = height * width * DROP_PER_WIDTH`. Only the distance is carried:
@@ -88,11 +88,8 @@ The gauge now draws the three layers `needleLift` describes. Two keys,
   `currentColor` and the group carries the colour, so one silhouette serves
   all three. `backdrop` is `markBackdrop(inkArgs)`, the same argument object
   the dial's `adaptiveInk` is built from.
-- The six form fields and the six canvas chips are two each. `hasShadow`
-  became `hasLift`, which reads `pointer_lift` and falls back to
-  `pointer_shadow_type` for a card that has not been edited since. Both halves
-  carry their own copy - a renderer may not read an editor helper, and a form
-  may not read the canvas editor's.
+- The six form fields and the six canvas chips are one each. `hasShadow` is
+  gone with them.
 - `SHADOW_MODE` is gone; height 0 is no shadow.
 - `element-templates.js` is on the new keys. Both templates that set a
   distance translate to a lift of 1: the shadow they asked for was thrown
@@ -101,10 +98,11 @@ The gauge now draws the three layers `needleLift` describes. Two keys,
   `pointer_shadow_angle: 40` stays in the default as the per-gauge fallback
   for a card with no light of its own.
 
-Open, for the user to answer at the dial rather than here: whether the
-softness slider earns its place. It is per gauge, while the sun that sets it
-is per card, and over its travel it moves the visible core by about five
-points. If it reads as doing nothing, the honest answer is one slider.
+Answered at the dial, 2026-09-25: the softness slider does not earn a row.
+Over its whole travel it moved the visible core by about five points, and it
+was per gauge while the sun that sets it is per card. `needleLift` still takes
+a diffusion - the arithmetic is right and the bench page rests on it - and the
+renderer passes none.
 
 ## Step 4 - cleanup
 

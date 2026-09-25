@@ -1012,12 +1012,14 @@ class ScGauge extends LitElement {
     const rTip  = radius-(safeFloat(this._get('pointer_offset',2),2)*scale), xBase=rTip-pLlen;
     const pCol  = resolveColor(this._get('pointer_color_type','fixed'), this._get('pointer_color', [255,255,255]), inkAt(rTip));
     
-    // How high the needle floats above the dial, and how soft the light is.
-    // One light at one height decides the cast shadow, the contact shadow and
-    // the lit edge together - see `pointer-shadow.js`. Six keys used to set
-    // those three independently, which is how a shadow ended up at a distance
-    // no light could have thrown it; they are still read, so a card written
+    // How high the needle floats above the dial, and nothing else. One light
+    // at one height decides the cast shadow, the contact shadow and the lit
+    // edge together - see `pointer-shadow.js`. Six keys used to set those
+    // three independently, which is how a shadow ended up at a distance no
+    // light could have thrown it; they are still read, so a card written
     // under them keeps the offset somebody actually chose.
+    // `needleLift` also takes a diffusion, and this passes none: judged at the
+    // dial, a slider for it moved the shadow too little to be worth a row.
     const pShadowType = this._get('pointer_shadow_type', 'none');
     const pLift = this._get('pointer_lift', undefined);
     const legacyLift = pShadowType === 'none' ? 0 : liftFromLegacy({
@@ -1030,15 +1032,13 @@ class ScGauge extends LitElement {
     const liftH = pLift === undefined || pLift === null || pLift === ''
       ? legacyLift
       : safeFloat(pLift, 0);
-    const liftD = safeFloat(this._get('pointer_lift_diffusion',
-                                      safeFloat(this._get('pointer_shadow_blur', 0.8), 0.8)), 0);
     // The card's sun if it has one, this gauge's own saved angle if not - so a
     // card drawn before the light was one value keeps its shadows exactly
     // where they were until somebody moves the sun.
     const liftAngle = cardLight(this.rootConfig,
                                 { angle: this._get('pointer_shadow_angle', undefined) }).angle;
     const cast = liftH > 0
-      ? needleLift({ height: liftH, diffusion: liftD, width: pW, angle: liftAngle,
+      ? needleLift({ height: liftH, width: pW, angle: liftAngle,
                      backdrop: markBackdrop(inkArgs) })
       : null;
     const scaleKey = `${data.unitPrefix}_${data.resultTier}_${data.max}`;

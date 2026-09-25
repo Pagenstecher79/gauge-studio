@@ -21,7 +21,7 @@ import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-t
 import { revealBy, scrollParent } from "./reveal-scroll.js";
 import { pinchStep } from "./pinch-gesture.js";
 import { icon, iconMask } from "./icons.js";
-import { MAX_HEIGHT as MAX_LIFT, MAX_DIFFUSION as MAX_LIFT_DIFFUSION } from "./pointer-shadow.js";
+import { MAX_HEIGHT as MAX_LIFT } from "./pointer-shadow.js";
 import { cardLight, clampLightAngle, ARC_MIN, ARC_MAX, LIGHT_ANGLE, LIGHT_DISTANCE } from "./card-light.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
@@ -497,21 +497,6 @@ const POINTER_SHAPE = Object.freeze([
   { value: 'needle', label: 'Needle' },
   { value: 'triangle', label: 'Triangle' },
 ]);
-
-/**
- * Whether the needle is off the dial at all, for the softness row under it.
- *
- * A needle lying on its face casts nothing to soften. The old six-key shadow
- * is read the same way it is drawn: no `pointer_lift` of its own means the
- * card is still on its saved distance, and a saved distance means a lift.
- */
-const hasLift = (/** @type {any} */ cfg) => {
-  const lift = cfg.pointer_lift;
-  if (lift === undefined || lift === null || lift === '') {
-    return (cfg.pointer_shadow_type || 'none') !== 'none';
-  }
-  return Number(lift) > 0;
-};
 
 /**
  * How a ring is coloured, and what each answer then asks for.
@@ -1128,13 +1113,11 @@ const GAUGE_RINGS = Object.freeze({
         dflt: 1, what: 'refraction',
         condition: (/** @type {any} */ cfg) => pointerLensFraction(cfg.pointer_glass) > 0 },
       // One light at one height draws the cast shadow, the contact shadow and
-      // the lit edge together, so there is one row for the height and one for
-      // how hard the light is. Colour, blur, distance and opacity were four
-      // ways of contradicting each other and are gone.
+      // the lit edge together, so one row is the whole of it. Type, colour,
+      // blur, distance, angle and opacity were six ways of contradicting each
+      // other and are gone.
       { key: 'pointer_lift', icon: icon('moon'), slide: true, by: 0.05, min: 0, max: MAX_LIFT,
         dflt: 0, what: 'lift off the dial' },
-      { key: 'pointer_lift_diffusion', icon: icon('droplet'), slide: true, by: 0.05, min: 0,
-        max: MAX_LIFT_DIFFUSION, dflt: 0, what: 'light softness', condition: hasLift },
     ],
   },
   pointer_center: {

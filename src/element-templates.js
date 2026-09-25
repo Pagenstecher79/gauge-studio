@@ -80,7 +80,6 @@ export const GAUGE_FACE = Object.freeze({
   // was thrown further than any light at this needle's width could throw one -
   // `liftFromLegacy` reads it as 1 and stops there.
   pointer_lift: 1,
-  pointer_lift_diffusion: 0.3,
   // Off the vertical, because a shadow straight down reads as a printing
   // mistake rather than as a light source. Only a fallback: a card with a
   // light of its own overrules it, and every gauge on that card is lit alike.
@@ -165,7 +164,6 @@ const ANALOG_NEEDLE = Object.freeze({
   pointer_type: 'needle',
   pointer_width: 0.5,
   pointer_center_radius: 2.5,
-  pointer_lift_diffusion: 0.2,
   // The one colour in the templates that is not the theme's. A hub this size
   // in `--primary-text-color` is a blob the eye goes to before the needle -
   // and the hub is not the reading. Mid-grey is the machined-metal cap of the
@@ -195,7 +193,6 @@ const RIM_MARKER = Object.freeze({
   pointer_width: 2.6,
   pointer_center_radius: 0,
   pointer_lift: 1,
-  pointer_lift_diffusion: 0.25,
 });
 
 /**

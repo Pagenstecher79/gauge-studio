@@ -5,22 +5,8 @@ import { gradientPresetPatch } from "./gradient-presets.js";
 import { icon } from "./icons.js";
 import { isPointerGlass, pointerBlurPx, pointerLensFraction } from "./pointer-glass.js";
 import { MAX_IOR } from "./glass-lens.js";
-import { MAX_HEIGHT as MAX_LIFT, MAX_DIFFUSION as MAX_LIFT_DIFFUSION } from "./pointer-shadow.js";
+import { MAX_HEIGHT as MAX_LIFT } from "./pointer-shadow.js";
 
-/**
- * Whether the needle is off the dial at all, for the softness row under it.
- *
- * The canvas editor asks the same question of its own chips and answers it
- * for itself: a form and the drawing are two halves that may not read each
- * other's helpers.
- */
-const hasLift = (/** @type {any} */ cfg) => {
-  const lift = cfg.pointer_lift;
-  if (lift === undefined || lift === null || lift === '') {
-    return (cfg.pointer_shadow_type || 'none') !== 'none';
-  }
-  return Number(lift) > 0;
-};
 import { ListReorder } from "./list-reorder.js";
 
 const SC = window.SupercardUtils;
@@ -305,16 +291,13 @@ const STYLE_FIELDS = [
   // the needle where it nearly touches, and lights the edge turned towards it
   // - three drawings that used to be set by six keys that could contradict
   // each other. The arithmetic is `pointer-shadow.js`; the sun itself belongs
-  // to the card, under Light in the canvas settings.
+  // to the card, under Light in the canvas settings. How soft that light is
+  // was a second row here for one afternoon and is not any more - judged at
+  // the dial, it moved the shadow too little to be worth reading.
   { id: 'pointer_lift', framedBy: 'pointer', label: 'Pointer lift off the dial',
     type: 'range', min: 0, max: MAX_LIFT, step: 0.05, placeholder: '0',
     hint: 'How far the needle floats above the face. At 0 it lies on the dial '
         + 'and casts nothing.' },
-  { id: 'pointer_lift_diffusion', framedBy: 'pointer', label: 'Light softness',
-    type: 'range', min: 0, max: MAX_LIFT_DIFFUSION, step: 0.05, placeholder: '0',
-    condition: cfg => hasLift(cfg),
-    hint: 'A hard light draws a sharp shadow close under the needle; a soft one '
-        + 'spreads it and lifts it away.' },
   { id: 'animation_duration',     label: 'Animation duration (s)',       type: 'range',    min: 0, max: 10, step: 0.1, placeholder: '0.8', condition: cfg => cfg.animation_easing !== 'spring' },
   { id: 'animation_spring_duration', label: 'Spring animation duration (s)', type: 'range', min: 0.1, max: 10, step: 0.1, placeholder: '1.5', condition: cfg => cfg.animation_easing === 'spring' },
   { id: 'animation_dynamic_speed',label: 'Dynamic pointer acceleration', type: 'checkbox' },
