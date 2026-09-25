@@ -5,7 +5,7 @@ import { gaugeScale, NO_TIER_STATE, tickMultiplier, multiplierParts } from "./ga
 import { ringRadius, ringPartRadius, gaugeOuter, frameBand, gaugeScaleOf } from "./gauge-inner-boxes.js";
 import { adaptiveInk, markBackdrop } from "./adaptive-ink.js";
 import { isPointerGlass, pointerBlurPx, pointerLensFraction,
-         pointerGlassStyle } from "./pointer-glass.js";
+         pointerGlassBox } from "./pointer-glass.js";
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { watchModalSuspend } from "./glass-suspend.js";
 import { cardLight } from "./card-light.js";
@@ -1069,6 +1069,13 @@ class ScGauge extends LitElement {
         ${overlay}
       </div>`;
 
+    // One box or two, as `pointerGlassBox` asks. The part is named on the
+    // outer one either way: that is the box with the geometry, and it is what
+    // the canvas editor frames and hit-tests.
+    const glassBox = ({ outer, inner }, part) => html`
+      <div data-sc-part="${part}" style="${outer}">${
+        inner ? html`<div style="${inner}"></div>` : ''}</div>`;
+
     // Glass, and what each half of it costs. The lens is withheld from a
     // needle too thin to show a bend and the blur is withheld at zero -
     // `blur(0px)` is not a no-op, it makes the part a backdrop root and pays
@@ -1119,25 +1126,25 @@ class ScGauge extends LitElement {
     const pointerLayers = html`
       ${cast ? castsOf(svg`<circle cx="0" cy="0" r="${dotR}" fill="currentColor"/>${is3d ? '' : shape('currentColor', null)}`) : ''}
       ${isPointerGlass(hubGlass)
-        ? layer(pivot, pivot, false, '', false, html`<div data-sc-part="pointer_center" style="${
-            pointerGlassStyle({ effect: hubGlass, color: hubCol, shape: 'circle', size: this.SIZE,
-                                x: pivot - dotR, y: pivot - dotR, w: dotR * 2, h: dotR * 2,
-                                filterId: hubLens ? HUB_LENS_ID : '', blurPx: hubBlur })}"></div>`)
+        ? layer(pivot, pivot, false, '', false, glassBox(
+            pointerGlassBox({ effect: hubGlass, color: hubCol, shape: 'circle', size: this.SIZE,
+                              x: pivot - dotR, y: pivot - dotR, w: dotR * 2, h: dotR * 2,
+                              filterId: hubLens ? HUB_LENS_ID : '', blurPx: hubBlur }), 'pointer_center'))
         : layer(pivot, pivot, false, svg`<circle data-sc-part="pointer_center" cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${hubCol}"/>`)}
       ${(cast && is3d) ? castsOf(shape('currentColor', null)) : ''}
       ${isPointerGlass(ptrGlass)
-        ? layer(pivot, pivot, true, '', true, html`<div data-sc-part="pointer" style="${
-            pointerGlassStyle({ effect: ptrGlass, color: pCol, size: this.SIZE,
-                                // A round cap reaches half the width past
-                                // either end of the line it finishes, and a
-                                // box does not - so the box is that much
-                                // longer at both ends, or the glass needle is
-                                // shorter than the one it replaces.
-                                ...(this._get('pointer_type','needle') === 'triangle'
-                                  ? { shape: 'triangle', x: pivot + xBase, w: rTip - xBase }
-                                  : { shape: 'round', x: pivot + xBase - pW / 2, w: rTip - xBase + pW }),
-                                y: pivot - pW / 2, h: pW,
-                                filterId: ptrLens ? PTR_LENS_ID : '', blurPx: ptrBlur })}"></div>`)
+        ? layer(pivot, pivot, true, '', true, glassBox(
+            pointerGlassBox({ effect: ptrGlass, color: pCol, size: this.SIZE,
+                              // A round cap reaches half the width past
+                              // either end of the line it finishes, and a
+                              // box does not - so the box is that much
+                              // longer at both ends, or the glass needle is
+                              // shorter than the one it replaces.
+                              ...(this._get('pointer_type','needle') === 'triangle'
+                                ? { shape: 'triangle', x: pivot + xBase, w: rTip - xBase }
+                                : { shape: 'round', x: pivot + xBase - pW / 2, w: rTip - xBase + pW }),
+                              y: pivot - pW / 2, h: pW,
+                              filterId: ptrLens ? PTR_LENS_ID : '', blurPx: ptrBlur }), 'pointer'))
         : layer(pivot, pivot, true, svg`
           ${is3d ? svg`<defs>
             <linearGradient id="sc-3d-pointer-grad" x1="0%" y1="0%" x2="0%" y2="100%">

@@ -143,11 +143,20 @@ export function pointerBackdrop(filterId, blurPx) {
  * the pill's rule and it is what separates the two effects when the lens
  * itself is too small to see.
  *
+ * `rim` is the hairline and the drop shadow, and it is withheld from a shape
+ * that is cut out with `clip-path`. A `box-shadow` is drawn against the
+ * border box and knows nothing of the cut: on a triangle the two inset lines
+ * run across the middle of the shape instead of along its slanted edges, and
+ * the outer shadow is clipped away entirely. Gradients are painted into the
+ * background and are cut with everything else, so they are all a clipped
+ * shape gets - and one more of them, standing in for the lost lower rim.
+ *
  * @param {string} effect
  * @param {string} color the part's colour, as CSS - a `var()` included
+ * @param {{ rim?: boolean }} [opts]
  * @returns {string} declarations, ready to drop into an inline style
  */
-export function pointerGlassPaint(effect, color) {
+export function pointerGlassPaint(effect, color, { rim: wantRim = true } = {}) {
   const strong = effect === 'glass_liquid';
   const body = 'color-mix(in srgb, ' + color + ' ' + (strong ? 22 : 30) + '%, transparent)';
 
@@ -171,6 +180,10 @@ export function pointerGlassPaint(effect, color) {
         '0 1px 2px rgba(0,0,0,0.4)',
       ];
 
+  if (!wantRim) {
+    return 'background-color: ' + body + '; background-image: '
+      + 'linear-gradient(0deg, rgba(0,0,0,0.35), rgba(0,0,0,0) 45%), ' + dome + ';';
+  }
   return 'background-color: ' + body + '; background-image: ' + dome + '; '
     + 'box-shadow: ' + rim.join(', ') + ';';
 }
@@ -213,4 +226,34 @@ export function pointerGlassStyle(spec) {
     + 'width: ' + pct(w) + '; height: ' + pct(h) + '; ' + cut
     + (backdrop ? ' backdrop-filter: ' + backdrop + '; -webkit-backdrop-filter: ' + backdrop + ';' : '')
     + ' ' + pointerGlassPaint(effect, color);
+}
+
+/**
+ * A glassed part as the one or two boxes it has to be drawn with.
+ *
+ * `backdrop-filter` is clipped by a border radius and not by a `clip-path`:
+ * Chromium samples and filters the whole border box, so a glass triangle
+ * comes out a glass rectangle with a corner drawn on it. A clip on an
+ * *ancestor* does cut the result, so a cut-out shape is two boxes - the outer
+ * one carries the geometry and the cut, the inner one the glass.
+ *
+ * A shape that is a border radius stays one box; there is nothing to fix and
+ * a second element would be a second thing to lay out every frame.
+ *
+ * @param {Parameters<typeof pointerGlassStyle>[0]} spec
+ * @returns {{ outer: string, inner: string|null }} `inner` is null for one box
+ */
+export function pointerGlassBox(spec) {
+  if (spec.shape !== 'triangle') return { outer: pointerGlassStyle(spec), inner: null };
+  const { effect, color, x, y, w, h, size, filterId = '', blurPx = 0 } = spec;
+  const pct = (/** @type {number} */ v) => (v / size * 100).toFixed(4) + '%';
+  const backdrop = pointerBackdrop(filterId, blurPx);
+  return {
+    outer: 'position: absolute; left: ' + pct(x) + '; top: ' + pct(y) + '; '
+      + 'width: ' + pct(w) + '; height: ' + pct(h) + '; '
+      + 'clip-path: polygon(100% 50%, 0 0, 0 100%);',
+    inner: 'position: absolute; inset: 0;'
+      + (backdrop ? ' backdrop-filter: ' + backdrop + '; -webkit-backdrop-filter: ' + backdrop + ';' : '')
+      + ' ' + pointerGlassPaint(effect, color, { rim: false }),
+  };
 }

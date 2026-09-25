@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   POINTER_GLASS_EFFECTS, POINTER_LENS_FRACTION,
   isPointerGlass, pointerLensFraction, pointerBlurPx,
-  pointerBackdrop, pointerGlassPaint, pointerGlassStyle,
+  pointerBackdrop, pointerGlassPaint, pointerGlassStyle, pointerGlassBox,
 } from './pointer-glass.js';
 
 const ADVERSARIAL = [undefined, null, '', 0, 1, 'true', 'false', NaN, -1];
@@ -141,5 +141,40 @@ describe('pointerGlassStyle', () => {
     expect(withLens).toContain('backdrop-filter:');
     expect(withLens).toContain('-webkit-backdrop-filter:');
     expect(pointerGlassStyle(base)).not.toContain('backdrop-filter');
+  });
+});
+
+describe('pointerGlassBox', () => {
+  const base = { effect: 'glass', color: '#fff', x: 10, y: 20, w: 40, h: 4, size: 100 };
+
+  it('leaves a rounded shape as one box', () => {
+    for (const shape of ['round', 'circle']) {
+      const box = pointerGlassBox({ ...base, shape });
+      expect(box.inner).toBeNull();
+      expect(box.outer).toBe(pointerGlassStyle({ ...base, shape }));
+    }
+  });
+
+  it('cuts a triangle on an outer box, so the glass inside it is cut too', () => {
+    const box = pointerGlassBox({ ...base, shape: 'triangle', blurPx: 2 });
+    expect(box.outer).toContain('clip-path: polygon(100% 50%, 0 0, 0 100%)');
+    expect(box.outer).not.toContain('backdrop-filter');
+    expect(box.inner).toContain('backdrop-filter');
+    expect(box.inner).toContain('inset: 0');
+  });
+
+  it('gives a cut shape no box-shadow, which would not follow the cut', () => {
+    const box = pointerGlassBox({ ...base, shape: 'triangle' });
+    expect(box.inner).not.toContain('box-shadow');
+    expect(box.outer).not.toContain('box-shadow');
+    // What the lost rim said is said by a gradient, which is cut with the rest.
+    expect(box.inner).toContain('linear-gradient(0deg, rgba(0,0,0,0.35)');
+  });
+
+  it('puts the geometry on the outer box and nowhere else', () => {
+    const box = pointerGlassBox({ ...base, shape: 'triangle' });
+    expect(box.outer).toContain('left: 10.0000%');
+    expect(box.outer).toContain('width: 40.0000%');
+    expect(box.inner).not.toContain('left:');
   });
 });
