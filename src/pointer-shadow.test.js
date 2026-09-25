@@ -197,3 +197,36 @@ describe('liftFromLegacy', () => {
       .toBe(liftFromLegacy({ distance: 2, width: W }));
   });
 });
+
+describe('the card light\'s distance', () => {
+  it('is 1 by default, so a card that never set one draws what it drew', () => {
+    expect(lift({ height: 0.5 })).toEqual(lift({ height: 0.5, distance: 1 }));
+  });
+
+  it('throws the shadow further, in proportion', () => {
+    const near = lift({ height: 0.5, distance: 1 });
+    const far = lift({ height: 0.5, distance: 3 });
+    expect(dist(far)).toBeCloseTo(dist(near) * 3, 10);
+  });
+
+  it('at nothing puts the shadow straight under the needle', () => {
+    const l = lift({ height: 0.5, distance: 0 });
+    expect(dist(l)).toBe(0);
+    expect(l.drop.opacity).toBeGreaterThan(0);
+  });
+
+  it('moves neither the lit edge nor the blur, which are the needle\'s own', () => {
+    const near = lift({ height: 0.6, distance: 1 });
+    const far = lift({ height: 0.6, distance: 4 });
+    expect(far.rim).toEqual(near.rim);
+    expect(far.drop.blur).toBe(near.drop.blur);
+    expect(far.contact).toEqual(near.contact);
+  });
+
+  it('reads a value that is no distance at all as the default', () => {
+    for (const v of [undefined, NaN, -1, Infinity]) {
+      expect(dist(lift({ height: 0.5, distance: /** @type {any} */ (v) })))
+        .toBeCloseTo(dist(lift({ height: 0.5 })), 10);
+    }
+  });
+});

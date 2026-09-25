@@ -3,33 +3,26 @@ import { cardLight, clampLightAngle, hasCardLight,
          LIGHT_ANGLE, LIGHT_DISTANCE, ARC_MIN, ARC_MAX } from './card-light.js';
 
 describe('clampLightAngle', () => {
-  it('leaves the arc alone', () => {
-    for (const a of [0, 1, 45, 90, 135, 179, 180]) expect(clampLightAngle(a)).toBe(a);
+  it('leaves an angle that is already one alone', () => {
+    for (const a of [0, 1, 45, 90, 135, 179, 180, 240, 359]) expect(clampLightAngle(a)).toBe(a);
   });
 
-  it('stops the sun at the horizon it is nearer to', () => {
-    expect(clampLightAngle(181)).toBe(ARC_MAX);
-    expect(clampLightAngle(200)).toBe(ARC_MAX);
-    expect(clampLightAngle(269)).toBe(ARC_MAX);
-    expect(clampLightAngle(271)).toBe(ARC_MIN);
-    expect(clampLightAngle(359)).toBe(ARC_MIN);
+  it('lets the sun go below the horizon, which is a place it may stand', () => {
+    for (const a of [181, 200, 269, 270, 271, 359]) expect(clampLightAngle(a)).toBe(a);
   });
 
-  it('sends a light from straight below the way the angles count', () => {
-    expect(clampLightAngle(270)).toBe(ARC_MIN);
-  });
-
-  it('folds a turn of the wheel back in first', () => {
+  it('brings a turn of the wheel back in first', () => {
     expect(clampLightAngle(450)).toBe(90);
-    expect(clampLightAngle(-90)).toBe(ARC_MIN);
+    expect(clampLightAngle(-90)).toBe(270);
     expect(clampLightAngle(-270)).toBe(90);
+    expect(clampLightAngle(360)).toBe(0);
   });
 
-  it('never leaves the arc, whatever it is handed', () => {
+  it('never leaves the circle, whatever it is handed', () => {
     for (const v of [undefined, null, '', NaN, 'nonsense', Infinity, -Infinity, 1e9, -1e9]) {
       const a = clampLightAngle(/** @type {any} */ (v));
       expect(a).toBeGreaterThanOrEqual(ARC_MIN);
-      expect(a).toBeLessThanOrEqual(ARC_MAX);
+      expect(a).toBeLessThan(ARC_MAX);
     }
   });
 });
@@ -49,8 +42,9 @@ describe('cardLight', () => {
     expect(l).toEqual({ angle: 30, distance: 2, fromCard: true });
   });
 
-  it('folds the card\'s own angle onto the arc', () => {
-    expect(cardLight({ light_angle: 300 }).angle).toBe(ARC_MIN);
+  it('brings the card\'s own angle into the circle without turning it round', () => {
+    expect(cardLight({ light_angle: 300 }).angle).toBe(300);
+    expect(cardLight({ light_angle: 400 }).angle).toBe(40);
   });
 
   it('is a whole light as soon as either half of one is set', () => {

@@ -31,36 +31,35 @@ export const LIGHT_ANGLE = 90;
 export const LIGHT_DISTANCE = 1;
 
 /**
- * The angles a light can actually stand at, as the direction of the shadow it
- * throws: clockwise from three o'clock, screen coordinates, so 90 is straight
- * down and the sun that cast it is straight up.
+ * The angles a light can stand at, as the direction of the shadow it throws:
+ * clockwise from three o'clock, screen coordinates, so 90 is straight down and
+ * the sun that cast it is straight up.
  *
- * Half the circle, and not a matter of taste: past either end the sun has gone
- * below the card, and a card lit from underneath reads as a mistake however
- * carefully the rest of it is drawn. The two ends are a light exactly level
- * with the surface, which is a raking light and perfectly real.
+ * The whole circle. It was half of one for a while, on the argument that a
+ * card lit from underneath reads as a mistake - which is true of a card that
+ * did not mean it, and a rule about what looks right is not a rule about what
+ * may be set. The pad still draws the horizon, so a sun below it is a thing
+ * somebody chose rather than a thing that happened.
  */
 export const ARC_MIN = 0;
-export const ARC_MAX = 180;
+export const ARC_MAX = 360;
 
 /**
- * An angle folded back onto the arc: the sun stops at the horizon rather than
- * setting behind it.
+ * An angle brought into 0..360, and nothing else.
  *
- * The nearer end, not the mirror image. This is read while a finger is on the
- * pad, and a sun that jumps to the far side of the sky the moment the hand
- * crosses the centre line is a sun that cannot be aimed; one that slides along
- * the horizon under the finger and waits there can. Exactly halfway - a light
- * from directly below - has to go one way or the other, and it goes to the end
- * it would reach by turning the way the angles count.
+ * It folded onto the upper half until the horizon was opened; the name is
+ * kept because it is still what every call site wants - one reading of an
+ * angle, wherever the number came from.
  *
  * @param {number} deg
  * @returns {number} an angle between `ARC_MIN` and `ARC_MAX`
  */
 export function clampLightAngle(deg) {
-  const a = ((Number(deg) || 0) % 360 + 360) % 360;
-  if (a <= ARC_MAX) return a;
-  return a < 270 ? ARC_MAX : ARC_MIN;
+  // `Infinity % 360` is NaN, and an angle of NaN puts a shadow nowhere at all.
+  // The folding this used to do caught that by accident; this has to say it.
+  const n = Number(deg);
+  if (!Number.isFinite(n)) return LIGHT_ANGLE;
+  return (n % 360 + 360) % 360;
 }
 
 /**

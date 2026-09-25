@@ -167,18 +167,26 @@ export function shadowRoom(backdrop) {
  * @param {number} o.width the needle's width, in whatever unit the caller
  *   paints in; every length handed back is in that unit
  * @param {number} [o.angle] where the light throws the shadow, in degrees
+ * @param {number} [o.distance] how far out the sun stands, as the card's
+ *   light gives it - 1 is where it stood before this was asked, so a card
+ *   that has never set one draws exactly what it drew
  * @param {[number, number, number]|null} [o.backdrop] what the needle is
  *   drawn on, from `markBackdrop` - null where the caller cannot say
  * @returns {NeedleLift}
  */
-export function needleLift({ height, diffusion = 0, width, angle = 90, backdrop = null }) {
+export function needleLift({ height, diffusion = 0, width, angle = 90, distance = 1,
+                             backdrop = null }) {
   const h = clamp01(height);
   const d = clamp01(diffusion) * DIFFUSION_REACH;
   const w = Number.isFinite(width) && width > 0 ? width : 0;
   const room = shadowRoom(backdrop);
   const rad = (Number.isFinite(angle) ? angle : 90) * Math.PI / 180;
 
-  const dist = h * w * DROP_PER_WIDTH * (1 - DROP_DIFFUSE_PULL * d);
+  // The card's sun standing further out throws the shadow further, and only
+  // further - it does not soften it and it does not move the lit edge, which
+  // is a fact about the needle's own edge and not about where the light is.
+  const far = Number.isFinite(distance) && distance >= 0 ? distance : 1;
+  const dist = h * w * DROP_PER_WIDTH * (1 - DROP_DIFFUSE_PULL * d) * far;
   // The same occlusion spread over more area, so the core lightens as the
   // shadow grows. This is the pair that used to be free of each other, and
   // free of each other is how a shadow ends up reading as a second needle.

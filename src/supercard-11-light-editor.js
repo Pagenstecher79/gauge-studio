@@ -69,13 +69,13 @@ Object.assign(window.SupercardModules['light'], (() => {
               </div>
               <div class="note">
                 The <b>angle</b> turns all of them together. The <b>distance</b> is how far
-                the light stands off, and only a bevel and a relief have a depth for that
-                to matter to - a needle's shadow is thrown by its own lift off the dial,
-                under the gauge's Pointer settings, so this will not move it.
+                the light stands off: it deepens a bevel and a relief, and it throws a
+                needle's shadow further out. How high the needle stands to cast one at all
+                is its own, under the gauge's Pointer settings.
               </div>
               <div class="note">
-                Only the upper half of the pad: below it the sun would be under the card,
-                and a card lit from beneath reads as a mistake rather than as a light.
+                The line across the pad is the horizon. The sun may go below it - that is a
+                card lit from underneath, which reads as a mistake unless you meant it.
               </div>
               ${light.fromCard ? '' : html`<div class="note">
                 Nothing is set yet, so each pattern is still lit from its own saved sun.

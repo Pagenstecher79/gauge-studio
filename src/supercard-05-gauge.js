@@ -1034,11 +1034,13 @@ class ScGauge extends LitElement {
       : safeFloat(pLift, 0);
     // The card's sun if it has one, this gauge's own saved angle if not - so a
     // card drawn before the light was one value keeps its shadows exactly
-    // where they were until somebody moves the sun.
-    const liftAngle = cardLight(this.rootConfig,
-                                { angle: this._get('pointer_shadow_angle', undefined) }).angle;
+    // where they were until somebody moves the sun. Its distance throws the
+    // shadow further out; a card with no light of its own is handed the
+    // default 1, which is the throw the lift alone used to give.
+    const sun = cardLight(this.rootConfig,
+                          { angle: this._get('pointer_shadow_angle', undefined) });
     const cast = liftH > 0
-      ? needleLift({ height: liftH, width: pW, angle: liftAngle,
+      ? needleLift({ height: liftH, width: pW, angle: sun.angle, distance: sun.distance,
                      backdrop: markBackdrop(inkArgs) })
       : null;
     const scaleKey = `${data.unitPrefix}_${data.resultTier}_${data.max}`;
