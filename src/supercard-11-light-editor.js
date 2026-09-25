@@ -38,8 +38,21 @@ Object.assign(window.SupercardModules['light'], (() => {
       `];
     }
 
-    /** Both keys in one commit: two in a tick and the first is lost. */
-    _set(patch) { this.commitFn('__merge__', patch); }
+    /**
+     * Both keys in one commit, always - and always both of them.
+     *
+     * Two commits in a tick lose the first, so they go together anyway. But
+     * they also go together when only one was moved: until the card has a
+     * light, `cardLight` answers with each part's own saved sun, and writing
+     * one key alone would make the card take over with the *default* for the
+     * other - every bevel on the card snapping to 90 degrees because somebody
+     * dragged the distance.
+     */
+    _set(patch) {
+      const now = cardLight(this.slot);
+      this.commitFn('__merge__', { light_angle: now.angle, light_distance: now.distance,
+                                   ...patch });
+    }
 
     render() {
       if (!this.slot) return html``;
@@ -52,7 +65,13 @@ Object.assign(window.SupercardModules['light'], (() => {
             <div class="inner-content">
               <div class="note">
                 Where the sun stands over the whole card. Every glass bevel, every lit
-                ring and every needle's shadow follows it.
+                ring and every needle's shadow is thrown from it.
+              </div>
+              <div class="note">
+                The <b>angle</b> turns all of them together. The <b>distance</b> is how far
+                the light stands off, and only a bevel and a relief have a depth for that
+                to matter to - a needle's shadow is thrown by its own lift off the dial,
+                under the gauge's Pointer settings, so this will not move it.
               </div>
               <div class="note">
                 Only the upper half of the pad: below it the sun would be under the card,
