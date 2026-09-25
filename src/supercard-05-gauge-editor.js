@@ -5,6 +5,22 @@ import { gradientPresetPatch } from "./gradient-presets.js";
 import { icon } from "./icons.js";
 import { isPointerGlass, pointerBlurPx, pointerLensFraction } from "./pointer-glass.js";
 import { MAX_IOR } from "./glass-lens.js";
+import { MAX_HEIGHT as MAX_LIFT, MAX_DIFFUSION as MAX_LIFT_DIFFUSION } from "./pointer-shadow.js";
+
+/**
+ * Whether the needle is off the dial at all, for the softness row under it.
+ *
+ * The canvas editor asks the same question of its own chips and answers it
+ * for itself: a form and the drawing are two halves that may not read each
+ * other's helpers.
+ */
+const hasLift = (/** @type {any} */ cfg) => {
+  const lift = cfg.pointer_lift;
+  if (lift === undefined || lift === null || lift === '') {
+    return (cfg.pointer_shadow_type || 'none') !== 'none';
+  }
+  return Number(lift) > 0;
+};
 import { ListReorder } from "./list-reorder.js";
 
 const SC = window.SupercardUtils;
@@ -285,15 +301,20 @@ const STYLE_FIELDS = [
     hint: 'How dense the dot\'s glass is. At 1 only its rim bends. Higher and '
         + 'the whole dot refracts, with a warm and a cold fringe at the edge. It '
         + 'does not move, so this costs nothing per frame.' },
-  { id: 'pointer_shadow_type', framedBy: 'pointer',    label: 'Pointer shadow',            type: 'select',  options: [ { value: 'none', label: 'None' }, { value: 'fixed', label: 'Fixed' }, { value: 'adaptive', label: 'Adaptive' } ] },
-  { id: 'pointer_shadow_color', framedBy: 'pointer',   label: 'Shadow colour',             type: 'color',   condition: cfg => cfg.pointer_shadow_type === 'fixed' },
-  { id: 'pointer_shadow_blur', framedBy: 'pointer',     label: 'Shadow blur',   type: 'range', min: 0,  max: 1, step: 0.01,  placeholder: '0.8', condition: cfg => cfg.pointer_shadow_type !== 'none' },
-  // Not 'offset Y': the offset is only vertical while the angle is 90 degrees,
-  // which is merely its default. The renderer still reads the old key for
-  // configs written before the angle had a control.
-  { id: 'pointer_shadow_distance', framedBy: 'pointer', label: 'Shadow distance',       type: 'range', min: -5, max: 5, step: 0.1,  placeholder: '0.5', condition: cfg => cfg.pointer_shadow_type !== 'none' },
-  { id: 'pointer_shadow_angle', framedBy: 'pointer',    label: 'Shadow angle',          type: 'range', min: 0, max: 360, step: 5,   placeholder: '90',  condition: cfg => cfg.pointer_shadow_type !== 'none' },
-  { id: 'pointer_shadow_opacity', framedBy: 'pointer',  label: 'Shadow opacity',        type: 'range', min: 0,  max: 1, step: 0.05, placeholder: '0.35', condition: cfg => cfg.pointer_shadow_type !== 'none' },
+  // One light at one height. It throws the shadow, traps the darkness under
+  // the needle where it nearly touches, and lights the edge turned towards it
+  // - three drawings that used to be set by six keys that could contradict
+  // each other. The arithmetic is `pointer-shadow.js`; the sun itself belongs
+  // to the card, under Light in the canvas settings.
+  { id: 'pointer_lift', framedBy: 'pointer', label: 'Pointer lift off the dial',
+    type: 'range', min: 0, max: MAX_LIFT, step: 0.05, placeholder: '0',
+    hint: 'How far the needle floats above the face. At 0 it lies on the dial '
+        + 'and casts nothing.' },
+  { id: 'pointer_lift_diffusion', framedBy: 'pointer', label: 'Light softness',
+    type: 'range', min: 0, max: MAX_LIFT_DIFFUSION, step: 0.05, placeholder: '0',
+    condition: cfg => hasLift(cfg),
+    hint: 'A hard light draws a sharp shadow close under the needle; a soft one '
+        + 'spreads it and lifts it away.' },
   { id: 'animation_duration',     label: 'Animation duration (s)',       type: 'range',    min: 0, max: 10, step: 0.1, placeholder: '0.8', condition: cfg => cfg.animation_easing !== 'spring' },
   { id: 'animation_spring_duration', label: 'Spring animation duration (s)', type: 'range', min: 0.1, max: 10, step: 0.1, placeholder: '1.5', condition: cfg => cfg.animation_easing === 'spring' },
   { id: 'animation_dynamic_speed',label: 'Dynamic pointer acceleration', type: 'checkbox' },

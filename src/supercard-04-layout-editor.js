@@ -21,6 +21,7 @@ import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-t
 import { revealBy, scrollParent } from "./reveal-scroll.js";
 import { pinchStep } from "./pinch-gesture.js";
 import { icon, iconMask } from "./icons.js";
+import { MAX_HEIGHT as MAX_LIFT, MAX_DIFFUSION as MAX_LIFT_DIFFUSION } from "./pointer-shadow.js";
 import { cardLight, clampLightAngle, ARC_MIN, ARC_MAX, LIGHT_ANGLE, LIGHT_DISTANCE } from "./card-light.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
@@ -475,13 +476,6 @@ const markHex = (/** @type {any} */ value, /** @type {string} */ dflt) => {
   return rgb ? SC.rgbToHex(rgb[0], rgb[1], rgb[2]) : dflt;
 };
 
-/** A shadow is off, a colour of its own, or taken from what it falls from. */
-const SHADOW_MODE = Object.freeze([
-  { value: 'none', label: 'None', short: 'None' },
-  { value: 'fixed', label: 'Fixed', short: 'Fixed' },
-  { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
-]);
-
 // Glass, as the two chips offer it. Both lists are the same list: the
 // needle's used to lose the liquid option below four units of width, and no
 // longer does - see POINTER_LENS_FRACTION.
@@ -504,9 +498,20 @@ const POINTER_SHAPE = Object.freeze([
   { value: 'triangle', label: 'Triangle' },
 ]);
 
-/** Whether there is a shadow for the four rows under it to shape. */
-const hasShadow = (/** @type {any} */ cfg) =>
-  (cfg.pointer_shadow_type || 'none') !== 'none';
+/**
+ * Whether the needle is off the dial at all, for the softness row under it.
+ *
+ * A needle lying on its face casts nothing to soften. The old six-key shadow
+ * is read the same way it is drawn: no `pointer_lift` of its own means the
+ * card is still on its saved distance, and a saved distance means a lift.
+ */
+const hasLift = (/** @type {any} */ cfg) => {
+  const lift = cfg.pointer_lift;
+  if (lift === undefined || lift === null || lift === '') {
+    return (cfg.pointer_shadow_type || 'none') !== 'none';
+  }
+  return Number(lift) > 0;
+};
 
 /**
  * How a ring is coloured, and what each answer then asks for.
@@ -1122,23 +1127,14 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05, min: 1, max: MAX_IOR,
         dflt: 1, what: 'refraction',
         condition: (/** @type {any} */ cfg) => pointerLensFraction(cfg.pointer_glass) > 0 },
-      { key: 'pointer_shadow_type', icon: icon('moon'), what: 'shadow', picks: SHADOW_MODE,
-        read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
-      { icon: icon('paintbrush'), what: 'shadow colour', paint: true,
-        condition: (/** @type {any} */ cfg) => cfg.pointer_shadow_type === 'fixed',
-        read: (/** @type {any} */ cfg) => markHex(cfg.pointer_shadow_color, '#000000'),
-        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
-          ({ pointer_shadow_color: v }) },
-      // The four that shape a shadow are not there to be read when there is no
-      // shadow to shape - the panel is short enough without them.
-      { key: 'pointer_shadow_blur', icon: icon('droplet'), slide: true, by: 0.01, min: 0, max: 1,
-        dflt: 0.8, what: 'shadow blur', condition: hasShadow },
-      { key: 'pointer_shadow_distance', icon: icon('move-diagonal'), slide: true, by: 0.1, min: -5,
-        max: 5, dflt: 0.5, what: 'shadow distance', condition: hasShadow },
-      { key: 'pointer_shadow_angle', icon: icon('rotate-cw'), slide: true, by: 5, min: 0, max: 360,
-        dflt: 90, what: 'shadow angle', condition: hasShadow },
-      { key: 'pointer_shadow_opacity', icon: icon('contrast'), slide: true, by: 0.05, min: 0,
-        max: 1, dflt: 0.35, what: 'shadow opacity', condition: hasShadow },
+      // One light at one height draws the cast shadow, the contact shadow and
+      // the lit edge together, so there is one row for the height and one for
+      // how hard the light is. Colour, blur, distance and opacity were four
+      // ways of contradicting each other and are gone.
+      { key: 'pointer_lift', icon: icon('moon'), slide: true, by: 0.05, min: 0, max: MAX_LIFT,
+        dflt: 0, what: 'lift off the dial' },
+      { key: 'pointer_lift_diffusion', icon: icon('droplet'), slide: true, by: 0.05, min: 0,
+        max: MAX_LIFT_DIFFUSION, dflt: 0, what: 'light softness', condition: hasLift },
     ],
   },
   pointer_center: {

@@ -206,3 +206,25 @@ export function needleLift({ height, diffusion = 0, width, angle = 90, backdrop 
     },
   };
 }
+
+/**
+ * The lift that reproduces an old six-key shadow, as near as one number can.
+ *
+ * Only the offset is carried. Blur, colour and opacity were free of one
+ * another under the old keys, and their being free of one another is exactly
+ * what `needleLift` removes - a light at a height decides all three - so
+ * reading them back in would be inventing a shadow nobody configured. The
+ * distance is what somebody actually looked at and nudged, so it is the one
+ * worth keeping: `dist = height * width * DROP_PER_WIDTH` inverted, and the
+ * sign dropped, because a negative distance was the old way of throwing the
+ * shadow the other way and the light's angle says that now.
+ *
+ * @param {{ distance?: number|string, width?: number }} legacy
+ * @returns {number} a height in 0..1
+ */
+export function liftFromLegacy({ distance, width }) {
+  const w = Number(width);
+  const d = Number(distance);
+  if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(d)) return 0;
+  return clamp01(Math.abs(d) / (w * DROP_PER_WIDTH));
+}

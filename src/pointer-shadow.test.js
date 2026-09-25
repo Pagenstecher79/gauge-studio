@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { needleLift, shadowRoom, DARKEST, DROP_PER_WIDTH,
+import { needleLift, shadowRoom, liftFromLegacy, DARKEST, DROP_PER_WIDTH,
          MAX_HEIGHT, MAX_DIFFUSION } from './pointer-shadow.js';
 
 const W = 17;
@@ -165,5 +165,35 @@ describe('the two ends', () => {
   it('names them, so a slider cannot be given a wider range by accident', () => {
     expect(MAX_HEIGHT).toBe(1);
     expect(MAX_DIFFUSION).toBe(1);
+  });
+});
+
+describe('liftFromLegacy', () => {
+  it('answers the height that reproduces the old offset', () => {
+    const h = liftFromLegacy({ distance: W * DROP_PER_WIDTH * 0.4, width: W });
+    expect(h).toBeCloseTo(0.4, 10);
+    expect(dist(lift({ height: h }))).toBeCloseTo(W * DROP_PER_WIDTH * 0.4, 10);
+  });
+
+  it('reads a shadow thrown the other way as the same height', () => {
+    expect(liftFromLegacy({ distance: -2, width: W }))
+      .toBe(liftFromLegacy({ distance: 2, width: W }));
+  });
+
+  it('never leaves the slider\'s range', () => {
+    expect(liftFromLegacy({ distance: 5, width: 1 })).toBe(MAX_HEIGHT);
+    expect(liftFromLegacy({ distance: 0, width: W })).toBe(0);
+  });
+
+  it('answers nothing where there is nothing to read', () => {
+    for (const v of [undefined, null, '', NaN, 'true', 'false', [], {}]) {
+      expect(liftFromLegacy({ distance: /** @type {any} */ (v), width: W })).toBe(0);
+      expect(liftFromLegacy({ distance: 1, width: /** @type {any} */ (v) })).toBe(0);
+    }
+  });
+
+  it('reads a numeric string, which is what a text field commits', () => {
+    expect(liftFromLegacy({ distance: '2', width: W }))
+      .toBe(liftFromLegacy({ distance: 2, width: W }));
   });
 });
