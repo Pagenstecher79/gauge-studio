@@ -3719,18 +3719,6 @@ class ScCanvasEditor extends LitElement {
    * because `this.slot` still holds the old config then - Home Assistant
    * hands the new one back asynchronously, a render later.
    */
-  /**
-   * Move the card's sun.
-   *
-   * Onto the slot rather than onto anything the canvas holds: the light is the
-   * card's, not any one element's, and the elements read it from there. One
-   * merge for both halves of it, because the pad hands over an angle and a
-   * distance together and two commits in a tick lose the first - `_commit`
-   * clones the config that Home Assistant is still writing back.
-   *
-   * @param {Record<string, number>} patch
-   */
-
   _send(key, value, keys = HISTORY_KEYS) {
     if (!this.commitFn) return;
     // A write that touches nothing the snapshot holds cannot be undone by

@@ -943,7 +943,6 @@ Object.assign(window.SupercardModules['core'], (() => {
                 </ha-selector>
               </div>
 
-              <!-- === NEW BLOCK: GLOBAL ENTITIES === -->
               <div class="col" style="margin-top: 12px; border-top: 1px dashed var(--divider-color,#444); padding-top: 12px;">
                 <div class="row" style="margin-bottom: 12px;">
                   <label style="font-weight: 600;">Global entities (alias) ${SC_UTILS.tipDot(
@@ -1039,7 +1038,6 @@ Object.assign(window.SupercardModules['core'], (() => {
                   </div>
                 </ha-sortable>
               </div>
-              <!-- === END NEW BLOCK === -->
 
             </div>
           </details>
