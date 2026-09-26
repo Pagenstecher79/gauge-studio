@@ -12,3 +12,6 @@ deploy.env
 # never commit secrets
 *.secret
 .env
+
+# where the one dev instance runs, when not here (docker/remote.mjs)
+docker/.remote

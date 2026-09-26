@@ -39,15 +39,23 @@ The hash is in the name because only the *resource* URL carries a cache
 buster. A manual install copies both files; HACS installs a zip. See
 `docs/editor-split.md`, and the two-stage registration under *Architecture*.
 
-**Testing happens in that one Docker instance, at <http://127.0.0.1:8123/>.**
+**Testing happens in that one Docker instance, at <http://192.168.2.150:8123/>**
+- on the Mac mini M2 Pro in the LAN (`ssh m2`), which is where server services
+are being moved one by one and where LM Studio already runs. The build still
+happens here; `docker/.remote` (gitignored, see `docker/remote.mjs`) points
+`postbuild` at that host, so `npm run build` ships `dist/` there and restarts
+the container, and `npm run ha` refuses to start a local one. The local
+`docker/config` is left over from before the move and serves only as staging
+for the resource entry - the dashboards being edited are the ones on the M2.
 One is enough and one is all there should be: a second container, a second
-port or a second browser profile splits the dashboards, the storage and the
-resource entry, and then a build that works in one and not the other says
-nothing about the card. `npm run build` restarts the container onto the new
-bundle, so the address stays the same from one build to the next - open it
-and reload rather than looking for a fresh URL. Synthetic pages under
-`.claude/bench/` stay what they are: a place to measure one mechanism in
-isolation, never the proof that the card works.
+host, a second port or a second browser profile splits the dashboards, the
+storage and the resource entry, and then a build that works in one and not
+the other says nothing about the card. `npm run build` restarts the container
+onto the new bundle, so the address stays the same from one build to the
+next - open it and reload rather than looking for a fresh URL. Should the
+instance ever move again, it moves whole - stop the old one in the same step.
+Synthetic pages under `.claude/bench/` stay what they are: a place to measure
+one mechanism in isolation, never the proof that the card works.
 
 `npm run ha` starts a real Home Assistant in Docker with the card registered
 as a Lovelace resource and a demo dashboard seeded - see `docker/README.md`.
@@ -552,7 +560,9 @@ getting them wrong first:
 Keep the page in `.claude/bench/` and copy it into `dist/`, which the
 container mounts as `/config/www` - so it is served at
 `/local/<name>.html` on the ordinary test instance, reachable from a tablet
-with no console. `npm run build` may clear `dist/`, so copy again after one.
+with no console. `npm run build` may clear `dist/`, so copy again after one;
+the build's own sync to the M2 carries it over, and so does a bare
+`rsync -a dist/ m2:gauge-studio-ha/dist/` when nothing was rebuilt.
 
 ## Releasing
 
