@@ -32,8 +32,22 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readRemote } from "./remote.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+// Refuse to start a second instance when the one instance lives elsewhere.
+// postbuild.mjs still runs this script, with GS_STAGING set, to rewrite the
+// resource store it has fetched from that host.
+const remote = readRemote();
+if (remote && !process.env.GS_STAGING) {
+  console.error(
+    `\nThe dev instance runs on ${remote.ssh} (${remote.url}), per docker/.remote.\n` +
+      `A second one here would split the dashboards, the storage and the resource\n` +
+      `entry. \`npm run build\` already ships the bundle there and restarts it.\n`,
+  );
+  process.exit(1);
+}
 
 // Refuse to hand a running container config it is not reading.
 //

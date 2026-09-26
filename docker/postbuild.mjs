@@ -36,6 +36,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { onRemote, pullFrom, pushTo, readRemote } from "./remote.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CONTAINER = "gauge-studio-ha";
@@ -99,9 +100,9 @@ function containerRunning() {
  * @param {string | null} url the registered resource URL, or null if unknown
  * @returns {Promise<boolean>} false if it never answered in time
  */
-async function waitForHa(url) {
+async function waitForHa(url, base = "http://localhost:8123") {
   const deadline = Date.now() + 90_000;
-  const target = `http://localhost:8123${url ?? "/local/gauge-studio.js"}`;
+  const target = `${base}${url ?? "/local/gauge-studio.js"}`;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(target, { method: "HEAD" });
@@ -113,6 +114,50 @@ async function waitForHa(url) {
   }
   return false;
 }
+
+/**
+ * The same job against an instance on another host (see remote.mjs).
+ *
+ * The bundle goes over first and unconditionally: with `npm run watch` the
+ * file under /local/ is what a hard refresh picks up, restart or not. The
+ * resource store then makes a round trip through the local `.storage`, so
+ * prepare.mjs stays the one place that knows how the entry is written - and
+ * only that one file goes back, because the dashboards on the host are the
+ * ones being edited there, and the local copies are not.
+ *
+ * @param {import("./remote.mjs").Remote} remote
+ */
+async function refreshRemote(remote) {
+  try {
+    onRemote(remote, "orb status | grep -q Running || orb start");
+    const running = onRemote(remote,
+      `docker ps --filter name=^${CONTAINER}$ --format '{{.Names}}'`).trim() === CONTAINER;
+    pushTo(remote, join(here, "..", "dist") + "/", "dist/", ["--delete"]);
+    if (!running) skip(`${CONTAINER} is not running on ${remote.ssh}; the bundle is there, the resource as it was.`);
+    pullFrom(remote, "docker/config/.storage/lovelace_resources", RESOURCES);
+    const before = registeredUrl();
+    execFileSync("node", [join(here, "prepare.mjs")], { stdio: "inherit", env: { ...process.env, GS_STAGING: "1" } });
+    const after = registeredUrl();
+    if (before && after && before === after) {
+      skip(`the bundle is byte for byte the one already registered on ${remote.ssh}, no restart needed.`);
+    }
+    pushTo(remote, RESOURCES, "docker/config/.storage/lovelace_resources");
+    console.log(`postbuild: restarting ${CONTAINER} on ${remote.ssh} so it serves the new URL...`);
+    onRemote(remote, `docker restart ${CONTAINER} >/dev/null`);
+    const up = await waitForHa(after ?? before, remote.url);
+    console.log(up
+      ? `postbuild: done - a plain reload of ${remote.url} now gets the build you just made.`
+      : `postbuild: restarted, but ${CONTAINER} on ${remote.ssh} has not answered yet - give it a moment.`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`postbuild: could not refresh the instance on ${remote.ssh} (${message.split("\n")[0]}).`);
+    console.log("postbuild: the build itself is fine.");
+  }
+  process.exit(0);
+}
+
+const remote = readRemote();
+if (remote) await refreshRemote(remote);
 
 if (!containerRunning()) skip(`${CONTAINER} is not running, leaving the resource as it is.`);
 

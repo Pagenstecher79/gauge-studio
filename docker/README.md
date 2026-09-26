@@ -11,6 +11,30 @@ Demo** dashboard appears in the sidebar.
 Requires Docker. There is no other automated way to run the card in a real
 Home Assistant.
 
+## On another host
+
+The instance can live on another machine in the LAN while the build stays
+here. That host needs Docker, ssh with key authentication and a folder shaped
+like this checkout - `docker/docker-compose.yml`, `docker/config`, `dist` -
+plus `docker/.env` holding `HA_BIND=0.0.0.0`, so the port is published on
+the LAN rather than only on that host's loopback. Start it there once with
+`docker compose -f docker/docker-compose.yml up -d`; `restart: unless-stopped`
+brings it back whenever Docker itself comes up.
+
+Then tell this checkout where it is, in `docker/.remote` (gitignored):
+
+```json
+{ "ssh": "m2", "url": "http://192.168.2.150:8123", "dir": "gauge-studio-ha" }
+```
+
+From then on `npm run build` - and so `npm run watch` - copies `dist/` over,
+re-registers the resource and restarts the container there, starting
+OrbStack first if it has stopped. `npm run ha` refuses to start a second
+instance here. The `ha:*` scripts still speak to the local Docker; on the host
+they are `docker compose -f docker/docker-compose.yml logs -f`, `down` and so
+on, over `ssh`. Moving an existing instance is: stop it, copy `docker/config`
+across, start it there, remove the local container - never two running.
+
 ## Why this exists
 
 A page that instantiates `sc-gauge` and friends directly proves that the
