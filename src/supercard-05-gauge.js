@@ -3,12 +3,13 @@ import { normalizeStops } from "./gradient-stops.js";
 import { autoStep, staggerRows, ROW_GAP, rowBox, boxReach } from "./tick-labels.js";
 import { gaugeScale, NO_TIER_STATE, tickMultiplier, multiplierParts } from "./gauge-scale.js";
 import { ringRadius, ringPartRadius, gaugeOuter, frameBand, gaugeScaleOf } from "./gauge-inner-boxes.js";
-import { adaptiveInk } from "./adaptive-ink.js";
+import { adaptiveInk, markBackdrop } from "./adaptive-ink.js";
 import { isPointerGlass, pointerBlurPx, pointerLensFraction,
-         pointerGlassStyle } from "./pointer-glass.js";
+         pointerGlassBox } from "./pointer-glass.js";
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { watchModalSuspend } from "./glass-suspend.js";
 import { cardLight } from "./card-light.js";
+import { needleLift, liftFromLegacy } from "./pointer-shadow.js";
 
 // One id each, not one per instance: a filter is looked up inside the
 // shadow root that holds it, and every gauge has its own.
@@ -752,12 +753,13 @@ class ScGauge extends LitElement {
                                         this._get('bg_threshold_unit', 'percent')) || []).map(st => st.c)
           : [bgC1, bgC2])
       : (bgMode === 'solid' ? [bgC1] : []);
-    const markInk = adaptiveInk({
+    const inkArgs = {
       fill: toRgbArray(hideSvgBg ? animCol : bgFill) || null,
       mode: bgMode,
       stops: bgStops.map(c => toRgbArray(c)).filter(Boolean),
       opacity: bgOpacity,
-    });
+    };
+    const markInk = adaptiveInk(inkArgs);
     /**
      * The ink for a mark at this distance from the centre.
      *
@@ -1010,57 +1012,37 @@ class ScGauge extends LitElement {
     const rTip  = radius-(safeFloat(this._get('pointer_offset',2),2)*scale), xBase=rTip-pLlen;
     const pCol  = resolveColor(this._get('pointer_color_type','fixed'), this._get('pointer_color', [255,255,255]), inkAt(rTip));
     
-    let shadowDef = '';
-    let filterAttr = '';
-    let sX = 0, sY = 0;
-    // Black at a little over a third, which is what this shadow was painted
-    // with before either of them was a setting.
-    let sCol = 'rgb(0,0,0)', sOpacity = 0.35;
+    // How high the needle floats above the dial, and nothing else. One light
+    // at one height decides the cast shadow, the contact shadow and the lit
+    // edge together - see `pointer-shadow.js`. Six keys used to set those
+    // three independently, which is how a shadow ended up at a distance no
+    // light could have thrown it; they are still read, so a card written
+    // under them keeps the offset somebody actually chose.
+    // `needleLift` also takes a diffusion, and this passes none: judged at the
+    // dial, a slider for it moved the shadow too little to be worth a row.
     const pShadowType = this._get('pointer_shadow_type', 'none');
-    
-    if (pShadowType !== 'none') {
-      const sBlur = safeFloat(this._get('pointer_shadow_blur', 0.8), 0.8);
-      // `pointer_shadow_offset_y` is the name this carried while the angle was
-      // always 90 degrees and the distance was therefore always vertical. The
-      // editor writes `pointer_shadow_distance` now; the old key is still read
-      // so a config written before the rename keeps its shadow.
-      const sDist = safeFloat(this._get('pointer_shadow_distance', this._get('pointer_shadow_offset_y', 0.5)), 0.5);
-      // The card's sun if it has one, this gauge's own saved angle if not -
-      // so a card drawn before the light was one value keeps its shadows
-      // exactly where they were until somebody moves the sun.
-      const sAngle = cardLight(this.rootConfig,
-                               { angle: this._get('pointer_shadow_angle', undefined) }).angle;
-      const sRad = sAngle * Math.PI / 180;
-      // 'adaptive' cannot mean here what it means everywhere else in this file.
-      // The theme's text color is near-white on a dark card, and the shadow is
-      // offset and barely blurred, so it does not read as the halo a lifted
-      // object casts on a dark surface - it reads as a second, ghostly pointer
-      // beside the real one. A shadow is the absence of light in any theme;
-      // what adapts is its strength, which is the opacity below. 'fixed' takes
-      // the color the editor has been offering all along.
-      sCol = pShadowType === 'adaptive'
-        ? 'rgb(0,0,0)'
-        : resolveColor('fixed', this._get('pointer_shadow_color', [0, 0, 0]));
-      // On the group rather than on each shape: the hub and the pointer overlap,
-      // and a shadow that is darker where one object crosses itself is not a
-      // shadow.
-      sOpacity = safeFloat(this._get('pointer_shadow_opacity', 0.35), 0.35);
-      
-      sX = sDist * Math.cos(sRad);
-      sY = sDist * Math.sin(sRad);
-      
-      const shadowId = `p-shadow-${this.config.entity ? this.config.entity.replace(/[^a-zA-Z0-9]/g,'_') : 'x'}_${this.dataset.idx || 0}`;
-      
-      shadowDef = svg`
-        <defs>
-          <filter id="${shadowId}" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="${sBlur}" />
-          </filter>
-        </defs>
-      `;
-      filterAttr = `url(#${shadowId})`;
-    }
-    
+    const pLift = this._get('pointer_lift', undefined);
+    const legacyLift = pShadowType === 'none' ? 0 : liftFromLegacy({
+      // `pointer_shadow_offset_y` is the name the distance carried while the
+      // angle was always 90 degrees and it was therefore always vertical.
+      distance: safeFloat(this._get('pointer_shadow_distance',
+                                    this._get('pointer_shadow_offset_y', 0.5)), 0.5),
+      width: pW,
+    });
+    const liftH = pLift === undefined || pLift === null || pLift === ''
+      ? legacyLift
+      : safeFloat(pLift, 0);
+    // The card's sun if it has one, this gauge's own saved angle if not - so a
+    // card drawn before the light was one value keeps its shadows exactly
+    // where they were until somebody moves the sun. Its distance throws the
+    // shadow further out; a card with no light of its own is handed the
+    // default 1, which is the throw the lift alone used to give.
+    const sun = cardLight(this.rootConfig,
+                          { angle: this._get('pointer_shadow_angle', undefined) });
+    const cast = liftH > 0
+      ? needleLift({ height: liftH, width: pW, angle: sun.angle, distance: sun.distance,
+                     backdrop: markBackdrop(inkArgs) })
+      : null;
     const scaleKey = `${data.unitPrefix}_${data.resultTier}_${data.max}`;
 
     // Each moving part gets its own <svg> in the HTML flow, because a transform
@@ -1089,6 +1071,13 @@ class ScGauge extends LitElement {
         ${overlay}
       </div>`;
 
+    // One box or two, as `pointerGlassBox` asks. The part is named on the
+    // outer one either way: that is the box with the geometry, and it is what
+    // the canvas editor frames and hit-tests.
+    const glassBox = ({ outer, inner }, part) => html`
+      <div data-sc-part="${part}" style="${outer}">${
+        inner ? html`<div style="${inner}"></div>` : ''}</div>`;
+
     // Glass, and what each half of it costs. The lens is withheld from a
     // needle too thin to show a bend and the blur is withheld at zero -
     // `blur(0px)` is not a no-op, it makes the part a backdrop root and pays
@@ -1114,36 +1103,50 @@ class ScGauge extends LitElement {
       : svg`<line x1="${xBase}" y1="0" x2="${rTip}" y2="0" stroke="${color}" stroke-width="${pW}" stroke-linecap="round"/>${
           gradId ? svg`<line x1="${xBase}" y1="0" x2="${rTip}" y2="0" stroke="url(#${gradId})" stroke-width="${pW}" stroke-linecap="round"/>` : ''}`;
 
-    // The shadow rotates about its own pivot, offset from the needle's - as it
-    // did when it was a translate inside the rotating group.
-    const shadowAt = (content) => layer(pivot + sX, pivot + sY, true, svg`
-          ${shadowDef}
-          <g transform="translate(${(pivot + sX).toFixed(2)}, ${(pivot + sY).toFixed(2)})" filter="${filterAttr}" opacity="${sOpacity}">
+    // Each cast rotates about its own pivot, offset from the needle's - as the
+    // single shadow did when it was a translate inside the rotating group.
+    const castId = `p-cast-${this.config.entity ? this.config.entity.replace(/[^a-zA-Z0-9]/g,'_') : 'x'}_${this.dataset.idx || 0}`;
+    const castAt = (name, { dx = 0, dy = 0, blur = 0, opacity = 0 }, colour, content) =>
+      opacity <= 0 ? '' : layer(pivot + dx, pivot + dy, true, svg`
+          ${blur > 0 ? svg`<defs>
+            <filter id="${castId}-${name}" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="${blur.toFixed(3)}" />
+            </filter>
+          </defs>` : ''}
+          <g transform="translate(${(pivot + dx).toFixed(2)}, ${(pivot + dy).toFixed(2)})" color="${colour}" filter="${blur > 0 ? `url(#${castId}-${name})` : 'none'}" opacity="${opacity.toFixed(3)}">
             ${content}
           </g>`);
+    // Bottom to top: the shadow the light throws, the darkness trapped where
+    // the needle nearly touches the dial, and last the edge the light catches -
+    // which is drawn *under* the needle, offset towards the sun, so that only
+    // the sliver the needle does not cover shows.
+    const castsOf = (content) => html`
+      ${castAt('drop', cast?.drop || {}, 'rgb(0,0,0)', content)}
+      ${castAt('contact', cast?.contact || {}, 'rgb(0,0,0)', content)}
+      ${castAt('rim', cast?.rim || {}, 'rgb(255,255,255)', content)}`;
 
     const pointerLayers = html`
-      ${filterAttr ? shadowAt(svg`<circle cx="0" cy="0" r="${dotR}" fill="${sCol}"/>${is3d ? '' : shape(sCol, null)}`) : ''}
+      ${cast ? castsOf(svg`<circle cx="0" cy="0" r="${dotR}" fill="currentColor"/>${is3d ? '' : shape('currentColor', null)}`) : ''}
       ${isPointerGlass(hubGlass)
-        ? layer(pivot, pivot, false, '', false, html`<div data-sc-part="pointer_center" style="${
-            pointerGlassStyle({ effect: hubGlass, color: hubCol, shape: 'circle', size: this.SIZE,
-                                x: pivot - dotR, y: pivot - dotR, w: dotR * 2, h: dotR * 2,
-                                filterId: hubLens ? HUB_LENS_ID : '', blurPx: hubBlur })}"></div>`)
+        ? layer(pivot, pivot, false, '', false, glassBox(
+            pointerGlassBox({ effect: hubGlass, color: hubCol, shape: 'circle', size: this.SIZE,
+                              x: pivot - dotR, y: pivot - dotR, w: dotR * 2, h: dotR * 2,
+                              filterId: hubLens ? HUB_LENS_ID : '', blurPx: hubBlur }), 'pointer_center'))
         : layer(pivot, pivot, false, svg`<circle data-sc-part="pointer_center" cx="${pivot}" cy="${pivot}" r="${dotR}" fill="${hubCol}"/>`)}
-      ${(filterAttr && is3d) ? shadowAt(shape(sCol, null)) : ''}
+      ${(cast && is3d) ? castsOf(shape('currentColor', null)) : ''}
       ${isPointerGlass(ptrGlass)
-        ? layer(pivot, pivot, true, '', true, html`<div data-sc-part="pointer" style="${
-            pointerGlassStyle({ effect: ptrGlass, color: pCol, size: this.SIZE,
-                                // A round cap reaches half the width past
-                                // either end of the line it finishes, and a
-                                // box does not - so the box is that much
-                                // longer at both ends, or the glass needle is
-                                // shorter than the one it replaces.
-                                ...(this._get('pointer_type','needle') === 'triangle'
-                                  ? { shape: 'triangle', x: pivot + xBase, w: rTip - xBase }
-                                  : { shape: 'round', x: pivot + xBase - pW / 2, w: rTip - xBase + pW }),
-                                y: pivot - pW / 2, h: pW,
-                                filterId: ptrLens ? PTR_LENS_ID : '', blurPx: ptrBlur })}"></div>`)
+        ? layer(pivot, pivot, true, '', true, glassBox(
+            pointerGlassBox({ effect: ptrGlass, color: pCol, size: this.SIZE,
+                              // A round cap reaches half the width past
+                              // either end of the line it finishes, and a
+                              // box does not - so the box is that much
+                              // longer at both ends, or the glass needle is
+                              // shorter than the one it replaces.
+                              ...(this._get('pointer_type','needle') === 'triangle'
+                                ? { shape: 'triangle', x: pivot + xBase, w: rTip - xBase }
+                                : { shape: 'round', x: pivot + xBase - pW / 2, w: rTip - xBase + pW }),
+                              y: pivot - pW / 2, h: pW,
+                              filterId: ptrLens ? PTR_LENS_ID : '', blurPx: ptrBlur }), 'pointer'))
         : layer(pivot, pivot, true, svg`
           ${is3d ? svg`<defs>
             <linearGradient id="sc-3d-pointer-grad" x1="0%" y1="0%" x2="0%" y2="100%">

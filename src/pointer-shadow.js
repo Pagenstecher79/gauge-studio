@@ -167,18 +167,26 @@ export function shadowRoom(backdrop) {
  * @param {number} o.width the needle's width, in whatever unit the caller
  *   paints in; every length handed back is in that unit
  * @param {number} [o.angle] where the light throws the shadow, in degrees
+ * @param {number} [o.distance] how far out the sun stands, as the card's
+ *   light gives it - 1 is where it stood before this was asked, so a card
+ *   that has never set one draws exactly what it drew
  * @param {[number, number, number]|null} [o.backdrop] what the needle is
  *   drawn on, from `markBackdrop` - null where the caller cannot say
  * @returns {NeedleLift}
  */
-export function needleLift({ height, diffusion = 0, width, angle = 90, backdrop = null }) {
+export function needleLift({ height, diffusion = 0, width, angle = 90, distance = 1,
+                             backdrop = null }) {
   const h = clamp01(height);
   const d = clamp01(diffusion) * DIFFUSION_REACH;
   const w = Number.isFinite(width) && width > 0 ? width : 0;
   const room = shadowRoom(backdrop);
   const rad = (Number.isFinite(angle) ? angle : 90) * Math.PI / 180;
 
-  const dist = h * w * DROP_PER_WIDTH * (1 - DROP_DIFFUSE_PULL * d);
+  // The card's sun standing further out throws the shadow further, and only
+  // further - it does not soften it and it does not move the lit edge, which
+  // is a fact about the needle's own edge and not about where the light is.
+  const far = Number.isFinite(distance) && distance >= 0 ? distance : 1;
+  const dist = h * w * DROP_PER_WIDTH * (1 - DROP_DIFFUSE_PULL * d) * far;
   // The same occlusion spread over more area, so the core lightens as the
   // shadow grows. This is the pair that used to be free of each other, and
   // free of each other is how a shadow ends up reading as a second needle.
@@ -205,4 +213,26 @@ export function needleLift({ height, diffusion = 0, width, angle = 90, backdrop 
                * (1 - RIM_DIFFUSE_LOSS * d),
     },
   };
+}
+
+/**
+ * The lift that reproduces an old six-key shadow, as near as one number can.
+ *
+ * Only the offset is carried. Blur, colour and opacity were free of one
+ * another under the old keys, and their being free of one another is exactly
+ * what `needleLift` removes - a light at a height decides all three - so
+ * reading them back in would be inventing a shadow nobody configured. The
+ * distance is what somebody actually looked at and nudged, so it is the one
+ * worth keeping: `dist = height * width * DROP_PER_WIDTH` inverted, and the
+ * sign dropped, because a negative distance was the old way of throwing the
+ * shadow the other way and the light's angle says that now.
+ *
+ * @param {{ distance?: number|string, width?: number }} legacy
+ * @returns {number} a height in 0..1
+ */
+export function liftFromLegacy({ distance, width }) {
+  const w = Number(width);
+  const d = Number(distance);
+  if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(d)) return 0;
+  return clamp01(Math.abs(d) / (w * DROP_PER_WIDTH));
 }

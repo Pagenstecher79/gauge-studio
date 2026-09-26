@@ -18,3 +18,6 @@ import './supercard-05-gauge-editor.js';
 import './supercard-06-labels-editor.js';
 import './supercard-07-fx-glass-editor.js';
 import './supercard-08-interaction-editor.js';
+// After the glass editor: that is where <sc-shadow-pad> is defined, and the
+// card's own light is the one control that uses it now.
+import './supercard-11-light-editor.js';

@@ -21,7 +21,7 @@ import { templatesFor, templateEntry, previewFor, GAUGE_FACE } from "./element-t
 import { revealBy, scrollParent } from "./reveal-scroll.js";
 import { pinchStep } from "./pinch-gesture.js";
 import { icon, iconMask } from "./icons.js";
-import { cardLight, clampLightAngle, ARC_MIN, ARC_MAX, LIGHT_ANGLE, LIGHT_DISTANCE } from "./card-light.js";
+import { MAX_HEIGHT as MAX_LIFT } from "./pointer-shadow.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
 import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
@@ -475,13 +475,6 @@ const markHex = (/** @type {any} */ value, /** @type {string} */ dflt) => {
   return rgb ? SC.rgbToHex(rgb[0], rgb[1], rgb[2]) : dflt;
 };
 
-/** A shadow is off, a colour of its own, or taken from what it falls from. */
-const SHADOW_MODE = Object.freeze([
-  { value: 'none', label: 'None', short: 'None' },
-  { value: 'fixed', label: 'Fixed', short: 'Fixed' },
-  { value: 'adaptive', label: 'Adaptive', short: 'Adaptive' },
-]);
-
 // Glass, as the two chips offer it. Both lists are the same list: the
 // needle's used to lose the liquid option below four units of width, and no
 // longer does - see POINTER_LENS_FRACTION.
@@ -503,10 +496,6 @@ const POINTER_SHAPE = Object.freeze([
   { value: 'needle', label: 'Needle' },
   { value: 'triangle', label: 'Triangle' },
 ]);
-
-/** Whether there is a shadow for the four rows under it to shape. */
-const hasShadow = (/** @type {any} */ cfg) =>
-  (cfg.pointer_shadow_type || 'none') !== 'none';
 
 /**
  * How a ring is coloured, and what each answer then asks for.
@@ -1122,23 +1111,12 @@ const GAUGE_RINGS = Object.freeze({
       { key: 'pointer_glass_ior', icon: icon('rainbow'), slide: true, by: 0.05, min: 1, max: MAX_IOR,
         dflt: 1, what: 'refraction',
         condition: (/** @type {any} */ cfg) => pointerLensFraction(cfg.pointer_glass) > 0 },
-      { key: 'pointer_shadow_type', icon: icon('moon'), what: 'shadow', picks: SHADOW_MODE,
-        read: (/** @type {any} */ cfg) => cfg.pointer_shadow_type || 'none' },
-      { icon: icon('paintbrush'), what: 'shadow colour', paint: true,
-        condition: (/** @type {any} */ cfg) => cfg.pointer_shadow_type === 'fixed',
-        read: (/** @type {any} */ cfg) => markHex(cfg.pointer_shadow_color, '#000000'),
-        patch: (/** @type {any} */ _cfg, /** @type {string} */ v) =>
-          ({ pointer_shadow_color: v }) },
-      // The four that shape a shadow are not there to be read when there is no
-      // shadow to shape - the panel is short enough without them.
-      { key: 'pointer_shadow_blur', icon: icon('droplet'), slide: true, by: 0.01, min: 0, max: 1,
-        dflt: 0.8, what: 'shadow blur', condition: hasShadow },
-      { key: 'pointer_shadow_distance', icon: icon('move-diagonal'), slide: true, by: 0.1, min: -5,
-        max: 5, dflt: 0.5, what: 'shadow distance', condition: hasShadow },
-      { key: 'pointer_shadow_angle', icon: icon('rotate-cw'), slide: true, by: 5, min: 0, max: 360,
-        dflt: 90, what: 'shadow angle', condition: hasShadow },
-      { key: 'pointer_shadow_opacity', icon: icon('contrast'), slide: true, by: 0.05, min: 0,
-        max: 1, dflt: 0.35, what: 'shadow opacity', condition: hasShadow },
+      // One light at one height draws the cast shadow, the contact shadow and
+      // the lit edge together, so one row is the whole of it. Type, colour,
+      // blur, distance, angle and opacity were six ways of contradicting each
+      // other and are gone.
+      { key: 'pointer_lift', icon: icon('moon'), slide: true, by: 0.05, min: 0, max: MAX_LIFT,
+        dflt: 0, what: 'lift off the dial' },
     ],
   },
   pointer_center: {
@@ -3752,7 +3730,6 @@ class ScCanvasEditor extends LitElement {
    *
    * @param {Record<string, number>} patch
    */
-  _setLight(patch) { this._send('__merge__', patch); }
 
   _send(key, value, keys = HISTORY_KEYS) {
     if (!this.commitFn) return;
@@ -7233,9 +7210,16 @@ class ScCanvasEditor extends LitElement {
     const where = below.length > 1
       ? below.slice(0, -1).join(', ') + ' and ' + below[below.length - 1]
       : below[0];
+    // The panel floats over the canvas, and the canvas below it drags whatever
+    // part is selected. Every control in here already keeps its own press to
+    // itself, but the padding between them did not, so a finger that reached
+    // for a slider and missed by a few pixels moved the part instead. One
+    // guard on the panel, stopping the press without preventing it, so the
+    // selects and the swatches still open themselves.
     return html`
       <div class="ring-steps ${opts?.up ? 'up' : ''} ${opts?.wide ? 'wide' : ''}"
            data-part=${this._innerSel}
+           @pointerdown=${keep}
            style="left:${left}%; top:${top}%;">
         ${rows.map(group)}
         ${where ? html`
@@ -8217,17 +8201,10 @@ class ScCanvasEditor extends LitElement {
     const gridTip = 'Per cent of the canvas width, so the grid keeps its proportions when '
       + 'the canvas is reshaped.'
       + (gridValue > 0 ? ` Currently ${gridToUnits({ ...c, grid_unit: 'pct' }, gridValue)} of ${c.w} units.` : '');
-    // One sun for the whole card: every bevel on a glass pattern, every relief
-    // on a segmented ring and every shadow a needle stands off its dial in is
-    // lit from it. It used to be a pad on each of those, which is how a card
-    // came to read as several photographs rather than as one object.
-    const light = cardLight(this.slot);
-    const lightTip = 'Where the sun stands over the whole card - every glass bevel, every '
-      + 'lit ring and every needle\'s shadow follows it. Only the upper half of the pad: '
-      + 'below it the sun would be under the card, and a card lit from beneath reads as a '
-      + 'mistake. The canvas itself is the preview, so turn Live preview on to judge it.'
-      + (light.fromCard ? '' : ' Nothing has been set yet, so each pattern is still lit from '
-        + 'its own saved sun; moving this one takes them all over to it.');
+    // The card's one sun has a menu of its own - see
+    // `supercard-11-light-editor.js`. It was a row here while it was new, and
+    // a card-wide light filed under the arrangement of the card is a setting
+    // nobody finds; the canvas is still where you watch it move.
     const hlTip = 'The part in hand blinks on the drawing itself and is lent a colour that stands out against what it is drawn on - the mark, not a frame round it. A colour just changed is shown plain for five seconds first, so the highlight is never what you are judging it by.';
     // The switch says what the card is set to; while an element is open the
     // preview is on over the top of it, and the tip is what says so - a
@@ -8258,23 +8235,6 @@ class ScCanvasEditor extends LitElement {
         <span class="settings-label">Live preview ${SC.tipDot(liveTip, { right: true })}</span>
         <ha-switch .checked=${this._live} .disabled=${liveHeld}
                    @change=${e => this._send('live_preview', e.target.checked ? undefined : false)}></ha-switch>
-        <span class="gap"></span>
-        <span class="settings-label">Light ${SC.tipDot(lightTip, { right: true })}</span>
-        <sc-shadow-pad compact .angle=${light.angle} .distance=${light.distance}
-                       .maxDistance=${5}
-                       @pad-change=${(/** @type {any} */ e) =>
-                         this._setLight({ light_angle: e.detail.angle,
-                                          light_distance: e.detail.distance })}></sc-shadow-pad>
-        <input class="num" type="number" min=${ARC_MIN} max=${ARC_MAX} step="1" .value=${light.angle}
-               @change=${(/** @type {any} */ e) => {
-                 const n = clampLightAngle(parseFloat(e.target.value));
-                 // lit writes `.value` only when the bound value changes, so an
-                 // angle that folds back onto the one already set would leave the
-                 // field showing what was typed instead of what was taken.
-                 e.target.value = String(n);
-                 this._setLight({ light_angle: n });
-               }}>
-        <span class="hint">°</span>
         <span class="gap"></span>
         <span class="settings-label">Highlight ${SC.tipDot(hlTip, { right: true })}</span>
         <ha-switch .checked=${this._hl}

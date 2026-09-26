@@ -687,7 +687,7 @@ class SupercardModularEditor extends LitElement {
     // while - it is the card, after all - but it is also the tallest thing in
     // the dialog by far, and two settings menus below it are two menus nobody
     // scrolls to.
-    const moduleOrder = ['core', 'layout', 'color', 'labels', 'gauge', 'progressbar', 'debug'];
+    const moduleOrder = ['core', 'light', 'layout', 'color', 'labels', 'gauge', 'progressbar', 'debug'];
     const availableModules = Object.keys(window.SupercardModules);
 
     availableModules.sort((a, b) => {

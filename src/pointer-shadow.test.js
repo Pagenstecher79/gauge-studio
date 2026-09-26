@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { needleLift, shadowRoom, DARKEST, DROP_PER_WIDTH,
+import { needleLift, shadowRoom, liftFromLegacy, DARKEST, DROP_PER_WIDTH,
          MAX_HEIGHT, MAX_DIFFUSION } from './pointer-shadow.js';
 
 const W = 17;
@@ -165,5 +165,68 @@ describe('the two ends', () => {
   it('names them, so a slider cannot be given a wider range by accident', () => {
     expect(MAX_HEIGHT).toBe(1);
     expect(MAX_DIFFUSION).toBe(1);
+  });
+});
+
+describe('liftFromLegacy', () => {
+  it('answers the height that reproduces the old offset', () => {
+    const h = liftFromLegacy({ distance: W * DROP_PER_WIDTH * 0.4, width: W });
+    expect(h).toBeCloseTo(0.4, 10);
+    expect(dist(lift({ height: h }))).toBeCloseTo(W * DROP_PER_WIDTH * 0.4, 10);
+  });
+
+  it('reads a shadow thrown the other way as the same height', () => {
+    expect(liftFromLegacy({ distance: -2, width: W }))
+      .toBe(liftFromLegacy({ distance: 2, width: W }));
+  });
+
+  it('never leaves the slider\'s range', () => {
+    expect(liftFromLegacy({ distance: 5, width: 1 })).toBe(MAX_HEIGHT);
+    expect(liftFromLegacy({ distance: 0, width: W })).toBe(0);
+  });
+
+  it('answers nothing where there is nothing to read', () => {
+    for (const v of [undefined, null, '', NaN, 'true', 'false', [], {}]) {
+      expect(liftFromLegacy({ distance: /** @type {any} */ (v), width: W })).toBe(0);
+      expect(liftFromLegacy({ distance: 1, width: /** @type {any} */ (v) })).toBe(0);
+    }
+  });
+
+  it('reads a numeric string, which is what a text field commits', () => {
+    expect(liftFromLegacy({ distance: '2', width: W }))
+      .toBe(liftFromLegacy({ distance: 2, width: W }));
+  });
+});
+
+describe('the card light\'s distance', () => {
+  it('is 1 by default, so a card that never set one draws what it drew', () => {
+    expect(lift({ height: 0.5 })).toEqual(lift({ height: 0.5, distance: 1 }));
+  });
+
+  it('throws the shadow further, in proportion', () => {
+    const near = lift({ height: 0.5, distance: 1 });
+    const far = lift({ height: 0.5, distance: 3 });
+    expect(dist(far)).toBeCloseTo(dist(near) * 3, 10);
+  });
+
+  it('at nothing puts the shadow straight under the needle', () => {
+    const l = lift({ height: 0.5, distance: 0 });
+    expect(dist(l)).toBe(0);
+    expect(l.drop.opacity).toBeGreaterThan(0);
+  });
+
+  it('moves neither the lit edge nor the blur, which are the needle\'s own', () => {
+    const near = lift({ height: 0.6, distance: 1 });
+    const far = lift({ height: 0.6, distance: 4 });
+    expect(far.rim).toEqual(near.rim);
+    expect(far.drop.blur).toBe(near.drop.blur);
+    expect(far.contact).toEqual(near.contact);
+  });
+
+  it('reads a value that is no distance at all as the default', () => {
+    for (const v of [undefined, NaN, -1, Infinity]) {
+      expect(dist(lift({ height: 0.5, distance: /** @type {any} */ (v) })))
+        .toBeCloseTo(dist(lift({ height: 0.5 })), 10);
+    }
   });
 });

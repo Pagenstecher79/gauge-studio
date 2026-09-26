@@ -70,17 +70,39 @@ instead of throwing it across the sky.
 editor, the way `<sc-gradient-stops>` is rendered from four editors. It gained
 `compact` (reflected) and the arc.
 
-## Step 3 - renderer and editor
+## Step 3 - renderer and editor - done 2026-09-25
 
-- Renderer `src/supercard-05-gauge.js:1005-1050`. It currently reads
-  `pointer_shadow_type` (1012), `_blur` (1015), `_distance` with the
-  `_offset_y` fallback (1020), `_angle` (1021), `_color` (1032), `_opacity`
-  (1036) and builds an `feGaussianBlur` filter `p-shadow-<entity>_<idx>`.
-  Replace with `needleLift`; the old keys stay readable.
-- Editor fields `src/supercard-05-gauge-editor.js:288-296`, six down to two.
-- Canvas chips `src/supercard-04-layout-editor.js:1124-1140`, same. The "has a
-  shadow" test at line 508 (`pointer_shadow_type !== 'none'`) becomes a height
-  test.
+The gauge now draws the three layers `needleLift` describes. One key,
+`pointer_lift`, 0..1.
+
+- `liftFromLegacy({ distance, width })` in `src/pointer-shadow.js` inverts
+  `dist = height * width * DROP_PER_WIDTH`. Only the distance is carried:
+  blur, colour and opacity were free of one another, and their being free of
+  one another is what this removes, so reading them back would be inventing a
+  shadow nobody set. The sign is dropped - a negative distance was the old way
+  of throwing the shadow the other way, and the light's angle says that now.
+- Renderer `src/supercard-05-gauge.js`. `castAt` draws one layer and `castsOf`
+  the three, bottom to top: the cast shadow, the contact shadow, and the lit
+  edge - which goes *under* the needle, offset towards the sun, so only the
+  sliver the needle does not cover shows. The silhouette is painted in
+  `currentColor` and the group carries the colour, so one silhouette serves
+  all three. `backdrop` is `markBackdrop(inkArgs)`, the same argument object
+  the dial's `adaptiveInk` is built from.
+- The six form fields and the six canvas chips are one each. `hasShadow` is
+  gone with them.
+- `SHADOW_MODE` is gone; height 0 is no shadow.
+- `element-templates.js` is on the new keys. Both templates that set a
+  distance translate to a lift of 1: the shadow they asked for was thrown
+  further than a light at that needle's width can throw one, which is the
+  clearest evidence there is that the six keys could contradict each other.
+  `pointer_shadow_angle: 40` stays in the default as the per-gauge fallback
+  for a card with no light of its own.
+
+Answered at the dial, 2026-09-25: the softness slider does not earn a row.
+Over its whole travel it moved the visible core by about five points, and it
+was per gauge while the sun that sets it is per card. `needleLift` still takes
+a diffusion - the arithmetic is right and the bench page rests on it - and the
+renderer passes none.
 
 ## Step 4 - cleanup
 
