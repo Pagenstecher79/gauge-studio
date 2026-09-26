@@ -1,4 +1,7 @@
 import { normalizeStops } from "./gradient-stops.js";
+import { gaugeScaleOf } from "./gauge-inner-boxes.js";
+import { liftFromLegacy } from "./pointer-shadow.js";
+import { hasCardLight } from "./card-light.js";
 
 /**
  * Settings that saved cards still carry and nothing reads any more.
@@ -219,6 +222,137 @@ function withScaleLabelUnits(slot) {
 }
 
 /**
+ * The needle shadow's keys from before it was one height above the dial.
+ *
+ * Six keys set the cast shadow's kind, offset, colour, blur and opacity each
+ * on its own, which is how a shadow ended up where no light could have thrown
+ * it. One key, `pointer_lift`, says all of that now; the gauge still reads the
+ * type and the distance, so an unedited card keeps the offset somebody chose.
+ * Colour, blur and opacity are read by nothing - the light decides them.
+ *
+ * `pointer_shadow_angle` is not here: it is the gauge's own sun, which
+ * `cardLight` falls back to for as long as the card has none of its own.
+ *
+ * @type {readonly string[]}
+ */
+const LEGACY_POINTER_SHADOW = Object.freeze([
+  'pointer_shadow_type', 'pointer_shadow_distance', 'pointer_shadow_offset_y',
+  'pointer_shadow_color', 'pointer_shadow_blur', 'pointer_shadow_opacity',
+]);
+
+/**
+ * A number as `safeFloat` reads it: the default for anything that is not one.
+ *
+ * @param {any} v @param {number} d
+ */
+const asFloat = (v, d) => {
+  const n = parseFloat(v);
+  return Number.isNaN(n) ? d : n;
+};
+
+/**
+ * A gauge's needle shadow with its lift written the one way it is read.
+ *
+ * The lift is the one the renderer would have worked out from the old keys -
+ * the same distance, against the same needle width at the same scale - so the
+ * shadow does not move when the keys go. A gauge that already carries a lift
+ * keeps it: the renderer never looked at the old keys for that one.
+ *
+ * @param {any} gauge
+ * @returns {any} the rewritten gauge, or the gauge itself where nothing changed
+ */
+function withPointerLift(gauge) {
+  if (!gauge || typeof gauge !== 'object') return gauge;
+  const olds = LEGACY_POINTER_SHADOW.filter(k => k in gauge);
+  if (!olds.length) return gauge;
+  const copy = { ...gauge };
+  const lift = gauge.pointer_lift;
+  if (lift === undefined || lift === null || lift === '') {
+    const type = gauge.pointer_shadow_type ?? 'none';
+    if (type === 'none') {
+      if ('pointer_lift' in copy) delete copy.pointer_lift;
+    } else {
+      // Read as the renderer reads them, `??` defaults and all - a
+      // `gauge_scale` of null is 0.9 there, where `gaugeScaleOf` alone
+      // would take it for 0.
+      const scale = gaugeScaleOf({
+        gauge_scale: gauge.gauge_scale ?? 0.9,
+        stroke_width: gauge.stroke_width ?? 3,
+        frame_ring_active: (gauge.frame_ring_active ?? false) === true,
+        frame_ring_width: gauge.frame_ring_width ?? 1.5,
+        frame_ring_gap: gauge.frame_ring_gap ?? 1.5,
+        scale_from_outer: (gauge.scale_from_outer ?? false) === true,
+      });
+      const distance = asFloat(gauge.pointer_shadow_distance ?? gauge.pointer_shadow_offset_y ?? 0.5, 0.5);
+      const width = asFloat(gauge.pointer_width ?? 2, 2) * scale;
+      copy.pointer_lift = liftFromLegacy({ distance, width });
+    }
+  }
+  for (const k of olds) delete copy[k];
+  return copy;
+}
+
+/**
+ * A gauge without the sun it kept for itself, once the card has one.
+ *
+ * @param {any} gauge
+ * @returns {any}
+ */
+function withoutOwnSun(gauge) {
+  if (!gauge || typeof gauge !== 'object' || !('pointer_shadow_angle' in gauge)) return gauge;
+  const { pointer_shadow_angle, ...rest } = gauge;
+  return rest;
+}
+
+/**
+ * The slot with every gauge's needle shadow migrated, itself where none was.
+ *
+ * Both places a gauge can live, as for the scale label. Once the card has a
+ * light of its own, each gauge's own angle has nothing left to stand in for,
+ * and goes with the rest.
+ *
+ * @param {any} slot
+ * @returns {any}
+ */
+function withPointerLifts(slot) {
+  const sunlit = hasCardLight(slot);
+  const one = (/** @type {any} */ g) => {
+    const lifted = withPointerLift(g);
+    return sunlit ? withoutOwnSun(lifted) : lifted;
+  };
+  let next = slot;
+  const list = slot?.gauges;
+  if (Array.isArray(list)) {
+    const gauges = list.map(one);
+    if (gauges.some((g, i) => g !== list[i])) next = { ...next, gauges };
+  }
+  return one(next);
+}
+
+/**
+ * The glass patterns without the sun each kept for itself, once the card has
+ * one: `cardLight` reads a pattern's `shadow_angle` and `shadow_distance`
+ * only while the card has no light, so from then on they only look like a
+ * setting.
+ *
+ * @param {any} slot
+ * @returns {any}
+ */
+function withoutPatternSuns(slot) {
+  const list = slot?.fx_glass_patterns;
+  if (!Array.isArray(list) || !hasCardLight(slot)) return slot;
+  let touched = false;
+  const next = list.map(pat => {
+    if (!pat || typeof pat !== 'object') return pat;
+    if (!('shadow_angle' in pat) && !('shadow_distance' in pat)) return pat;
+    touched = true;
+    const { shadow_angle, shadow_distance, ...rest } = pat;
+    return rest;
+  });
+  return touched ? { ...slot, fx_glass_patterns: next } : slot;
+}
+
+/**
  * The keys whose value is a list of gradient stops.
  *
  * All three used to be written `{value, color}` by the gauge and
@@ -353,6 +487,10 @@ export function stripDeadConfig(slot) {
   if (shaped !== cleaned) cleaned = shaped;
   const united = withScaleLabelUnits(cleaned);
   if (united !== cleaned) cleaned = united;
+  const lifted = withPointerLifts(cleaned);
+  if (lifted !== cleaned) cleaned = lifted;
+  const unsunned = withoutPatternSuns(cleaned);
+  if (unsunned !== cleaned) cleaned = unsunned;
   return cleaned === slot ? null : cleaned;
 }
 
