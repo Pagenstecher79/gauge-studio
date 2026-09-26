@@ -7210,9 +7210,16 @@ class ScCanvasEditor extends LitElement {
     const where = below.length > 1
       ? below.slice(0, -1).join(', ') + ' and ' + below[below.length - 1]
       : below[0];
+    // The panel floats over the canvas, and the canvas below it drags whatever
+    // part is selected. Every control in here already keeps its own press to
+    // itself, but the padding between them did not, so a finger that reached
+    // for a slider and missed by a few pixels moved the part instead. One
+    // guard on the panel, stopping the press without preventing it, so the
+    // selects and the swatches still open themselves.
     return html`
       <div class="ring-steps ${opts?.up ? 'up' : ''} ${opts?.wide ? 'wide' : ''}"
            data-part=${this._innerSel}
+           @pointerdown=${keep}
            style="left:${left}%; top:${top}%;">
         ${rows.map(group)}
         ${where ? html`
