@@ -1,11 +1,11 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { DEAD_PATTERN_TARGETS } from "./config-cleanup.js";
-import { lightParams, bevelShadow, px, isRoundTarget, isReliefTarget, boxRingMask, isCircleRadius } from "./glass-light.js";
+import { lightParams, bevelShadow, px, isRoundTarget, isReliefTarget } from "./glass-light.js";
 import { clampLightAngle, hasCardLight, LIGHT_ANGLE, LIGHT_DISTANCE } from "./card-light.js";
-import { lensScaleFraction, lensFilterMarkup, applyLensGeometry, MAX_IOR } from "./glass-lens.js";
-import { suspendable, watchModalSuspend } from "./glass-suspend.js";
+import { lensScaleFraction, MAX_IOR } from "./glass-lens.js";
+
 import { icon } from "./icons.js";
-import { patternList, patternFor, patternRadiusCss } from "./color-pattern.js";
+
 import { ListReorder } from "./list-reorder.js";
 
 const SC = window.SupercardUtils;
@@ -634,7 +634,6 @@ class ScFxGlassEditor extends LitElement {
             const isExp = !!this._expanded[pat.id];
             let targetLabel = getLabelForTarget(pat.target);
             if (pat.target === 'none') targetLabel = 'Not assigned';
-
 
             return html`
               <div class="pattern-card ${this._reorder.lifted(n) ? 'drag-lifted' : ''} ${

@@ -24,7 +24,7 @@ import { icon, iconMask } from "./icons.js";
 import { MAX_HEIGHT as MAX_LIFT } from "./pointer-shadow.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
-import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
+import { FIT_DENSITY } from "./label-typography.js";
 import { isPointerGlass, pointerLensFraction } from "./pointer-glass.js";
 import { isLiquidEffect } from "./pill-glass.js";
 import { MAX_IOR } from "./glass-lens.js";
@@ -119,7 +119,6 @@ function getLayoutTargets(slot) {
 
   return elements;
 }
-
 
 // --- CANVAS EDITOR -------------------------------------------------------
 // One canvas, elements placed on it directly. The rows/cells/items model it
@@ -5540,9 +5539,6 @@ class ScCanvasEditor extends LitElement {
     };
   }
 
-
-
-
   /**
    * Bring the settings that belong to the part just taken hold of up to where
    * they can be read.
@@ -8599,7 +8595,6 @@ class ScCanvasDimensions extends ScCanvasEditor {
 
 if (!customElements.get('sc-canvas-dimensions')) customElements.define('sc-canvas-dimensions', ScCanvasDimensions);
 
-
 /**
  * Writes down the canvas the card is already drawing, once, when the editor
  * opens.
@@ -8676,7 +8671,6 @@ class ScCanvasAdopt extends LitElement {
   render() { return html``; }
 }
 if (!customElements.get('sc-canvas-adopt')) customElements.define('sc-canvas-adopt', ScCanvasAdopt);
-
 
 // --- THE EDITOR HALF OF THE MODULE ---
 window.SupercardModules['layout'] = window.SupercardModules['layout'] || {};

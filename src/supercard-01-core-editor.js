@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
-import { canvasFromGrid } from "./canvas-model.js";
+
 import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { icon } from "./icons.js";
 import { GRADIENT_PRESETS, gradientPresetCss } from "./gradient-presets.js";

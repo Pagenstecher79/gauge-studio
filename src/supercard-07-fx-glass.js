@@ -1,9 +1,8 @@
-import { html } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { DEAD_PATTERN_TARGETS } from "./config-cleanup.js";
 import { lightParams, bevelShadow, px, isRoundTarget, boxRingMask, isCircleRadius } from "./glass-light.js";
 import { lensScaleFraction, lensFilterMarkup, applyLensGeometry } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
-import { icon } from "./icons.js";
+
 import { patternList, patternFor, patternRadiusCss } from "./color-pattern.js";
 
 const SC = window.SupercardUtils;

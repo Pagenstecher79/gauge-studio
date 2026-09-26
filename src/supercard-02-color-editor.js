@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
-import { normalizeStops, stopsToCss } from "./gradient-stops.js";
-import { BEND_ROOM, bendsOf, bendClipPath, bendEscapes } from "./canvas-bend.js";
+import { normalizeStops } from "./gradient-stops.js";
+
 import { icon } from "./icons.js";
 import { PATTERN_ANIMATIONS, defaultColorPattern, patchPattern, patchPatternStops,
          patternList, patternPreviewCss, solidColorOf,
