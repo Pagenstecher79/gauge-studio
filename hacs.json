@@ -1,6 +1,5 @@
 {
   "name": "Gauge, Progressbar, Custom Card Studio",
-  "filename": "gauge-studio.zip",
-  "zip_release": true,
+  "filename": "gauge-studio.js",
   "render_readme": true
 }

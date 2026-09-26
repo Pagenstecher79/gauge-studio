@@ -36,7 +36,8 @@ editor chunk import the card back as `./gauge-studio.js`, a name under which
 Home Assistant never serves it, and the whole card would load twice. `npm run
 watch` rebuilds both for the same reason; a bare `vite build` now refuses.
 The hash is in the name because only the *resource* URL carries a cache
-buster. A manual install copies both files; HACS installs a zip. See
+buster. A manual install copies both files, and so does HACS - every asset
+of the release lands in the card's directory. See
 `docs/editor-split.md`, and the two-stage registration under *Architecture*.
 
 **Testing happens in that one Docker instance, at <http://192.168.2.150:8123/>**
@@ -607,18 +608,31 @@ bodies have since been translated back, but the tag messages those bodies came
 from are still German, because force-pushing a tag re-fires the release
 workflow and ships a new build to everyone.
 
-**The asset HACS installs is `gauge-studio.zip`**, because the card is two
-files and `hacs.json` names one `filename`. The workflow zips `dist/*.js` flat
-and uploads that, plus both loose files for a manual install. A release that
-ships the card without its editor chunk is a card whose settings dialog 404s.
+**The release ships both files loose, and `hacs.json` names the card.**
+`filename` is `gauge-studio.js` and there is no `zip_release`. That one key
+does two jobs in HACS and they pull in opposite directions, which is worth
+knowing before anyone "tidies" it:
 
-That name is also why **HACS Validation is red between the rename and the
-first stable release that carries the zip**. The action resolves `filename`
-against GitHub's *latest release*, not against the repository - which is why
-it passed all along with `dist/` gitignored - and a pre-release is not the
-latest release. So `v2.5.0-beta.1` does not clear it and `v2.5.0` does. Do not
-"fix" it by pointing `filename` back at a single file: that ships a card whose
-editor 404s, which is the real breakage. Expect the daily scheduled run to be
-red for as long as that window lasts, and check it again after the stable tag.
+- `update_filenames()` sets `data.file_name` from `filename`, and
+  `generate_dashboard_resource_url()` builds the Lovelace resource from
+  `data.file_name`. So `filename` is the file a dashboard loads as a module.
+- `zip_release` makes HACS fetch the release asset *called* `filename` and
+  unzip it. There is no second key for the resource name.
+
+Set both and HACS registers `/hacsfiles/gauge-studio/gauge-studio.zip` as a
+module, which is what v2.5.0 shipped and what v2.5.1 fixed. The card was dead
+on every dashboard that updated.
+
+A zip is not needed anyway. Without `content_in_root`, `download_content`
+takes `release_contents` - *every* asset of the release - and downloads all of
+them into the card's directory. So two loose assets arrive side by side, the
+editor chunk included, and the resource points at the card. A release that
+ships the card without its editor chunk is a card whose settings dialog 404s;
+that is what the second asset is for, not a zip.
+
+**HACS Validation** resolves `filename` against GitHub's *latest release*, not
+against the repository - which is why it passes with `dist/` gitignored - and
+a pre-release is not the latest release. So a `-beta` tag cannot clear it and
+the next stable one does.
 
 `dist/` is gitignored; the release workflow builds it. Never commit build output.

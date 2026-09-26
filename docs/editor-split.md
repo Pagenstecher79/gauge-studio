@@ -100,15 +100,25 @@ against this month's renderers, and say nothing about it. With the content
 hash in the name there is nothing to invalidate - a changed editor is a new
 URL.
 
-## Why HACS installs a zip
+## Why HACS needs no zip, and must not have one
 
-`hacs.json` names one `filename`, so two files mean `zip_release: true` and a
-`gauge-studio.zip` asset built by the release workflow. The zip is flat: HACS
-unpacks it into the card's own directory, which is where the card's relative
-import looks.
+`hacs.json` says `filename: gauge-studio.js` and nothing else. That one key
+does two jobs in HACS: `update_filenames()` makes it `data.file_name`, and
+`generate_dashboard_resource_url()` builds the Lovelace resource from
+`data.file_name`. So `filename` is the file a dashboard loads as a module.
 
-A manual install therefore has to copy **both** files, side by side. The card
-alone is a card whose editor 404s.
+`zip_release` uses the same key for the asset to fetch and unzip, and there is
+no second key for the resource name. Setting both is what v2.5.0 did, and HACS
+duly registered `/hacsfiles/gauge-studio/gauge-studio.zip` as a JavaScript
+module. The card was dead on every dashboard that updated; v2.5.1 is the fix.
+
+Two files need no zip. Without `content_in_root`, `download_content` takes
+`release_contents` - every asset of the release - and downloads all of them
+into the card's directory. So the editor chunk arrives beside the card on its
+own, and the resource points at the card.
+
+A manual install copies the same **both** files, side by side. The card alone
+is a card whose editor 404s.
 
 ## Verifying it
 

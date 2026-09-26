@@ -66,8 +66,10 @@ load, and `gauge-studio-editor-<hash>.js`, which it fetches by itself the
 first time you open a card's settings. Copy both, side by side; only the
 first one is registered as a resource.
 
-1. Download `gauge-studio.zip` from the [latest release](https://github.com/Pagenstecher79/gauge-studio/releases/latest).
-2. Unpack it into `config/www/gauge-studio/` in your Home Assistant configuration.
+1. Download **both** `gauge-studio.js` and `gauge-studio-editor-<hash>.js`
+   from the [latest release](https://github.com/Pagenstecher79/gauge-studio/releases/latest).
+2. Put them side by side in `config/www/gauge-studio/` in your Home Assistant
+   configuration.
 3. Add the resource under **Settings → Dashboards → ⋮ → Resources**:
    * URL: `/local/gauge-studio/gauge-studio.js`
    * Type: **JavaScript Module**
