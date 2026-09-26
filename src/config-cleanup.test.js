@@ -1,3 +1,5 @@
+import { gaugeScaleOf } from './gauge-inner-boxes.js';
+import { liftFromLegacy } from './pointer-shadow.js';
 import { describe, it, expect } from 'vitest';
 import { stripDeadConfig, migrateSlotKey, withoutElementConfig, DEAD_ENTRY_KEYS, DEAD_PATTERN_TARGETS } from './config-cleanup.js';
 
@@ -329,5 +331,80 @@ describe("a scale label's custom unit", () => {
     ] });
     expect(out.gauges[0])
       .toEqual({ scale_label_custom_unit: 'A', scale_label_replace_unit: true });
+  });
+});
+
+describe('the needle shadow before it was a lift', () => {
+  const legacy = { pointer_shadow_type: 'drop', pointer_shadow_distance: 1.2,
+                   pointer_shadow_color: '#000', pointer_shadow_blur: 3, pointer_shadow_opacity: 0.4 };
+
+  it('writes the lift the renderer worked out, and drops the six keys', () => {
+    const out = stripDeadConfig({ gauges: [{ pointer_width: 2, gauge_scale: 0.9, ...legacy }] });
+    const g = out.gauges[0];
+    const scale = gaugeScaleOf({ gauge_scale: 0.9, stroke_width: 3, frame_ring_active: false,
+                                 frame_ring_width: 1.5, frame_ring_gap: 1.5, scale_from_outer: false });
+    expect(g.pointer_lift).toBe(liftFromLegacy({ distance: 1.2, width: 2 * scale }));
+    expect(g.pointer_lift).toBeGreaterThan(0);
+    for (const k of Object.keys(legacy)) expect(k in g).toBe(false);
+  });
+
+  it('reads the older name of the distance, and the default where there is none', () => {
+    const scale = gaugeScaleOf({ gauge_scale: 0.9, stroke_width: 3 });
+    const a = stripDeadConfig({ gauges: [{ pointer_shadow_type: 'drop', pointer_shadow_offset_y: 0.8 }] });
+    expect(a.gauges[0].pointer_lift).toBe(liftFromLegacy({ distance: 0.8, width: 2 * scale }));
+    const b = stripDeadConfig({ gauges: [{ pointer_shadow_type: 'drop' }] });
+    expect(b.gauges[0].pointer_lift).toBe(liftFromLegacy({ distance: 0.5, width: 2 * scale }));
+  });
+
+  it('reads a null scale as the renderer does, as 0.9 rather than 0', () => {
+    const a = stripDeadConfig({ gauges: [{ gauge_scale: null, pointer_shadow_type: 'drop' }] });
+    const b = stripDeadConfig({ gauges: [{ gauge_scale: 0.9, pointer_shadow_type: 'drop' }] });
+    expect(a.gauges[0].pointer_lift).toBe(b.gauges[0].pointer_lift);
+  });
+
+  it('writes no lift for a shadow that was off', () => {
+    const out = stripDeadConfig({ gauges: [{ pointer_shadow_type: 'none', pointer_shadow_distance: 2 }] });
+    expect(out.gauges[0]).toEqual({});
+    const unset = stripDeadConfig({ gauges: [{ pointer_shadow_color: '#000' }] });
+    expect(unset.gauges[0]).toEqual({});
+  });
+
+  it('keeps a lift the gauge already carries', () => {
+    const out = stripDeadConfig({ gauges: [{ pointer_lift: 0.3, ...legacy }] });
+    expect(out.gauges[0]).toEqual({ pointer_lift: 0.3 });
+    const zero = stripDeadConfig({ gauges: [{ pointer_lift: 0, ...legacy }] });
+    expect(zero.gauges[0]).toEqual({ pointer_lift: 0 });
+  });
+
+  it('replaces an empty lift, which the renderer passed over too', () => {
+    const out = stripDeadConfig({ gauges: [{ pointer_lift: '', pointer_shadow_type: 'drop' }] });
+    expect(out.gauges[0].pointer_lift).toBeGreaterThan(0);
+  });
+
+  it('migrates a gauge that is the slot itself', () => {
+    const out = stripDeadConfig({ gauge_active: true, pointer_shadow_type: 'drop' });
+    expect(out.pointer_lift).toBeGreaterThan(0);
+    expect('pointer_shadow_type' in out).toBe(false);
+  });
+
+  it('keeps the gauge\'s own sun while the card has none', () => {
+    const slot = { gauges: [{ pointer_lift: 1, pointer_shadow_angle: 40 }],
+                   fx_glass_patterns: [{ target: 'gauge_0', shadow_angle: 90, shadow_distance: 1 }] };
+    expect(stripDeadConfig(slot)).toBe(null);
+  });
+
+  it('drops every part\'s own sun once the card has a light', () => {
+    const slot = { light_angle: 120, light_distance: 1,
+                   gauges: [{ pointer_lift: 1, pointer_shadow_angle: 40 }],
+                   fx_glass_patterns: [{ target: 'gauge_0', blur: 10, shadow_angle: 90, shadow_distance: 1 }] };
+    const out = stripDeadConfig(slot);
+    expect(out.gauges[0]).toEqual({ pointer_lift: 1 });
+    expect(out.fx_glass_patterns[0]).toEqual({ target: 'gauge_0', blur: 10 });
+    expect(slot.gauges[0].pointer_shadow_angle).toBe(40);
+  });
+
+  it('leaves a gauge with nothing old in it alone', () => {
+    const g = { pointer_lift: 0.5 };
+    expect(stripDeadConfig({ gauges: [g] })).toBe(null);
   });
 });

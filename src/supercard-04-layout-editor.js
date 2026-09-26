@@ -24,7 +24,7 @@ import { icon, iconMask } from "./icons.js";
 import { MAX_HEIGHT as MAX_LIFT } from "./pointer-shadow.js";
 import { dialFromStartAngle, startAngleFromDial } from "./gauge-angle.js";
 import { GRADIENT_PRESETS, gradientPresetPatch, gradientPresetCss } from "./gradient-presets.js";
-import { labelFontSize, labelIconSize, DENSITY, FIT_DENSITY } from "./label-typography.js";
+import { FIT_DENSITY } from "./label-typography.js";
 import { isPointerGlass, pointerLensFraction } from "./pointer-glass.js";
 import { isLiquidEffect } from "./pill-glass.js";
 import { MAX_IOR } from "./glass-lens.js";
@@ -119,7 +119,6 @@ function getLayoutTargets(slot) {
 
   return elements;
 }
-
 
 // --- CANVAS EDITOR -------------------------------------------------------
 // One canvas, elements placed on it directly. The rows/cells/items model it
@@ -3719,18 +3718,6 @@ class ScCanvasEditor extends LitElement {
    * because `this.slot` still holds the old config then - Home Assistant
    * hands the new one back asynchronously, a render later.
    */
-  /**
-   * Move the card's sun.
-   *
-   * Onto the slot rather than onto anything the canvas holds: the light is the
-   * card's, not any one element's, and the elements read it from there. One
-   * merge for both halves of it, because the pad hands over an angle and a
-   * distance together and two commits in a tick lose the first - `_commit`
-   * clones the config that Home Assistant is still writing back.
-   *
-   * @param {Record<string, number>} patch
-   */
-
   _send(key, value, keys = HISTORY_KEYS) {
     if (!this.commitFn) return;
     // A write that touches nothing the snapshot holds cannot be undone by
@@ -5551,9 +5538,6 @@ class ScCanvasEditor extends LitElement {
       ring: ringRadius(SC.safeFloat(cfg.stroke_width, 3), scale, frameBand(cfg, scale)),
     };
   }
-
-
-
 
   /**
    * Bring the settings that belong to the part just taken hold of up to where
@@ -8611,7 +8595,6 @@ class ScCanvasDimensions extends ScCanvasEditor {
 
 if (!customElements.get('sc-canvas-dimensions')) customElements.define('sc-canvas-dimensions', ScCanvasDimensions);
 
-
 /**
  * Writes down the canvas the card is already drawing, once, when the editor
  * opens.
@@ -8688,7 +8671,6 @@ class ScCanvasAdopt extends LitElement {
   render() { return html``; }
 }
 if (!customElements.get('sc-canvas-adopt')) customElements.define('sc-canvas-adopt', ScCanvasAdopt);
-
 
 // --- THE EDITOR HALF OF THE MODULE ---
 window.SupercardModules['layout'] = window.SupercardModules['layout'] || {};

@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
-import { canvasFromGrid } from "./canvas-model.js";
+
 import { stripDeadConfig, migrateSlotKey } from "./config-cleanup.js";
 import { icon } from "./icons.js";
 import { GRADIENT_PRESETS, gradientPresetCss } from "./gradient-presets.js";
@@ -943,7 +943,6 @@ Object.assign(window.SupercardModules['core'], (() => {
                 </ha-selector>
               </div>
 
-              <!-- === NEW BLOCK: GLOBAL ENTITIES === -->
               <div class="col" style="margin-top: 12px; border-top: 1px dashed var(--divider-color,#444); padding-top: 12px;">
                 <div class="row" style="margin-bottom: 12px;">
                   <label style="font-weight: 600;">Global entities (alias) ${SC_UTILS.tipDot(
@@ -1039,7 +1038,6 @@ Object.assign(window.SupercardModules['core'], (() => {
                   </div>
                 </ha-sortable>
               </div>
-              <!-- === END NEW BLOCK === -->
 
             </div>
           </details>

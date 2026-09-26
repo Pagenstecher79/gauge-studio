@@ -574,6 +574,15 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   them (`markDialogClean`), and the first real edit is what makes it dirty
   again.
 
+- **55** - The bar's editor still names three of its shapes with a character
+  rather than an icon: `↔` and `↕` for the two linear directions and a
+  hole emoji for the half circle, plus a `➔` in the title it builds for a
+  card in the list. They are what `src/icons.js` replaced everywhere else,
+  and one of them back in a row of drawn icons is what makes a menu look
+  assembled rather than drawn. The catch is that a `<select>`'s `<option>`
+  cannot hold an SVG, so this is not a substitution but a question of what
+  the shape picker should be instead.
+
 ## Later
 
 - **33** - ~~Tidy the code: the bundle is approaching 750 kB. Fold blocks
@@ -651,3 +660,11 @@ So: `INNER_KINDS`' `parts` are elements; what the canvas lays out are objects.
   chamfered crystals - after I had claimed in passing that a watch glass
   does not have a ground edge, which was simply wrong. The rounding in the
   code is not the error; the missing alternative is.
+
+- **56** - The gauge's renderer writes its stacking numbers out by hand.
+  `supercard-05-gauge.js` has `z-index: 700 / 800 / 900 / 1000` in its
+  layer classes, which are exactly `ELM_BASE` to `ELM_FLOAT` in `SC_LAYERS`,
+  and a 690 for the wave background that means *just under the base*.
+  `supercard-02-color.js` does the same with 500 and 510. The convention
+  says never a bare number, and the reason is the next time one of those
+  layers moves: the dictionary would be changed and the copies would not.
