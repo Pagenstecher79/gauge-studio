@@ -6,6 +6,7 @@ import { isLiquidEffect, pillLensFraction, liquidPillCSS, liquidPadding, pillFon
 import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { suspendable, watchModalSuspend } from "./glass-suspend.js";
 import { adaptiveInk } from "./adaptive-ink.js";
+import { SC_LAYERS } from "./supercard-01-core.js";
 
 const SC = window.SupercardUtils;
 
@@ -101,10 +102,7 @@ function bounceEaseFn(intensity) {
 // ==========================================
 // 2. THE COMPONENT
 // ==========================================
-const ELM_BASE    = 700; 
-const ELM_STATIC  = 800; 
-const ELM_DYNAMIC = 900; 
-const ELM_FLOAT   = 1000; 
+const { ELM_BASE, ELM_STATIC, ELM_DYNAMIC, ELM_FLOAT } = SC_LAYERS;
 
 // EXPERIMENT ONLY (perf/cpu-investigation): window.SC_FRAME_SKIP = false turns
 // the frame skipping off so the two can be measured against each other in one

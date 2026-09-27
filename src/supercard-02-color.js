@@ -1,6 +1,7 @@
 import { html } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 import { normalizeStops, stopsToCss } from "./gradient-stops.js";
 import { BEND_ROOM, bendsOf, bendClipPath, bendEscapes } from "./canvas-bend.js";
+import { SC_LAYERS } from "./supercard-01-core.js";
 
 const SC = window.SupercardUtils;
 
@@ -62,9 +63,9 @@ Object.assign(window.SupercardModules['color'], (() => {
       \n`;
     }
 
-    // Always anchor the base container at 500
+    // Always anchor the base container at the layout layer
     styleStr += `
-      .supercard-container { position: relative !important; z-index: 500 !important; background: transparent !important; }
+      .supercard-container { position: relative !important; z-index: ${SC_LAYERS.LAYOUT_GRID} !important; background: transparent !important; }
     \n`;
 
     patterns.forEach((pat, idx) => {
@@ -95,11 +96,11 @@ Object.assign(window.SupercardModules['color'], (() => {
           selector = `${partSel}::before`;
           boxSelector = partSel;
 
-          // CELL: gets z-index 510 as a solid foundation. No isolation hack needed anymore!
+          // A cell sits just above the layout layer, as a solid foundation.
           styleStr += `
             ${partSel} {
               position: relative !important;
-              z-index: 510 !important;
+              z-index: ${SC_LAYERS.LAYOUT_GRID + 10} !important;
               background: transparent !important;
             }
           \n`;
@@ -428,10 +429,9 @@ Object.assign(window.SupercardModules['color'], (() => {
         borderRadius = `${pat.border_radius}${pat.border_radius_unit || 'px'}`;
       }
 
-      // EXACT ASSIGNMENT HERE:
-      // 200 = BG_ANIMATED (for the main card)
-      // 520 = sub-container background (exactly between 510 and the 700-range texts!)
-      const zIndex = isMain ? '200' : '-1';
+      // The card's own background is the animated background layer; any
+      // other target paints just under its own box's contents.
+      const zIndex = isMain ? SC_LAYERS.BG_ANIMATED : -1;
       const bgImp  = allowImportantOnBg ? ' !important' : '';
 
       // A bow outward is paint beyond the box, so the layer is grown by the

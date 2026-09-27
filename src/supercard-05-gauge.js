@@ -10,6 +10,7 @@ import { applyLensGeometry, lensFilterElement } from "./glass-lens.js";
 import { watchModalSuspend } from "./glass-suspend.js";
 import { cardLight } from "./card-light.js";
 import { needleLift, liftFromLegacy } from "./pointer-shadow.js";
+import { SC_LAYERS } from "./supercard-01-core.js";
 
 // One id each, not one per instance: a filter is looked up inside the
 // shadow root that holds it, and every gauge has its own.
@@ -154,10 +155,10 @@ class ScGauge extends LitElement {
       .sc-gauge-layer[data-sc-spin] { will-change: transform; }
 
       /* --- SUPERCARD LAYER MAPPING --- */
-      .layer-elm-base    { z-index: 700; }
-      .layer-elm-static  { z-index: 800; }
-      .layer-elm-dynamic { z-index: 900; }
-      .layer-elm-float   { z-index: 1000; }
+      .layer-elm-base    { z-index: ${SC_LAYERS.ELM_BASE}; }
+      .layer-elm-static  { z-index: ${SC_LAYERS.ELM_STATIC}; }
+      .layer-elm-dynamic { z-index: ${SC_LAYERS.ELM_DYNAMIC}; }
+      .layer-elm-float   { z-index: ${SC_LAYERS.ELM_FLOAT}; }
     `];
   }
 
@@ -594,7 +595,7 @@ class ScGauge extends LitElement {
     const wrapStyle = `
       position: absolute;
       pointer-events: none;
-      z-index: 700;
+      z-index: ${SC_LAYERS.ELM_BASE};
       width: ${isResponsive ? '100%' : `${sizePx}px`};
       height: ${isResponsive ? '100%' : `${sizePx}px`};
       ${isResponsive ? '' : (posMap[posMode] || posMap['center'])}; 
@@ -694,7 +695,7 @@ class ScGauge extends LitElement {
 
       const diameterPct = bgR * 4;
       waveDivNode = html`
-        <div style="position:absolute; top:50%; left:50%; width:${diameterPct}%; height:${diameterPct}%; transform:translate(-50%,-50%); border-radius:50%; background:${waveBgValue}; animation:${animValue}; z-index:690; pointer-events:none; opacity:${bgOpacity};"></div>
+        <div style="position:absolute; top:50%; left:50%; width:${diameterPct}%; height:${diameterPct}%; transform:translate(-50%,-50%); border-radius:50%; background:${waveBgValue}; animation:${animValue}; z-index:${SC_LAYERS.ELM_BASE - 10}; pointer-events:none; opacity:${bgOpacity};"></div>
       `;
     }
 
