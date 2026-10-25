@@ -228,63 +228,7 @@ commit. **One edit that has to touch both the card config and the slot must
 use it**: `_commit` clones `this.config`, and Home Assistant writes that back
 asynchronously, so two commits in the same tick silently lose the first.
 
-**The card's height.** `getGridOptions()` reports `rows: "auto"` for a canvas
-card and the fixed default for a row/cell one (`reportedRows`). A canvas has a
-ratio, not a height, and the width needed to turn one into the other is a
-layout result the card cannot see. When someone does set a row count, the
-canvas letterboxes inside it - never `max-height`, which would keep the width
-at 100% and break the ratio. See `docs/canvas-layout.md` §5.
-
-**The card's shape.** `canvasFromGrid` turns `grid_options` (columns x rows)
-into the canvas shape that box wants, so a migration reproduces the card that
-is already on the dashboard instead of imposing a default. `gridColumnsToPx`
-uses a *reference* section width, because a section's real width is a viewport
-result; only the ratio against `gridRowsToPx` is used. `canvasFromBox` is the
-same thing from a box that has been measured, which is what the card itself
-can offer. The canvas editor sets columns and rows itself and reshapes the
-canvas with `rescaleCanvas` when they change - but only on a user's edit,
-never on render.
-
-With auto height the shape is the user's: the canvas decides how tall the card
-is, so a change of width says nothing about it and nothing is reshaped. Only a
-card that has never been drawn on needs a shape from nowhere, and
-`defaultShapeRows` is it - as near a square as whole rows allow, read against
-the reference width so the same card is the same shape on every viewport. A
-row count of the user's own means fixed rows, which is a height in pixels and
-is matched against the *measured* width instead. That measurement is taken by
-walking up out of the editor to the section being edited, so it has to be
-*remembered*: Home Assistant's dialog renders one tab at a time, and a size
-set in its Layout tab reaches an editor that is no longer in the document.
-The snap grid is stored as a per cent of the canvas for the same reason - a
-grid in units does not survive the next reshape. See §7.
-
-**One gradient shape, one gradient editor.** A colour stop is
-`{pos, color}` - `pos` in per cent, or on the entity's scale where a gauge
-says so, and `null` for a colour nobody placed, which CSS then spreads
-itself. `gradient-stops.js` holds the arithmetic and `<sc-gradient-stops>`
-(`supercard-09-gradient-stops.js`) is the only editor for such a list: the
-gauge's stops, a bar's gradient and a colour pattern's colours are all that
-one element, told what its add button should say. Saved cards still carry the
-older shapes - a gauge's `{value, color}`, a pattern's parallel `colors` and
-`stops` - so readers go through `normalizeStops`, and `stripDeadConfig`
-rewrites them on the next edit. Do not add a fourth stop editor, and do not
-read a stop list without `normalizeStops`.
-
-**One layout model.** The canvas is the only one. The rows-and-cells model it
-replaced had its renderer and its editor removed in v2.1.0, but its
-configurations are on people's dashboards, so `layout_rows` is still *read*:
-`rows-compat.js` answers with the canvas those rows describe, in memory, once
-per render, and `_drawnSlot` in the core hands that one answer to every module
-so none of them sees two models. Nothing is written back - a Lovelace card
-cannot persist its own config outside the editor - so the editor stages the
-same canvas as an ordinary edit when it opens such a card. Do not add a second
-read path for `layout_rows`. A card that never had a layout is migrated only
-when there is nothing to arrange: `contentRowArranges` counts the elements the
-canvas would hold, and one, or none, comes along on its own - the single
-element fills the card exactly as the content row drew it. Several are stacked
-into bands that nobody chose, which is a new arrangement however faithful the
-contents, so that card keeps its offer and its button. See
-`docs/canvas-layout.md` §3.
+**Canvas height, shape, gradients, layout model:** skill `gauge-studio-canvas`
 
 **One control, drawn once.** A colour is `SC.colorRow`/`SC.colorField` and a
 range is `SC.slider`/`SC.sliderRow`/`SC.sliderField`, in every editor, whether
@@ -388,44 +332,7 @@ an editor that has a field array, and do not invent a second renderer: a block
 that is not a field - a preview, a picker grid, a datalist - is
 `type: 'custom'` and hands the markup back through `render(ctx)`.
 
-**Settings that the drawing expresses belong on the drawing**, and the form
-has to let go of them in the same change. `field.framedBy` names the part whose
-frame replaces a field, and the field disappears while that part is framed;
-`field.framedWhen` is its mirror, the line that stands in for what has gone, so
-a fold that has lost most of its rows does not read as one that is missing
-something. Both are in `SC.renderField`, so every field array has them, and a
-`framedBy` may be a function of the entry where whether a setting is on the
-drawing depends on the entry. Two live controls for one value is worse than one
-badly placed control.
-
-Both rules, and the counting around them, are `framed-fields.js` - core only
-publishes them, because the bar's editor draws its own fields and the rule has
-to be the same rule there. `SC.framedIn(items, entry, slot, framed)` says which
-part took a fold's rows and how many are left, so the line standing in names
-the menu and says *the* settings or *parts of the* settings accordingly.
-`SC.menusFor(fields, entry, slot, part)` is the same question from the
-drawing: every fold a part came out of and what is left in each, so a chip's
-panel can point down at the rest - and say nothing where the part took those
-folds with it. Plural because a part is usually filed in two, its geometry in
-one and its looks in another. A kind names the module whose form to ask with `form:` in
-`INNER_KINDS`; the module hands it over as `formFields()`.
-
-Which elements can be worked on that way is `INNER_KINDS` in
-`supercard-04-layout.js`: a kind says where its config lives, which parts it
-has, how its drawing is measured, and which editor holds its settings, and
-nothing else in the canvas editor knows one kind from another. A new kind is an
-entry there, not a second copy of the frames, the chips and the numbers.
-`docs/canvas-editing.md` is the guide to the rest of it: what may be a control
-on a canvas, the hit-testing and stacking rules, how the zoom belongs to the
-mode, why a corner grip does the arithmetic it does, and how to know any of it
-works.
-
-A folded section is `type: 'details'`, drawn the same everywhere - the gauge
-and the bar build theirs from a `'section'` field instead, because their own
-renderers split a flat list into sections, but the fold looks the same. Every
-section heading opens with an icon, which is what makes a folded list readable
-at a glance; the gauge's and the bar's keep the `── ` prefix on the label, a
-marker their renderers strip before drawing.
+**Settings on the drawing, `INNER_KINDS`, folds:** skill `gauge-studio-canvas`; guide in `docs/canvas-editing.md`.
 
 **Icons are `src/icons.js`, never a character.** `icon('name')` gives back the
 drawing, sized by the font size beside it and coloured by `currentColor`, and
@@ -438,94 +345,11 @@ assembled rather than drawn.
 
 ## Performance
 
-Progress bars are the hot path: many can animate at once, and the cost is
-layout/paint, not JS. Two things dominate and are already gated - keep them
-gated:
-
-- `backdrop-filter` re-samples and re-blurs the backdrop every frame. It is only
-  visible through a translucent pill; skip it when the pill is opaque.
-- `filter: url(#sc-goo-filter)` re-rasterises the whole fill layer every frame.
-  Only apply it when there is actually a pill to merge into the fill.
-
-A lens - `backdrop-filter: url(#...)` over an `feDisplacementMap` - is not a
-third expensive thing. Measured on the demo at 120 Hz: 16 refracting gauge
-panes cost 119.3 fps against 119.9 with no glass at all, and 12 bars with
-refracting pills cost nothing against the same bars with a flat dark pill.
-What does cost is *stacking* it on a blur: 16 panes doing both fell to 118.8
-fps with a p99 of 16.0 ms, because the pane then re-samples the backdrop
-twice. The gate is the same one the blur already has - an opaque pane bends
-nothing, so it gets no filter.
-
-The map behind that lens is a 64x64 bitmap drawn once per profile, not a
-stack of gradients, and it carries both axes in one image - so the filter is
-one `feImage` and one `feDisplacementMap`, with nothing to composite. Keep it
-that way: the field is smooth, and a bigger map buys nothing that bilinear
-scaling does not already give.
-
-A pane's `backdrop-filter` is also why the editor dialog flickers, and that
-one is not a cost but a correctness bug in the browser: for content in the
-top layer the backdrop root is the whole document, and Chromium sometimes
-presents the intermediate render without the top layer - the dialog and its
-dimming vanish for one to three frames and you see the dashboard through the
-editor. Measured with a per-frame recorder on the demo: in the second before
-each sighting there was not one DOM mutation anywhere, no long task, and a
-steady 114-120 fps, so nothing this card renders causes it. Glass everywhere:
-5 sightings. Glass nowhere: 0 in 7.0 min. Glass only inside the dialog: 0 in
-6.2 min.
-
-`glass-suspend.js` is that last line: every `backdrop-filter` this card
-writes goes through `var(--sc-glass-suspend, ...)`, and one watcher per page
-sets the property to `none` on the document root while a modal dialog is
-open, exempting the dialog itself with `initial`. Do not inline a
-`backdrop-filter` past that wrapper, and do not "simplify" the watcher away -
-the flicker comes back, and it comes back only sporadically, which is the
-worst way for a bug to come back.
-
-Before claiming a rendering change is faster, measure it. Frame budget is
-1000/refresh-rate ms - 8.3 ms on a 120 Hz display, not 16.6.
+Progress bars are the hot path; keep `backdrop-filter` and the goo filter gated, and every `backdrop-filter` through `var(--sc-glass-suspend, ...)`. Details and measurements: skill `gauge-studio-performance`.
 
 ## Verifying a change
 
-There is no test suite, so behaviour-preserving refactors are verified by
-comparing against the previous build:
-
-1. Build the current `HEAD` in a git worktree, and the working tree as usual.
-2. Load both bundles in a page that instantiates every editor and renderer with
-   a fixed synthetic `hass` and config. The working tree's build is two files
-   now, so that page imports the runtime bundle and the editor chunk together.
-3. Compare `shadowRoot.innerHTML` byte for byte, and compare what each editor
-   commits when every control in it is driven.
-
-Normalise the three known sources of nondeterminism first: lit's per-load
-marker ids (`lit$<digits>$`), the per-instance random SVG filter ids, and
-fx-glass's keyframe names, which carry a random suffix per pattern
-(`sc-glass-awake-<pattern id>-<random>`). Freeze animations
-(`animation_duration: 0`) or the snapshot catches a bar mid-flight.
-
-All three are per-load, so they differ between two runs of the *same* build.
-If a comparison shows a handful of differences that are equal in number and
-position and differ only in an id, look for a fourth such source before
-reading it as a behaviour change.
-
-That comparison covers rendering and committed values. It cannot cover the
-editor inside HA's config dialog, drag and drop, or whether an animation looks
-smooth - for those, `npm run ha` and click. It also cannot cover the *lazy*
-path, because it loads both bundles: that the card draws before the editor
-exists, and that `getConfigElement()` brings the other half in. Load the
-runtime bundle alone and assert on both - `.claude/bench/lazy-editor.html`
-does, and `docs/editor-split.md` says what it checks.
-
-When you replace one pure mechanism with another - a visibility rule, a
-formatter - do not just eyeball the translation. Run both side by side in the
-build, over configurations that include the adversarial values (`undefined`,
-`null`, `''`, `0`, `1`, `'true'`, `'false'`), and assert they never disagree
-before deleting the old one. That is how the `showIf` to `condition` move was
-done, and it caught two silent behaviour changes that reading the diff did
-not.
-
-### A number nobody can derive is asked, not chosen
-
-A bench page of fixed stages, not a slider: skill `bench-stufen`.
+No test suite beyond `canvas-model.js`: compare against the previous build. Procedure: skill `gauge-studio-pruefen`; taste questions: skill `bench-stufen`.
 
 ## Releasing
 
